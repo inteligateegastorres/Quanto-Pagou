@@ -85,16 +85,45 @@ Princípios chave:
 Pré-requisitos: Docker, Python 3.12+, [`uv`](https://docs.astral.sh/uv/),
 Node 20+.
 
+### Caminho rápido (recomendado)
+
+```powershell
+# Windows
+pwsh scripts/dev_up.ps1            # sobe postgres + API + frontend
+pwsh scripts/dev_down.ps1          # para API + frontend (postgres continua)
+pwsh scripts/dev_down.ps1 -All     # tambem para postgres (volume preservado)
+pwsh scripts/dev_down.ps1 -Wipe    # tudo + apaga volume (perde dados)
+pwsh scripts/dev_up.ps1 -Fresh     # reset completo: re-cria volume + reseed
+```
+
 ```bash
-# 1. Postgres (docker)
+# Linux / Mac / WSL
+bash scripts/dev_up.sh
+bash scripts/dev_down.sh
+ALL=1  bash scripts/dev_down.sh
+WIPE=1 bash scripts/dev_down.sh
+FRESH=1 bash scripts/dev_up.sh
+```
+
+O `dev_up` é idempotente: aplica a migration analytics, ingere a fixture só
+se `raw.compras` estiver vazio, roda `build_marts` e sobe API + frontend em
+background. PIDs e logs ficam em `.dev/` (gitignored). URLs ao final:
+
+- Postgres: `localhost:5433` (user/db `quantopagou`)
+- API: <http://127.0.0.1:8000> (Swagger em `/docs`)
+- Frontend: <http://127.0.0.1:3000>
+
+### Caminho manual (se preferir controle)
+
+```bash
+# 1. Postgres
 docker compose up -d
-docker compose ps                      # confirma healthy
 
 # 2. Dependências Python
 python -m uv sync
 
-# 3. Variáveis de ambiente
-cp .env.example .env
+# 3. Migration analytics (a 000_init.sql roda automática na 1ª subida do volume)
+docker exec -i quantopagou-postgres psql -U quantopagou -d quantopagou < sql/001_analytics.sql
 
 # 4. Ingestão (fixture sintética enquanto API real está caída)
 python -m uv run python -m ingest --fixture data/fixtures/compras_sample.jsonl 2026-04-15 2026-04-15
@@ -102,27 +131,19 @@ python -m uv run python -m ingest --fixture data/fixtures/compras_sample.jsonl 2
 # 5. Pipeline analytics (canonicalização + refresh dos marts)
 python -m uv run python -m analytics.build_marts
 
-# 6. Inspeções rápidas
-python -m uv run python scripts/inspect_raw.py
-python -m uv run python scripts/inspect_marts.py
-
-# 7. API
+# 6. API
 python -m uv run uvicorn api.main:app --host 127.0.0.1 --port 8000
-# OpenAPI/Swagger: http://127.0.0.1:8000/docs
 
-# 8. Frontend (em outro terminal)
+# 7. Frontend (em outro terminal)
 cd frontend && npm install && npm run dev
-# http://127.0.0.1:3000
-
-# Testes
-python -m uv run pytest tests/ -v
 ```
 
-Aplicar nova migration SQL a um banco já inicializado (o
-`docker-entrypoint-initdb.d` só roda na primeira inicialização do volume):
+### Inspeções e testes
 
 ```bash
-docker exec -i quantopagou-postgres psql -U quantopagou -d quantopagou < sql/001_analytics.sql
+python -m uv run python scripts/inspect_raw.py
+python -m uv run python scripts/inspect_marts.py
+python -m uv run pytest tests/ -v
 ```
 
 ---
@@ -171,7 +192,7 @@ docker exec -i quantopagou-postgres psql -U quantopagou -d quantopagou < sql/001
 │   │   └── correcoes/page.tsx
 │   └── lib/api.ts                    # cliente da API + helpers de formato
 │
-├── scripts/                          # smokes e exploração (probe, inspect, fixture gen)
+├── scripts/                          # dev_up/dev_down (ps1 + sh) + smokes (probe, inspect, fixture gen)
 ├── snapshots/                        # JSONL.gz de cada coleta (gitignored)
 └── tests/
     └── test_resolution.py            # 28 testes (parametrize cobrindo edge cases reais)

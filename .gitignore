@@ -43,3 +43,6 @@ desktop.ini
 # Logs
 *.log
 logs/
+
+# Estado runtime dos scripts dev_up/dev_down
+.dev/
