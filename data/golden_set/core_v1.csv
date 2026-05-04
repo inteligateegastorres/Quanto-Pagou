@@ -1,0 +1,51 @@
+catmat_id,cluster_id,cluster_version,categoria,descricao_original,unidade_label,unidade_base,fator_conversao,fonte
+410,arroz_tipo_1,v1,alimento_seco,ARROZ TIPO 1 LONGO FINO PACOTE 5KG,pacote 5kg,kg,5.0,manual
+410,arroz_tipo_1,v1,alimento_seco,ARROZ BENEFICIADO POLIDO TIPO 1 PCT 5 KG,pct 5 kg,kg,5.0,manual
+410,arroz_tipo_1,v1,alimento_seco,ARROZ BRANCO TIPO 1 LONGO FINO 1KG,1kg,kg,1.0,manual
+410,arroz_tipo_1,v1,alimento_seco,ARROZ TIPO 1 PACOTE COM 5 QUILOS,pacote 5 quilos,kg,5.0,manual
+410,arroz_tipo_1,v1,alimento_seco,ARROZ AGULHINHA TIPO 1 EMBALAGEM 2KG,embalagem 2kg,kg,2.0,manual
+410,arroz_tipo_1,v1,alimento_seco,ARROZ TIPO I PCT 1KG,pct 1kg,kg,1.0,manual
+410,arroz_tipo_1,v1,alimento_seco,ARROZ TIPO 1 BRANCO POLIDO FARDO 30KG,fardo 30kg,kg,30.0,manual
+410,arroz_tipo_1,v1,alimento_seco,ARROZ TIPO 1 LONGO FINO PACOTE DE 5 KG,pacote de 5 kg,kg,5.0,manual
+410,arroz_tipo_1,v1,alimento_seco,ARROZ TIPO 1 SACO 5KG,saco 5kg,kg,5.0,manual
+410,arroz_tipo_1,v1,alimento_seco,ARROZ POLIDO TIPO 1 EMB 5 KG,emb 5 kg,kg,5.0,manual
+1825,cafe_torrado_moido,v1,alimento_seco,CAFE TORRADO MOIDO PACOTE 500G,pacote 500g,kg,0.5,manual
+1825,cafe_torrado_moido,v1,alimento_seco,CAFE TORRADO E MOIDO PCT 500 G,pct 500 g,kg,0.5,manual
+1825,cafe_torrado_moido,v1,alimento_seco,CAFE TORRADO MOIDO 250G,250g,kg,0.25,manual
+1825,cafe_torrado_moido,v1,alimento_seco,CAFE TORRADO MOIDO TRADICIONAL 500 GRAMAS,500 gramas,kg,0.5,manual
+1825,cafe_torrado_moido,v1,alimento_seco,CAFE TORRADO E MOIDO EMBALAGEM 500G,embalagem 500g,kg,0.5,manual
+1825,cafe_torrado_moido,v1,alimento_seco,CAFE EM PO TORRADO MOIDO PCT 500G,pct 500g,kg,0.5,manual
+1825,cafe_torrado_moido,v1,alimento_seco,CAFE TORRADO MOIDO FORTE PACOTE 1KG,pacote 1kg,kg,1.0,manual
+1825,cafe_torrado_moido,v1,alimento_seco,CAFE TORRADO E MOIDO TIPO TRADICIONAL 500G,500g,kg,0.5,manual
+1825,cafe_torrado_moido,v1,alimento_seco,CAFE TORRADO MOIDO ALMOFADA 500G,almofada 500g,kg,0.5,manual
+1825,cafe_torrado_moido,v1,alimento_seco,CAFE TORRADO MOIDO VACUO 500G,vacuo 500g,kg,0.5,manual
+8543,oleo_diesel_s10,v1,combustivel,OLEO DIESEL S10 LITRO,litro,litro,1.0,manual
+8543,oleo_diesel_s10,v1,combustivel,OLEO DIESEL S-10,unidade,litro,1.0,manual
+8543,oleo_diesel_s10,v1,combustivel,OLEO DIESEL S10 COMUM L,l,litro,1.0,manual
+8543,oleo_diesel_s10,v1,combustivel,DIESEL S10 LT,lt,litro,1.0,manual
+8543,oleo_diesel_s10,v1,combustivel,OLEO DIESEL TIPO S10 LITROS,litros,litro,1.0,manual
+8543,oleo_diesel_s10,v1,combustivel,OLEO DIESEL S 10 - LITRO,litro,litro,1.0,manual
+8543,oleo_diesel_s10,v1,combustivel,OLEO DIESEL ADITIVADO S10 LITRO,litro,litro,1.0,manual
+8543,oleo_diesel_s10,v1,combustivel,OLEO DIESEL S10 RODOVIARIO L,l,litro,1.0,manual
+8543,oleo_diesel_s10,v1,combustivel,DIESEL S-10 PADRAO ANP LITRO,litro,litro,1.0,manual
+8543,oleo_diesel_s10,v1,combustivel,DIESEL TIPO S 10 LT,lt,litro,1.0,manual
+39,papel_sulfite_a4_75g,v1,escritorio,PAPEL SULFITE A4 75G RESMA 500 FOLHAS,resma 500 folhas,resma_500,1.0,manual
+39,papel_sulfite_a4_75g,v1,escritorio,PAPEL A4 75G/M2 RESMA C/ 500 FLS,resma c/ 500 fls,resma_500,1.0,manual
+39,papel_sulfite_a4_75g,v1,escritorio,PAPEL SULFITE FORMATO A4 GRAMATURA 75G PCT 500 FOLHAS,pct 500 folhas,resma_500,1.0,manual
+39,papel_sulfite_a4_75g,v1,escritorio,PAPEL A4 BRANCO 75 GRAMAS RESMA 500 FOLHAS,resma 500 folhas,resma_500,1.0,manual
+39,papel_sulfite_a4_75g,v1,escritorio,PAPEL SULFITE BRANCO A4 75G CAIXA C 10 RESMAS,caixa 10 resmas,resma_500,10.0,manual
+39,papel_sulfite_a4_75g,v1,escritorio,PAPEL A4 75G RESMA,resma,resma_500,1.0,manual
+39,papel_sulfite_a4_75g,v1,escritorio,PAPEL SULFITE A4 BRANCO 75G/M2 PACOTE 500 FOLHAS,pacote 500 folhas,resma_500,1.0,manual
+39,papel_sulfite_a4_75g,v1,escritorio,PAPEL OFICIO A4 75G RESMA C/ 500 FOLHAS,resma c/ 500 folhas,resma_500,1.0,manual
+39,papel_sulfite_a4_75g,v1,escritorio,PAPEL SULFITE BRANCO 75G FORMATO A4 RESMA,resma,resma_500,1.0,manual
+39,papel_sulfite_a4_75g,v1,escritorio,PAPEL A4 SULFITE 75G/M2 EMBALAGEM 500 FOLHAS,embalagem 500 folhas,resma_500,1.0,manual
+280144,caneta_esferografica_azul,v1,escritorio,CANETA ESFEROGRAFICA AZUL CORPO TRANSPARENTE,unidade,unidade,1.0,manual
+280144,caneta_esferografica_azul,v1,escritorio,CANETA ESFEROGRAFICA TINTA AZUL,unidade,unidade,1.0,manual
+280144,caneta_esferografica_azul,v1,escritorio,CANETA ESFEROGRAFICA AZUL PONTA 1.0MM,unidade,unidade,1.0,manual
+280144,caneta_esferografica_azul,v1,escritorio,CANETA ESFEROGRAFICA AZUL CX C/ 50 UNIDADES,cx c/ 50 unidades,unidade,50.0,manual
+280144,caneta_esferografica_azul,v1,escritorio,CANETA ESFEROGRAFICA AZUL ESCRITA MEDIA,unidade,unidade,1.0,manual
+280144,caneta_esferografica_azul,v1,escritorio,CANETA ESFEROGRAFICA TINTA AZUL CORPO PLASTICO,unidade,unidade,1.0,manual
+280144,caneta_esferografica_azul,v1,escritorio,CANETA ESFERO AZUL CAIXA COM 50,caixa com 50,unidade,50.0,manual
+280144,caneta_esferografica_azul,v1,escritorio,CANETA ESFEROGRAFICA AZUL UNIDADE,unidade,unidade,1.0,manual
+280144,caneta_esferografica_azul,v1,escritorio,CANETA ESFEROGRAFICA COR AZUL CORPO SEXTAVADO,unidade,unidade,1.0,manual
+280144,caneta_esferografica_azul,v1,escritorio,CANETA ESFEROGRAFICA AZUL EMB COM 50 UN,emb com 50 un,unidade,50.0,manual

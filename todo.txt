@@ -1,0 +1,102 @@
+- Criar rotinas para publicar alguns itens nas redes sociais
+	- instagram
+	- x
+	- etc
+
+---
+Excelente. Li com atenção o plano v4. Você está absolutamente certo: o momento é de executar, e o plano já internalizou as principais lições das versões anteriores (progressive correctness, desacoplamento editorial/técnico, guardrails jurídicos).
+
+Meu papel aqui não é mais planejar, mas sim antecipar obstáculos invisíveis e identificar alavancas de alto impacto que você ainda não viu.
+
+Aqui estão 4 melhorias de produto (não de infra) que podem ser implementadas ainda na sprint de 7 dias ou imediatamente após a Fase 0.5, com baixo custo e alto retorno em clareza, confiança e compartilhamento.
+1. O "Teste da Cesta Básica" (validação narrativa instantânea)
+
+O problema: O card narrativo (6.1) é tecnicamente correto, mas ainda exige que o cidadão entenda "mediana", "IQR", "p25-p75". Para 80% do público, isso é ruído.
+
+A melhoria (adicione ao card, ao lado do toggle de pares):
+text
+
+[Comparação técnica ▼]  [🧺 Comparação com cesta básica]
+
+Ao clicar em "cesta básica", o sistema converte o desvio absoluto (ex: R$ 5,00/kg acima da mediana) em:
+
+    "Essa diferença pagaria 36 kg de arroz ou 12 litros de óleo por mês para uma família."
+
+    (Cálculo: desvio total anualizado ÷ preço médio estadual do item de cesta básica mais próximo)
+
+Implementação: Tabela estática com 5 itens âncora (arroz, feijão, óleo, leite, farinha) por UF, atualizada mensalmente via scraping básico. Não precisa de API em tempo real.
+
+Por que funciona: Torna a indignação (ou alívio) tangível antes mesmo de entender estatística. É o gancho perfeito para WhatsApp: "Minha prefeitura paga tão caro por merenda que daria para comprar 200 kg de arroz a mais por mês."
+2. Badge "Este dado foi corrigido" (antecipação proativa de crises)
+
+O problema: A página de correções (6.6) é excelente, mas passiva. O usuário que viu um dado errado ontem e voltou hoje não sabe que foi corrigido — ele só desconfia da plataforma para sempre.
+
+A melhoria (adicione ao card narrativo, ao lado do badge de confiabilidade):
+text
+
+[🔁 Corrigido em 02/05/2026 · ver histórico]
+
+    Aparece apenas se o item/órgão/município teve qualquer correção nos últimos 30 dias.
+
+    Ao clicar, abre modal com o delta: *"Valor anterior: R78,50/kg(extraıˊdodePDFcomOCRincorreto).Valoratual:R78,50/kg(extraıˊdodePDFcomOCRincorreto).Valoratual:R 12,30/kg (fonte: API Compras.gov.br). Motivo: relato de usuário via 🚩."*
+
+    Bônus: Na página de correções (6.6), destaque para correções que afetaram rankings públicos ("este ranking foi recalculado").
+
+Por que funciona: Transforma um ponto de falha (erro) em evidência de compromisso com a verdade. A plataforma que se corrige rapidamente ganha mais confiança do que a que nunca erra. É o equivalente cívico do "nosso processo de revisão é público".
+3. Modo "Só me mostre o que é confiável" (filtro por qualidade)
+
+O problema: Badges de confiabilidade (6.2) são informativos, mas o cidadão ainda precisa interpretar e filtrar mentalmente. Isso é trabalho cognitivo que afasta o usuário leigo.
+
+A melhoria (adicione um toggle global no header da página de ranking/lista):
+text
+
+[Mostrar tudo]  [✓ Mostrar apenas itens com alta confiabilidade]
+
+    "Alta confiabilidade" = badges Verde ou Amarelo (confiança ≥ 0.75 + fora da quarentena).
+
+    Ao ativar, o sistema exibe um aviso amarelo: "Alguns dados foram ocultados porque ainda estamos validando. [Ver dados em validação]" — mantendo a transparência, mas não sobrecarregando.
+
+    Para jornalistas/pesquisadores: o parâmetro ?quality=all na URL desativa o filtro.
+
+Por que funciona: Dá agência ao usuário sem exigir alfabetização estatística. Quem quer prudência, filtra. Quer completude, vê tudo. Zero custo de implementação (é só um WHERE clause).
+4. O "Botão do Vereador" (caminho mais curto para ação política)
+
+O problema: A plataforma hoje termina em "compartilhar" ou "pedir LAI" (6.1). O cidadão indignado não sabe o que fazer com a informação além de reclamar no WhatsApp.
+
+A melhoria (adicione ao final do card narrativo, após os botões existentes):
+text
+
+[🏛️ Cobrar meu vereador]  [📋 Gerar minuta de pedido de fiscalização]
+
+Fluxo:
+
+    Identifica automaticamente os vereadores do município (via API Dados Abertos das Câmaras ou tabela estática atualizada 1x/mês).
+
+    Gera texto pré-formatado: "Vereador [Nome], na plataforma Quanto Pagou identifiquei que [Município] pagou R$ X por [item] em [data], [pct]% acima da média de cidades similares. Solicito que a Câmara Municipal fiscalize este contrato (ID [id_fonte])."
+
+    Oferece opções: copiar texto para e-mail/WhatsApp, abrir contato do vereador (se disponível), ou agendar lembrete para cobrar após 15 dias.
+
+    Métrica de sucesso: rastrear quantas vezes o botão foi usado por município — isso vira dado público ("cidadãos mais engajados") e dispara alerta para a própria plataforma priorizar cobertura naquele local.
+
+Por que funciona: Resolve o problema clássico de dados abertos: informação sem caminho de ação é entretenimento. Este botão transforma espectador em fiscal. E gera um ciclo de feedback real (vereadores começam a pedir relatórios da plataforma).
+Resumo para a sprint de 7 dias
+Melhoria	Esforço	Impacto	Implementar na sprint?
+#1 Teste da Cesta Básica	Baixo (2h tabela estática + 2h UI)	Alto (viralidade)	✅ Sim, após dia 5
+#2 Badge "Corrigido"	Médio (tracking de correções + modal)	Alto (confiança)	✅ Sim, pós-Fase 0.5
+#3 Filtro de confiabilidade	Muito baixo (1h UI + query param)	Médio (usabilidade)	✅ Sim, dia 6
+#4 Botão do Vereador	Médio (API de vereadores + gerador de texto)	Muito alto (engajamento cívico)	⚠️ Pós-Fase 1 (depende de geolocalização)
+
+Recomendação para os próximos 7 dias: entregue #1, #2 e #3 ainda na sprint de lançamento da Fase 0.5. #4 pode esperar a Fase 1, mas mande o design para o repositório hoje como issue.
+Uma última provocação (não técnica)
+
+Seu plano é excepcionalmente bom para um engenheiro. Mas o sucesso ou fracasso deste projeto não será decidido por cluster_version ou unidade_base.
+
+Será decidido por uma única pergunta: Qual vereador, jornalista ou secretário municipal vai acordar no dia do lançamento e sentir que esta plataforma foi feita para ele?
+
+Você tem personas (seção 2). Mas tem early advocates concretos? Sugiro:
+
+    Antes do lançamento da Fase 0.5, identifique 3 jornalistas que cobrem controle público (ex: Marina Atoji, Bruno Fonseca, equipe do Núcleo). Envie a eles um preview exclusivo com uma história que eles não conseguiriam contar sem seus dados.
+
+    Na Fase 1, convide 1 vereador de oposição de capital (SP, RJ, BH, Recife) para um café virtual e mostre como ele pode usar a plataforma para fiscalizar o prefeito. Se ele usar, vira case.
+
+Boa sorte. O país precisa disso. Agora, crie o repositório e escreva a primeira linha de código. 🚀

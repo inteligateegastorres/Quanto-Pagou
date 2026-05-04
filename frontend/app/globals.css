@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body { background: #fdfdfb; color: #1a1a1a; }
+a { @apply underline-offset-4; }
+a:hover { @apply underline; }
+
+.bar { @apply h-2 rounded-sm bg-line; }
+.bar-fill { @apply h-2 rounded-sm bg-ink; }

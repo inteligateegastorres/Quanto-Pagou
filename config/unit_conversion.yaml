@@ -1,0 +1,105 @@
+# Quanto Pagou - tabela de conversao de unidades (versionada).
+#
+# schema_version bump quando: novas unidades-base, novos patterns ou alteracao
+# de fator. Historico nunca e reescrito - dados antigos preservam o fator que
+# usaram em sua versao.
+#
+# Modelo: cada match retorna (unidade_base, qtd_em_unidade_base).
+#   qtd_em_unidade_base = qtd_capturada * multiplicador  (ou qtd_fixa)
+#   valor_unitario_normalizado = valor_unitario / qtd_em_unidade_base
+#
+# Pipeline:
+#   1. Aplica `patterns` em ordem (descricao em UPPER). Primeiro vence.
+#   2. Se nada bater, tenta `defaults_por_categoria` (assume qtd=1) com flag
+#      fator_inferido=true (penaliza confianca).
+#   3. Se categoria nao conhecida e nada bate: em_quarentena=true.
+#
+# Convencoes anti-bug:
+#   - SEMPRE \b antes de \d+ para nao capturar numeros embutidos em codigos
+#     (ex: "S10 LITRO" nao deve casar "10 LITRO").
+#   - Patterns mais especificos antes dos genericos (papel/resma antes de
+#     gramas, para nao capturar "75G/M2" como peso da embalagem).
+#   - Negative lookahead para gramatura de papel: G/M2, G/M3 nao sao peso.
+#
+schema_version: v1
+
+unidades_base:
+  - kg
+  - litro
+  - unidade
+  - resma_500
+  - hora
+  - m2
+  - m3
+
+patterns:
+  # ---------- PAPEL / RESMA (antes de massa: 75G/M2 nao e peso) ----------
+  # "RESMA 500 FOLHAS", "PCT C/ 500 FLS", "EMBALAGEM 500 FOLHAS"
+  - regex: '\b(?:RESMA|PCT|PACOTE|EMB|EMBALAGEM)\s*(?:C\/|COM|DE)?\s*500\s*(?:FLS|FOLHAS)\b'
+    unidade_base: resma_500
+    multiplicador: 1.0
+    qtd_fixa: 1
+  # "CAIXA C/ 10 RESMAS", "CAIXA C 10 RESMAS", "CAIXA COM 10 RESMAS"
+  - regex: '\bCAIXA\s*(?:C\/?|COM|DE)?\s*(?P<qtd>\d+)\s*RESMAS?\b'
+    unidade_base: resma_500
+    multiplicador: 1.0
+  # "RESMA" solo
+  - regex: '\bRESMA\b'
+    unidade_base: resma_500
+    multiplicador: 1.0
+    qtd_fixa: 1
+
+  # ---------- DISCRETOS / EMBALAGENS (antes de massa) ----------
+  # "CX C/ 50 UNIDADES", "CAIXA COM 50", "EMB COM 50 UN"
+  - regex: '\b(?:CAIXA|CX|EMB|EMBALAGEM|FARDO)\s*(?:COM|C\/|DE)\s*(?P<qtd>\d+)\s*(?:UN|UND|UNID|UNIDADES|PECAS?)?\b'
+    unidade_base: unidade
+    multiplicador: 1.0
+
+  # ---------- MASSA ----------
+  # "PACOTE 5KG", "FARDO 30KG", "EMB 2KG" - precedido por embalagem
+  - regex: '\b(?:PACOTE|PCT|EMBALAGEM|EMB|FARDO|SACO)\s*(?:C\/|COM|DE)?\s*(?P<qtd>\d+(?:[.,]\d+)?)\s*KG\b'
+    unidade_base: kg
+    multiplicador: 1.0
+  # "5KG" / "5 KG" solo (sem embalagem antes)
+  - regex: '\b(?P<qtd>\d+(?:[.,]\d+)?)\s*KG\b'
+    unidade_base: kg
+    multiplicador: 1.0
+  # "5 QUILOS"
+  - regex: '\b(?P<qtd>\d+(?:[.,]\d+)?)\s*QUILOS?\b'
+    unidade_base: kg
+    multiplicador: 1.0
+  # "PACOTE 500G", "PCT 500 G", "EMB 500 GRAMAS" - precedido por embalagem
+  - regex: '\b(?:PACOTE|PCT|EMBALAGEM|EMB|FARDO|SACO|ALMOFADA|VACUO|FRASCO|LATA)\s*(?:C\/|COM|DE)?\s*(?P<qtd>\d+(?:[.,]\d+)?)\s*(?:G|GRAMAS?)\b'
+    unidade_base: kg
+    multiplicador: 0.001
+  # "500G" / "500 G" solo, mas NAO "75G/M2" (gramatura)
+  - regex: '\b(?P<qtd>\d+(?:[.,]\d+)?)\s*G(?:RAMAS?)?\b(?!\s*\/?\s*M[23]?)'
+    unidade_base: kg
+    multiplicador: 0.001
+
+  # ---------- VOLUME ----------
+  - regex: '\b(?P<qtd>\d+(?:[.,]\d+)?)\s*(?:LT|LITROS?)\b'
+    unidade_base: litro
+    multiplicador: 1.0
+  - regex: '\b(?P<qtd>\d+(?:[.,]\d+)?)\s*ML\b'
+    unidade_base: litro
+    multiplicador: 0.001
+  # "L" solo (apos os qualificados acima). Negative lookbehind impede S10/A4.
+  - regex: '\b(?P<qtd>\d+(?:[.,]\d+)?)\s+L\b'
+    unidade_base: litro
+    multiplicador: 1.0
+
+  # ---------- UNIDADES SOLO ----------
+  - regex: '\b(?:UNIDADE|UNID|UND|UN)\b'
+    unidade_base: unidade
+    multiplicador: 1.0
+    qtd_fixa: 1
+
+# Fallback por categoria quando nenhum pattern bate.
+# qtd assumida = 1 da unidade_base; flag fator_inferido=true; confianca -= 0.10.
+defaults_por_categoria:
+  alimento_seco:    {unidade_base: kg,        qtd: 1.0}
+  alimento_liquido: {unidade_base: litro,     qtd: 1.0}
+  combustivel:      {unidade_base: litro,     qtd: 1.0}
+  escritorio:       {unidade_base: unidade,   qtd: 1.0}
+  servico:          {unidade_base: hora,      qtd: 1.0}

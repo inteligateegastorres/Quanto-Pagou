@@ -1,0 +1,313 @@
+# Quanto Pagou
+
+Plataforma cívica para monitorar gastos públicos brasileiros e identificar possíveis desvios.
+
+> **Status:** sprint local — Day 5 de 7 (ver [PLANO.md](./PLANO.md) §12).
+> Pipeline completo (ingestão → resolução → marts → API → frontend) rodando em
+> `localhost`. Próximo: análise editorial real + OG images + manifesto.
+
+---
+
+## Estado atual
+
+Pronto:
+- Camada de durabilidade (snapshots brutos versionados por SHA-256).
+- Spider Compras.gov.br + ingestão por fixture sintética (a API real está com
+  falha intermitente de backend JPA — fixture preserva o pipeline downstream).
+- Resolução de cluster Tier 1 (CATMAT direto contra golden set core v1).
+- Normalização de unidade via `unit_conversion.yaml` versionado (kg, litro,
+  unidade, resma_500).
+- Marts materializados: `mart_pares` (mediana/p25/p75 por cluster × ente × uf
+  × porte) e `mart_orgao_cluster` (ranking de órgãos por cluster).
+- Quarentena visível com motivo legível (itens não-comparáveis nunca somem).
+- API FastAPI (OpenAPI nativo).
+- Frontend Next.js 16: home com ranking destacado, página de cluster, card
+  narrativo do item (template §6.1 do plano), metodologia, correções.
+- 28 testes unitários travando regressões do parser de unidade.
+
+Não pronto (próximo bloco do sprint):
+- Análise editorial real e OG images dinâmicas.
+- Manifesto + landing pública.
+- Tier 2 (embeddings) — diferido para Fase 1+ por design (progressive
+  correctness).
+- Ingestão real do Compras.gov.br quando o backend deles estabilizar.
+- Spiders estaduais (Tá de Pé) — Fase 2.
+
+---
+
+## Arquitetura
+
+```
+Compras.gov.br ──▶ raw.snapshots (SHA-256 + JSONL.gz em ./snapshots)
+                ──▶ raw.compras   (linhas + raw_payload JSONB)
+                          │
+                          ▼
+                  src/analytics/resolution.py
+                  (Tier 1 CATMAT + parser unit_conversion.yaml)
+                          │
+                          ▼
+                  analytics.cluster_registry (versionado)
+                  analytics.item_canonical   (1:1 com raw.compras)
+                          │
+              ┌───────────┴────────────┐
+              ▼                        ▼
+   analytics.mart_pares       analytics.mart_orgao_cluster
+   (mediana/p25/p75 por        (ranking por cluster)
+    cluster × ente × uf
+    × porte)
+              │                        │
+              └───────────┬────────────┘
+                          ▼
+                   FastAPI (src/api/main.py)
+                          │
+                          ▼
+                   Next.js (frontend/)
+```
+
+Princípios chave:
+- **Progressive correctness.** Tier 2-4 e drift automático ficam para fases
+  posteriores; o que está aqui é Tier 1 + golden set pequeno + drift manual.
+- **Quarentena visível.** Item sem CATMAT, sem unidade detectável ou com
+  cluster_id ambíguo entra em `analytics.item_canonical.em_quarentena=true`
+  com motivo legível e segue acessível por URL.
+- **Snapshot é a verdade.** Reprocessar é função pura sobre snapshots —
+  `build_marts.py` é idempotente (`UPSERT ... ON CONFLICT`).
+- **Cluster é versionado.** `cluster_version` (ex: `v1`) acompanha cada item
+  canonicalizado. Mudança de modelo gera nova versão; histórico nunca é
+  reescrito.
+- **Comparações públicas só com `confianca_resolucao ≥ 0.75`** — threshold
+  versionado nos marts (filtro WHERE no SQL da MV).
+
+---
+
+## Como rodar (local)
+
+Pré-requisitos: Docker, Python 3.12+, [`uv`](https://docs.astral.sh/uv/),
+Node 20+.
+
+```bash
+# 1. Postgres (docker)
+docker compose up -d
+docker compose ps                      # confirma healthy
+
+# 2. Dependências Python
+python -m uv sync
+
+# 3. Variáveis de ambiente
+cp .env.example .env
+
+# 4. Ingestão (fixture sintética enquanto API real está caída)
+python -m uv run python -m ingest --fixture data/fixtures/compras_sample.jsonl 2026-04-15 2026-04-15
+
+# 5. Pipeline analytics (canonicalização + refresh dos marts)
+python -m uv run python -m analytics.build_marts
+
+# 6. Inspeções rápidas
+python -m uv run python scripts/inspect_raw.py
+python -m uv run python scripts/inspect_marts.py
+
+# 7. API
+python -m uv run uvicorn api.main:app --host 127.0.0.1 --port 8000
+# OpenAPI/Swagger: http://127.0.0.1:8000/docs
+
+# 8. Frontend (em outro terminal)
+cd frontend && npm install && npm run dev
+# http://127.0.0.1:3000
+
+# Testes
+python -m uv run pytest tests/ -v
+```
+
+Aplicar nova migration SQL a um banco já inicializado (o
+`docker-entrypoint-initdb.d` só roda na primeira inicialização do volume):
+
+```bash
+docker exec -i quantopagou-postgres psql -U quantopagou -d quantopagou < sql/001_analytics.sql
+```
+
+---
+
+## Layout do repositório
+
+```
+.
+├── PLANO.md                          # Plano de produto + roadmap (v4)
+├── README.md                         # Este arquivo
+├── docker-compose.yml                # Postgres 16 (porta 5433)
+├── pyproject.toml                    # uv / hatchling
+├── .env.example                      # DATABASE_URL, COMPRAS_API_BASE, ...
+│
+├── sql/
+│   ├── 000_init.sql                  # raw.snapshots + raw.compras
+│   └── 001_analytics.sql             # analytics.* (cluster_registry, item_canonical, marts, view)
+│
+├── config/
+│   └── unit_conversion.yaml          # patterns regex + defaults por categoria (versionado)
+│
+├── data/
+│   ├── compras_openapi.json          # OpenAPI da API Compras.gov.br (referência offline)
+│   ├── golden_set/
+│   │   └── core_v1.csv               # 50 itens, 5 clusters-piloto
+│   └── fixtures/
+│       └── compras_sample.jsonl      # payload sintético (para quando upstream cai)
+│
+├── src/
+│   ├── ingest/
+│   │   ├── compras.py                # spider + persistência (snapshot + raw.compras)
+│   │   ├── config.py                 # pydantic-settings (.env)
+│   │   └── __main__.py               # CLI: python -m ingest [start] [end] [--fixture ...]
+│   ├── analytics/
+│   │   ├── resolution.py             # Tier 1 + parser de unidade + derivação de ente
+│   │   └── build_marts.py            # CLI: python -m analytics.build_marts
+│   └── api/
+│       └── main.py                   # FastAPI
+│
+├── frontend/                         # Next.js 16 + Tailwind
+│   ├── app/
+│   │   ├── layout.tsx · page.tsx · globals.css
+│   │   ├── cluster/[cluster_id]/page.tsx
+│   │   ├── item/[raw_id]/page.tsx
+│   │   ├── metodologia/page.tsx
+│   │   └── correcoes/page.tsx
+│   └── lib/api.ts                    # cliente da API + helpers de formato
+│
+├── scripts/                          # smokes e exploração (probe, inspect, fixture gen)
+├── snapshots/                        # JSONL.gz de cada coleta (gitignored)
+└── tests/
+    └── test_resolution.py            # 28 testes (parametrize cobrindo edge cases reais)
+```
+
+---
+
+## API REST (Fase 0.5)
+
+Base: `http://127.0.0.1:8000` · Docs: `/docs` · Sem auth (dados públicos).
+
+| Endpoint                                                | Descrição                                                  |
+|---------------------------------------------------------|------------------------------------------------------------|
+| `GET /health`                                           | Sanidade + contagens (snapshots, raw, canonical, marts).   |
+| `GET /clusters?categoria=...`                           | Lista clusters ativos com `n_itens`.                       |
+| `GET /pares?cluster_id=X&cluster_version=v1`            | `mart_pares` filtrada (mediana/p25/p75 por uf+porte+ente). |
+| `GET /ranking/orgaos?cluster_id=X&order=mediana_desc`   | Ranking de órgãos para o cluster (gancho viral).           |
+| `GET /item/{raw_id}`                                    | Item canonicalizado + comparação com pares (ou flag de quarentena). |
+| `GET /quarentena/resumo`                                | Saúde pública do pipeline (% por categoria × motivo).      |
+
+---
+
+## Páginas do frontend
+
+| Rota                       | Conteúdo                                                                                        |
+|----------------------------|-------------------------------------------------------------------------------------------------|
+| `/`                        | Pitch + ranking destacado de órgãos federais por mediana de preço; lista de categorias.         |
+| `/cluster/[cluster_id]`    | Distribuição p25-p75 entre pares + ranking completo de órgãos.                                  |
+| `/item/[raw_id]`           | Card narrativo do plano §6.1: barras "você vs mediana", badge de confiabilidade, sinais decompostos, agregado escondido. |
+| `/metodologia`             | Fontes, resolução, normalização de unidade, política de correção.                              |
+| `/correcoes`               | Página viva (vazia por enquanto) — onde aparecem correções pós-relato.                         |
+
+---
+
+## Schema do banco
+
+```sql
+-- camada bruta
+raw.snapshots(id pk, source, period_start, period_end, records_count, hash_sha256, ingested_at)
+raw.compras  (id pk, snapshot_id fk, source, source_id, source_url,
+              contract_date, orgao_codigo, orgao_nome,
+              fornecedor_cnpj, fornecedor_nome,
+              catmat_id, catser_id, descricao,
+              quantidade, unidade, valor_unitario, valor_total, modalidade,
+              raw_payload jsonb, ingested_at)
+
+-- camada canônica
+analytics.cluster_registry(cluster_id, cluster_version, descricao_canonica,
+                           categoria, ativo, criado_em, mapeamento_de
+                           PRIMARY KEY (cluster_id, cluster_version))
+
+analytics.item_canonical(raw_id pk fk -> raw.compras,
+                         cluster_id, cluster_version,
+                         metodo_resolucao, confianca_resolucao,
+                         unidade_label, unidade_base, fator_conversao,
+                         valor_unitario_normalizado,
+                         ente_nivel, uf, porte,
+                         em_quarentena, motivo_quarentena, resolved_at)
+
+-- marts (materialized views, refresh manual via build_marts.py)
+analytics.mart_pares          -- (cluster, ente, uf, porte) → n, min, p25, mediana, p75, max, iqr
+analytics.mart_orgao_cluster  -- (cluster, orgao)           → n_compras, mediana_orgao, valor_total
+
+-- saúde
+analytics.v_quarentena_resumo -- (categoria, motivo) → n
+```
+
+Filtros aplicados nos marts: `em_quarentena=false`, `valor_unitario_normalizado IS NOT NULL`, `confianca_resolucao >= 0.75`.
+
+---
+
+## Resolução & normalização — como funciona
+
+`src/analytics/resolution.py` faz duas coisas e devolve uma linha canônica
+por linha bruta:
+
+**1. Cluster (Tier 1 apenas nesta fase):**
+
+| Caso                                    | `cluster_id`         | `metodo_resolucao`         | `confianca` |
+|-----------------------------------------|----------------------|----------------------------|-------------|
+| `catmat_id` no `core_v1.csv`            | do golden            | `tier1_catmat_golden`      | 1.00        |
+| `catmat_id` válido fora do golden       | `catmat_<id>`        | `tier1_catmat_sintetico`   | 0.85        |
+| Sem `catmat_id`                         | `null` → quarentena  | `sem_cluster`              | 0.00        |
+
+**2. Unidade:** aplica `config/unit_conversion.yaml` em ordem de patterns;
+primeiro match vence. Se nada bate, cai para `defaults_por_categoria` (qtd
+assumida = 1) e marca `fator_inferido=true` (penaliza confiança em -0.10).
+Se nem o default existe → quarentena.
+
+`valor_unitario_normalizado = valor_unitario / qtd_em_unidade_base`.
+
+**Convenções anti-bug** já no YAML (motivadas por bugs reais pegos no caminho):
+- `\b` antes de `\d+` em todo pattern numérico — `S10 LITRO` não vira "10 L".
+- Patterns de papel/resma vêm antes de massa — `75G/M²` (gramatura) não vira
+  peso.
+- Negative lookahead `(?!\s*\/?\s*M[23]?)` no pattern de gramas para descartar
+  "G/M2", "G/M3".
+
+Esses dois bugs específicos estão travados em `tests/test_resolution.py`
+(`test_canonicalize_diesel_nao_corrompe_S10`,
+`test_canonicalize_papel_nao_corrompe_gramatura`).
+
+---
+
+## Decisões técnicas
+
+- **Golden set é CSV, não DB.** Versionado no repo, fácil de revisar via PR.
+- **`cluster_version` em todo lugar.** Comparações cross-versão exigem
+  mapeamento explícito documentado — histórico nunca é reescrito.
+- **MVs em vez de queries ad-hoc.** Refresh é manual no fim do `build_marts`,
+  com `CREATE UNIQUE INDEX` para garantir refresh concorrente futuro.
+- **`raw_payload JSONB` mantido íntegro.** Se mudar a interpretação amanhã,
+  reprocessa do payload sem nova coleta.
+- **Ente derivado em `item_canonical`, não em `raw.compras`.** Permite
+  reinterpretar o mesmo dado bruto sob novas regras (ex: novas faixas de
+  porte municipal) sem alterar a camada raw.
+- **Sem auth na API.** Dados públicos por definição. Rate limit virá via
+  reverse proxy quando houver tráfego.
+- **Frontend faz fetch direto da API a cada requisição** (`cache: 'no-store'`).
+  Caching real só quando colocarmos atrás de Vercel/CDN.
+- **Linguagem do UI:** "Sinais de atenção" / "Índice comparativo", nunca
+  "Risco". Score agregado escondido em modo cidadão.
+
+---
+
+## Princípios
+
+- **Comunicação > infra.** Publicar imperfeito + visível > adiar para perfeito + invisível.
+- **Progressive correctness.** Sofisticar quando houver tráfego.
+- **Dados em quarentena ficam visíveis** com label, nunca somem.
+- **Estatística honesta + linguagem honesta.** Mediana/IQR, não σ ingênuo.
+  Linguagem factual, não acusatória.
+
+---
+
+## Licença
+
+Backend: AGPL-3.0-or-later. Frontend e SDKs (futuros): MIT. Datasets
+normalizados: ODbL ou CC-BY 4.0.
