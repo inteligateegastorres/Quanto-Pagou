@@ -2,12 +2,12 @@
 
 Plataforma cívica para monitorar gastos públicos brasileiros e identificar possíveis desvios.
 
-> **Status:** sprint local — Day 6 de 7 (ver [PLANO.md](./PLANO.md) §12).
+> **Status:** sprint local — **Day 7 de 7 entregue** (ver [PLANO.md](./PLANO.md) §12).
 > Pipeline completo (ingestão → resolução → marts → API → frontend) rodando em
-> `localhost`. Day 6 entregou: 1ª história editorial (`/insight/diesel-ministerios`),
-> OG images dinâmicas via `next/og`, banner de modo demonstração, e
-> resiliência da ingestão (window-splitting). Próximo (Day 7):
-> manifesto + landing pública + revisão jurídica preliminar.
+> `localhost`, com manifesto, landing pública, formulário de boletim
+> (placeholder mailto), e [DEPLOY.md](./DEPLOY.md) descrevendo a ordem
+> de operações para o go-live público. Próximo passo é do usuário humano:
+> domínio, contas Vercel/Supabase/R2, revisão jurídica preliminar.
 
 ---
 
@@ -24,9 +24,10 @@ Pronto:
   × porte) e `mart_orgao_cluster` (ranking de órgãos por cluster).
 - Quarentena visível com motivo legível (itens não-comparáveis nunca somem).
 - API FastAPI (OpenAPI nativo).
-- Frontend Next.js 16: home com ranking destacado + insight em destaque,
-  página de cluster, card narrativo do item (template §6.1 do plano),
-  página de insight editorial, metodologia, correções.
+- Frontend Next.js 16: landing pública (home reformulada com pitch +
+  3 CTAs + boletim + status), manifesto, ranking destacado, insight
+  editorial, página de cluster, card narrativo do item (template §6.1
+  do plano), metodologia, correções.
 - **OG images dinâmicas** (`/opengraph-image` na home, `/insight/.../opengraph-image`)
   via `next/og` — dados puxados do mart em tempo de geração; share preview
   em Twitter/Bluesky/WhatsApp pronto.
@@ -39,9 +40,13 @@ Pronto:
   `error_message` legível. `scripts/sync_compras.{ps1,sh}` orquestra.
 - 28 testes unitários travando regressões do parser de unidade.
 
-Não pronto (próximo bloco do sprint):
-- Manifesto + landing pública (Day 7).
+Não pronto (depende do usuário humano para destravar):
+- Domínio `quantopagou.org`, organização GitHub, contas Vercel/Supabase/R2.
 - Revisão jurídica preliminar do manifesto + página de fornecedor.
+- Adapter PNCP como fallback (explorado, pausado em commit `cc2dd13` —
+  swagger e fixture preservados em `data/`. NFe traz só 20% dos itens
+  com classificação NCM e não CATMAT; reabrir só se Compras.gov.br
+  ficar fora por semanas. Ver memória `project_pncp_adapter`).
 - Tier 2 (embeddings) — diferido para Fase 1+ por design (progressive
   correctness).
 - Ingestão real do Compras.gov.br quando o backend deles estabilizar
@@ -235,7 +240,8 @@ Base: `http://127.0.0.1:8000` · Docs: `/docs` · Sem auth (dados públicos).
 
 | Rota                       | Conteúdo                                                                                        |
 |----------------------------|-------------------------------------------------------------------------------------------------|
-| `/`                        | Pitch + insight em destaque + ranking de órgãos federais por mediana; lista de categorias.      |
+| `/`                        | Landing pública (Day 7): pitch + 3 CTAs + insight + ranking + categorias + boletim + status.    |
+| `/manifesto`               | Por que existe a plataforma — gap do Painel de Preços + tese + princípios + licenças.          |
 | `/insight/diesel-ministerios` | Análise editorial (Day 6) sobre o spread entre ministérios federais comprando o mesmo diesel S10. |
 | `/cluster/[cluster_id]`    | Distribuição p25-p75 entre pares + ranking completo de órgãos.                                  |
 | `/item/[raw_id]`           | Card narrativo do plano §6.1: barras "você vs mediana", badge de confiabilidade, sinais decompostos, agregado escondido. |
@@ -343,6 +349,19 @@ Esses dois bugs específicos estão travados em `tests/test_resolution.py`
 - **Dados em quarentena ficam visíveis** com label, nunca somem.
 - **Estatística honesta + linguagem honesta.** Mediana/IQR, não σ ingênuo.
   Linguagem factual, não acusatória.
+
+---
+
+## Deploy
+
+Plano operacional para o go-live público da Fase 0.5 está em
+[DEPLOY.md](./DEPLOY.md): stack (Vercel + Supabase + Cloudflare R2 +
+Fly.io para o worker FastAPI + GH Actions para cron de ingestão),
+ordem de operações, env vars (template em `.env.production.example`),
+checklist de smoke test e rollback. Custo total Fase 0.5: US$ 0/mês
+(todos free tiers). As ações que ainda dependem do usuário humano
+(domínio, contas, revisão jurídica) estão listadas na seção
+"Pré-requisitos".
 
 ---
 

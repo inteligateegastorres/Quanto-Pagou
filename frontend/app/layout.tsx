@@ -37,7 +37,8 @@ export default function RootLayout({
             <Link href="/" className="text-lg font-semibold tracking-tight no-underline">
               Quanto Pagou
             </Link>
-            <nav className="text-sm text-muted flex gap-6">
+            <nav className="text-sm text-muted flex gap-5 flex-wrap justify-end">
+              <Link href="/manifesto">Manifesto</Link>
               <Link href="/insight/diesel-ministerios">Insights</Link>
               <Link href="/metodologia">Metodologia</Link>
               <Link href="/correcoes">Correções</Link>

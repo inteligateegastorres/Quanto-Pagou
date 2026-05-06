@@ -24,16 +24,37 @@ export default async function HomePage() {
       : null;
 
   return (
-    <div className="space-y-12">
-      <section className="space-y-3">
-        <h1 className="text-3xl font-semibold tracking-tight">
+    <div className="space-y-14">
+      <section className="space-y-5">
+        <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight leading-tight">
           Quanto o governo pagou pela mesma coisa?
         </h1>
-        <p className="text-muted max-w-2xl">
-          Comparamos preços que órgãos públicos pagaram pelos mesmos itens.
-          Mostramos o que está acima da mediana, com fonte primária. Não
-          afirmamos irregularidade — mostramos os números.
+        <p className="text-muted max-w-2xl text-lg leading-relaxed">
+          O Painel de Preços oficial parou de receber atualizações em julho
+          de 2025. <em>Quanto Pagou</em> é o sucessor cívico — comparamos
+          preços que órgãos públicos pagaram pelos mesmos itens, com fonte
+          primária. Mostramos os números, sem adjetivos.
         </p>
+        <div className="flex gap-3 flex-wrap pt-2">
+          <Link
+            href="/manifesto"
+            className="border border-ink rounded-md px-4 py-2 text-sm no-underline hover:bg-ink hover:text-paper"
+          >
+            Leia o manifesto →
+          </Link>
+          <Link
+            href="/insight/diesel-ministerios"
+            className="border border-line rounded-md px-4 py-2 text-sm no-underline hover:border-ink"
+          >
+            Insight: spread no diesel federal
+          </Link>
+          <Link
+            href="/metodologia"
+            className="border border-line rounded-md px-4 py-2 text-sm no-underline hover:border-ink"
+          >
+            Como calculamos
+          </Link>
+        </div>
       </section>
 
       <section className="border border-attention/40 bg-attention/5 rounded-md p-5">
@@ -124,12 +145,55 @@ export default async function HomePage() {
         </ul>
       </section>
 
-      <section className="text-sm text-muted border-t border-line pt-6">
+      <section className="border border-line rounded-md p-6 bg-white">
+        <h2 className="text-xl font-semibold mb-2">Boletim semanal</h2>
+        <p className="text-sm text-muted mb-4 max-w-xl">
+          Toda quarta enviamos um e-mail com o ranking semanal recalculado, o
+          insight editorial e o que mudou em correções públicas. Sem
+          paywall, sem patrocinador, sem rastreador comercial.
+        </p>
+        <form
+          className="flex gap-2 max-w-md flex-wrap"
+          action="mailto:contato@quantopagou.org?subject=Inscrever%20no%20boletim"
+          method="post"
+          encType="text/plain"
+        >
+          <input
+            type="email"
+            name="email"
+            required
+            placeholder="seu@email.com"
+            className="flex-1 min-w-0 border border-line rounded-md px-3 py-2 text-sm bg-paper"
+          />
+          <button
+            type="submit"
+            className="border border-ink rounded-md px-4 py-2 text-sm no-underline hover:bg-ink hover:text-paper"
+          >
+            Inscrever
+          </button>
+        </form>
+        <p className="text-xs text-muted mt-2">
+          Placeholder via <code>mailto:</code> enquanto o gateway de e-mail
+          não está plugado. Sua inscrição abre seu cliente de e-mail — o
+          formulário fica de verdade no lançamento da Fase 1.
+        </p>
+      </section>
+
+      <section className="text-sm text-muted border-t border-line pt-6 space-y-3">
         <p>
-          Fase 0.5 (sprint local). Cobertura inicial: 5 categorias-piloto
-          federais via fixture sintética. API real Compras.gov.br entra em
-          rotação assim que o backend deles estabilizar. Veja{" "}
-          <Link href="/metodologia">metodologia</Link> para detalhes.
+          <strong>Status:</strong> Fase 0.5 (sprint local). Cobertura
+          inicial: 5 categorias-piloto federais via fixture sintética. A
+          API Compras.gov.br está com instabilidade crônica de backend
+          (JPA EntityManager); a ingestão real entra em rotação assim que
+          estabilizar. A engenharia já está pronta — vamos publicar os
+          números reais sem mudar uma linha de produto.
+        </p>
+        <p>
+          <strong>Aberto desde o primeiro commit.</strong> Backend AGPL-3.0,
+          frontend MIT, datasets sob ODbL/CC-BY 4.0. Repositório, testes,
+          metodologia e CSV do golden set tudo público — quem discordar de
+          uma escolha pode abrir uma issue. Quem encontrar erro tem o
+          botão <Link href="/correcoes">reportar</Link>.
         </p>
       </section>
     </div>
