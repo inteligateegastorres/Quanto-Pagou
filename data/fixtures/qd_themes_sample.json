@@ -1,0 +1,116 @@
+{
+  "themes": {
+    "themes": [
+      "Políticas Ambientais",
+      "Tecnologias na Educação"
+    ]
+  },
+  "subthemes_sample": {
+    "Políticas Ambientais": {
+      "total_excerpts": 555,
+      "excerpts": [
+        {
+          "territory_id": "4106902",
+          "date": "2011-12-29",
+          "scraped_at": "2022-05-10T19:00:03.329900",
+          "url": "https://data.queridodiario.ok.org.br/4106902/2011-12-29/3334432d2706bb18f16f5a4825426654c032942c.pdf",
+          "territory_name": "Curitiba",
+          "state_code": "PR",
+          "excerpt": "Federal nº 11.445, de 5 de janeiro de 2007 Lei Federal nº 12.305, de 2 de agosto de 2010 Decreto Federal nº 7.217, de 21 de junho de 2010 Lei Municipal nº 13.509, de 8 de junho de 2010 Decreto Municipal nº 1.120, de 24 de novembro de 1997 Decreto Municipal nº 983, de 26 de outubro de 2004 Decreto Municipal nº 1.068, de 18 de dezembro de 2004 Decreto Municipal nº 816, de 2 de julho de 2010 Decreto Municipal nº 968, de 29 de julho de 2010 TRANSFERÊNCIAS CORRENTES TRANSFERÊNCIAS INTERGOVERNAMENTAIS COTA-PARTE DO FUNDO DE PARTICIPAÇÃO DOS MUNICÍPIOS - FPM Emenda Constitucional nº 55, de 20 de setembro de 2007 Lei Complementar Federal nº 62, de 28 de dezembro de 1989 Lei Complementar Federal nº 91, de 22 de dezembro de 1997 Lei Complementar Federal nº 106, de 23 de março de 2001 Decreto-Lei Federal nº 1.881, de 27 de agosto de 1981 COTA-PARTE DO IMPOSTO SOBRE A PROPRIEDADE TERRITORIAL RURAL - ITR Lei Complementar Federal nº 93, de 4 de fevereiro de 1998 Lei Complementar Federal nº 123, de 14 de dezembro de 2006 Lei Complementar Federal nº 128, de 19 de dezembro de 2008 Lei Federal nº 4.504, de 30 de novembro de 1964 Lei Federal nº 5.672, de 2 de julho de 1971 Lei Federal nº 5.868, de 12 de dezembro de 1972 Lei Federal nº 6.746, de 10 de dezembro de 1979 Lei Federal nº 9.393, de 19 de dezembro de 1996 Lei Federal nº 11.250, de 27 de dezembro de 2005 Lei Federal nº 11.443, de 5 de janeiro de 2007 Lei Federal nº 11.446, de 5 de janeiro de 2007 Decreto-Lei Federal nº 57, de 18 de novembro de 1966 Decreto-Lei Federal nº 1.989, de 28 de dezembro de 1982 Decreto Federal nº 56.792, de 26 de agosto de 1965 Decreto Federal nº 59.566, de 14 de novembro de 1966 Decreto Federal nº 59.900, de 30 de dezembro de 1966 Decreto Federal nº 84.685, de 6 de maio de 1980 Decreto Federal nº 4.382, de 19 de setembro de 2002 Decreto Federal nº 4.892, de 25 de novembro de 2003 Decreto Federal nº 6.433, de 15 de abril",
+          "subthemes": [
+            "Política Nacional de Resíduos Sólidos"
+          ],
+          "entities": [],
+          "edition": "99",
+          "is_extra_edition": false,
+          "txt_url": "https://data.queridodiario.ok.org.br/4106902/2011-12-29/3334432d2706bb18f16f5a4825426654c032942c.txt"
+        },
+        {
+          "territory_id": "4106902",
+          "date": "2012-12-28",
+          "scraped_at": "2022-05-10T21:35:59.078164",
+          "url": "https://data.queridodiario.ok.org.br/4106902/2012-12-28/99f849e8c3e085e5cf2fa9f000366799a19d8722.pdf",
+          "territory_name": "Curitiba",
+          "state_code": "PR",
+          "excerpt": "Federal nº 11.445, de 5 de janeiro de 2007 Lei Federal nº 12.305, de 2 de agosto de 2010 Decreto Federal nº 7.217, de 21 de junho de 2010 Lei Municipal nº 13.509, de 8 de junho de 2010 Lei Municipal nº 13.965, de 13 de abril de 2012 Decreto Municipal nº 1.120, de 24 de novembro de 1997 Decreto Municipal nº 983, de 26 de outubro de 2004 Decreto Municipal nº 1.068, de 18 de dezembro de 2004 Decreto Municipal nº 816, de 2 de julho de 2010 Decreto Municipal nº 968, de 29 de julho de 2010 TRANSFERÊNCIAS CORRENTES TRANSFERÊNCIAS INTERGOVERNAMENTAIS COTA-PARTE DO FUNDO DE PARTICIPAÇÃO DOS MUNICÍPIOS - FPM Emenda Constitucional nº 55, de 20 de setembro de 2007 Lei Complementar Federal nº 62, de 28 de dezembro de 1989 Lei Complementar Federal nº 91, de 22 de dezembro de 1997 p Lei Complementar Federal nº 106, de 23 de março de 2001 Decreto-Lei Federal nº 1.881, de 27 de agosto de 1981 COTA-PARTE DO IMPOSTO SOBRE A PROPRIEDADE TERRITORIAL RURAL - ITR Lei Complementar Federal nº 93, de 4 de fevereiro de 1998 Lei Complementar Federal nº 123, de 14 de dezembro de 2006 Lei Complementar Federal nº 128, de 19 de dezembro de 2008 Lei Federal nº 4.504, de 30 de novembro de 1964 Lei Federal nº 5.672, de 2 de julho de 1971 Lei Federal nº 5.868, de 12 de dezembro de 1972 Lei Federal nº 6.746, de 10 de dezembro de 1979 Lei Federal nº 9.393, de 19 de dezembro de 1996 Lei Federal nº 11.250, de 27 de dezembro de 2005 Lei Federal nº 11.443, de 5 de janeiro de 2007 Lei Federal nº 11.446, de 5 de janeiro de 2007 Decreto-Lei Federal nº 57, de 18 de novembro de 1966 Decreto-Lei Federal nº 1.989, de 28 de dezembro de 1982 Decreto Federal nº 56.792, de 26 de agosto de 1965 Decreto Federal nº 59.566, de 14 de novembro de 1966 Decreto Federal nº 59.900, de 30 de dezembro de 1966 Decreto Federal nº 84.685, de 6 de maio de 1980 Decreto Federal nº 4.382, de 19 de setembro de 2002 Decreto Federal nº 4.892, de 25 de novembro",
+          "subthemes": [
+            "Política Nacional de Resíduos Sólidos"
+          ],
+          "entities": [],
+          "edition": "97",
+          "is_extra_edition": false,
+          "txt_url": "https://data.queridodiario.ok.org.br/4106902/2012-12-28/99f849e8c3e085e5cf2fa9f000366799a19d8722.txt"
+        },
+        {
+          "territory_id": "4106902",
+          "date": "2010-12-30",
+          "scraped_at": "2022-05-10T21:34:35.210348",
+          "url": "https://data.queridodiario.ok.org.br/4106902/2010-12-30/d4572cc538bb595869fd0aecf6e952e759f36334.pdf",
+          "territory_name": "Curitiba",
+          "state_code": "PR",
+          "excerpt": "Federal nº 11.445, de 5 de janeiro de 2007 Lei Federal nº 12.305, de 2 de agosto de 2010 Decreto Federal nº 7.217, de 21 de junho de 2010 Lei Municipal nº 13.509, de 8 de junho de 2010 Decreto Municipal nº 1.120, de 24 de novembro de 1997 Decreto Municipal nº 983, de 26 de outubro de 2004 Decreto Municipal nº 1.068, de 18 de dezembro de 2004 Decreto Municipal nº 816, de 2 de julho de 2010 Decreto Municipal nº 968, de 29 de julho de 2010 CURITIBA, 5 ª - FEIRA, 30/12/2010 - Nº 98 ATOS DO MUNICÍPIO DE CURITIBA pág. 157 TRANSFERÊNCIAS CORRENTES TRANSFERÊNCIAS INTERGOVERNAMENTAIS COTA-PARTE DO FUNDO DE PARTICIPAÇÃO DOS MUNICÍPIOS - FPM Emenda Constitucional nº 55, de 20 de setembro de 2007 Lei Complementar Federal nº 62, de 28 de dezembro de 1989 Lei Complementar Federal nº 91, de 22 de dezembro de 1997 Lei Complementar Federal nº 106, de 23 de março de 2001 Decreto-Lei Federal nº 1.881, de 27 de agosto de 1981 COTA-PARTE DO IMPOSTO SOBRE A PROPRIEDADE TERRITORIAL RURAL - ITR Lei Complementar Federal nº 93, de 4 de fevereiro de 1998 Lei Complementar Federal nº 123, de 14 de dezembro de 2006 Lei Complementar Federal nº 128, de 19 de dezembro de 2008 Lei Federal nº 4.504, de 30 de novembro de 1964 Lei Federal nº 5.672, de 2 de julho de 1971 Lei Federal nº 5.868, de 12 de dezembro de 1972 Lei Federal nº 6.746, de 10 de dezembro de 1979 Lei Federal nº 9.393, de 19 de dezembro de 1996 Lei Federal nº 11.250, de 27 de dezembro de 2005 Lei Federal nº 11.443, de 5 de janeiro de 2007 Lei Federal nº 11.446, de 5 de janeiro de 2007 Decreto-Lei Federal nº 57, de 18 de novembro de 1966 Decreto-Lei Federal nº 1.989, de 28 de dezembro de 1982 Decreto Federal nº 56.792, de 26 de agosto de 1965 Decreto Federal nº 59.566, de 14 de novembro de 1966 Decreto Federal nº 59.900, de 30 de dezembro de 1966 Decreto Federal nº 84.685, de 6 de maio de 1980 Decreto Federal nº 4.382, de 19 de setembro de 2002 Decreto",
+          "subthemes": [
+            "Política Nacional de Resíduos Sólidos"
+          ],
+          "entities": [],
+          "edition": "98",
+          "is_extra_edition": false,
+          "txt_url": "https://data.queridodiario.ok.org.br/4106902/2010-12-30/d4572cc538bb595869fd0aecf6e952e759f36334.txt"
+        }
+      ]
+    },
+    "Tecnologias na Educação": {
+      "total_excerpts": 1271,
+      "excerpts": [
+        {
+          "territory_id": "4106902",
+          "date": "2024-11-11",
+          "scraped_at": "2024-11-12T06:24:03.050685",
+          "url": "https://data.queridodiario.ok.org.br/4106902/2024-11-11/92886790b3867d5adc32bc4c6af1ea2d942f980c.pdf",
+          "territory_name": "Curitiba",
+          "state_code": "PR",
+          "excerpt": "Tema: Selecionar um dos temas: I - Teorias da Aquisição de Língua; II - Metodologias e Abordagens de Ensino; III - Desenvolvimento de Competências Linguísticas; IV - Planejamento e Avaliação; V - Tecnologia Educacional (Aplicativos e Software para Aprendizagem de Línguas); VI - Diversidade e Inclusão (Ensino para Alunos com Necessidades Especiais); VII - Aspectos Culturais (Integrando Cultura e Língua no Currículo); VIII - Prática de Ensino. Situação-problema: A partir do tema selecionado, descreva uma situação-problema vivenciada no seu cotidiano escolar considerando o Programa Curitibinhas Poliglotas, detalhando um breve perfil da turma e histórico de ações/atividades desenvolvidas. Proposta de solução: A partir da situação-problema, desenvolva uma proposta de solução incluindo os seguintes itens: - Objetivos; - Público-alvo; - Detalhamento das ações/atividades; - Estratégias de avaliação da proposta/verificação dos resultados; - Relação com a Formação Continuada no Exterior: (1) expectativa de como a Formação Continuada no Exterior pode auxiliar na resolução da situação-problema; (2) estratégia de compartilhamento dos saberes adquiridos com os demais professores de língua estrangeira que atuam no Programa Curitibinhas Poliglotas. - Cronograma de ações.",
+          "subthemes": [
+            "Formação e Aprendizagem"
+          ],
+          "entities": [],
+          "edition": "216",
+          "is_extra_edition": false,
+          "txt_url": "https://data.queridodiario.ok.org.br/4106902/2024-11-11/92886790b3867d5adc32bc4c6af1ea2d942f980c.txt"
+        },
+        {
+          "territory_id": "4106902",
+          "date": "2022-02-04",
+          "scraped_at": "2022-05-10T19:20:01.045121",
+          "url": "https://data.queridodiario.ok.org.br/4106902/2022-02-04/3bce2477da5d7a381d614ef9f53954819cd1c85a.pdf",
+          "territory_name": "Curitiba",
+          "state_code": "PR",
+          "excerpt": "Alexandre Jarschel de Oliveira : Secretário Municipal de Administração, Gestão de Pessoal e Tecnologia da Informação PORTARIA Nº 248 O SECRETÁRIO MUNICIPAL DE ADMINISTRAÇÃO, GESTÃO DE PESSOAL E TECNOLOGIA DA INFORMAÇÃO, no uso das competências que lhe foram delegadas pelo Decreto Municipal n.º 1.632 de 5 de dezembro de 2019, em atenção ao Ofício n.º 390/2021-SME e no protocolo nº 04-038451/2021, Libera servidores. Contrata em Regime Especial por Tempo Determinado, para a Função Pública de Professor de Educação Infantil.",
+          "subthemes": [
+            "Formação e Aprendizagem"
+          ],
+          "entities": [],
+          "edition": "25",
+          "is_extra_edition": false,
+          "txt_url": "https://data.queridodiario.ok.org.br/4106902/2022-02-04/3bce2477da5d7a381d614ef9f53954819cd1c85a.txt"
+        },
+        {
+          "territory_id": "4106902",
+          "date": "2021-04-06",
+          "scraped_at": "2022-05-10T08:53:39.645498",
+          "url": "https://data.queridodiario.ok.org.br/4106902/2021-04-06/d4d8b94eca702d05b1a7424a852bfea341ab164e.pdf",
+          "territory_name": "Curitiba",
+          "state_code": "PR",
+          "excerpt": "A cópia dos Editais de Credenciamento com seus anexos poderá ser obtida na página da internet da Secretaria Municipal da Educação de Curitiba – https://educacao.curitiba.pr.gov.br/ Comissão Especial de Credenciamento para prestação de serviços eventuais de ações formativas, aperfeiçoamento, pesquisa ou desenvolvimento cultural/artístico, para a Rede Municipal de Ensino de Curitiba, designada pela Portaria n.º 11 de 23 de março de 2020. Secretaria Municipal da Educação, 5 de abril de 2021. Maria Sílvia Bacila : Secretária Municipal da Educação CREDENCIAMENTO DE DOCENTES - AVISO DE PUBLICAÇÃO A Secretaria Municipal da Educação, por meio da Comissão Especial de Credenciamento, designada pela Portaria n.º 11 de 23 de março de 2020, torna público os profissionais habilitados no processo de credenciamento para prestação de serviços eventuais de ações formativas, aperfeiçoamento, pesquisa ou desenvolvimento cultural/artístico, para a Rede Municipal de Ensino de Curitiba, para cursos, oficinas, palestras, seminários, fóruns, conferências, apresentações culturais/artísticas, consultorias/tutorias, tradução/interpretação da Língua Brasileira de Sinais, Fanfarra Infantojuvenil e Serviços de correção, análise e ou revisão ortográfica e gramatical, relacionados abaixo: NOME: LEONIR LORENZETTI CPF: 623.338.959-34 ÁREAS: Ensino Fundamental - Ciências: Matéria e Energia; Ser Humano e Saúde; Terra e Universo; Vida e Ambiente; Práticas de Ciência e Tecnologia; Educação Infantil: Campos de Experiências; Temas Contemporâneos: Meio Ambiente - Educação Ambiental e para a Sustentabilidade.",
+          "subthemes": [
+            "Conectividade"
+          ],
+          "entities": [],
+          "edition": "67",
+          "is_extra_edition": false,
+          "txt_url": "https://data.queridodiario.ok.org.br/4106902/2021-04-06/d4d8b94eca702d05b1a7424a852bfea341ab164e.txt"
+        }
+      ]
+    }
+  }
+}

@@ -49,6 +49,12 @@ export default async function HomePage() {
             Insight: spread no diesel federal
           </Link>
           <Link
+            href="/curitiba"
+            className="border border-line rounded-md px-4 py-2 text-sm no-underline hover:border-ink"
+          >
+            Buscar diários de Curitiba
+          </Link>
+          <Link
             href="/metodologia"
             className="border border-line rounded-md px-4 py-2 text-sm no-underline hover:border-ink"
           >

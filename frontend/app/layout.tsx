@@ -40,6 +40,7 @@ export default function RootLayout({
             <nav className="text-sm text-muted flex gap-5 flex-wrap justify-end">
               <Link href="/manifesto">Manifesto</Link>
               <Link href="/insight/diesel-ministerios">Insights</Link>
+              <Link href="/curitiba">Curitiba</Link>
               <Link href="/metodologia">Metodologia</Link>
               <Link href="/correcoes">Correções</Link>
               <a
