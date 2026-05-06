@@ -69,10 +69,10 @@ if (-not $gotApi -and -not $gotWeb -and -not (Test-Path $pidsFile)) {
 
 if ($Wipe) {
     Say "derrubando postgres + apagando volume (--wipe)..." Yellow
-    docker compose down -v 2>&1 | Out-Null
+    docker compose down -v *> $null
 } elseif ($All) {
     Say "parando postgres (volume preservado)..."
-    docker compose stop 2>&1 | Out-Null
+    docker compose stop *> $null
 } else {
     Say "postgres continua rodando (use -All para parar tudo)" DarkGray
 }

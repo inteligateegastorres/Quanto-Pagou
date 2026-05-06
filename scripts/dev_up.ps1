@@ -15,7 +15,10 @@ param(
     [int]$WebPort = 3000
 )
 
-$ErrorActionPreference = "Stop"
+# Continue (nao Stop): em Windows PowerShell 5.1 com Stop, qualquer escrita em
+# stderr de comando nativo (ex.: warnings benignos do docker) vira NativeCommandError
+# e aborta o script. Usamos throw + checks de $LASTEXITCODE explicitos.
+$ErrorActionPreference = "Continue"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
@@ -81,11 +84,12 @@ if (-not $SkipFront) { Need-Cmd "npm" }
 
 if ($Fresh) {
     Say "modo --fresh: derrubando container + volume" Yellow
-    docker compose down -v 2>&1 | Out-Null
+    docker compose down -v *> $null
 }
 
 Say "subindo postgres (docker compose up -d)..."
-docker compose up -d 2>&1 | Out-Null
+docker compose up -d *> $null
+if ($LASTEXITCODE -ne 0) { throw "docker compose up falhou (exit=$LASTEXITCODE)" }
 
 Say "aguardando postgres healthy..." DarkGray
 $deadline = (Get-Date).AddSeconds(60)
@@ -99,15 +103,19 @@ do {
 } while (-not $ok -and (Get-Date) -lt $deadline)
 if (-not $ok) { throw "postgres nao ficou healthy em 60s" }
 
-# Aplicar migration analytics (idempotente; sobrescreve materialized views)
-Say "aplicando sql/001_analytics.sql..."
-Get-Content sql/001_analytics.sql -Raw | docker exec -i quantopagou-postgres psql -U quantopagou -d quantopagou -q *> $null
+# Aplicar migrations idempotentes na ordem (analytics + resilience)
+foreach ($sqlFile in @("sql/001_analytics.sql", "sql/002_resilience.sql")) {
+    Say "aplicando $sqlFile..."
+    Get-Content $sqlFile -Raw | docker exec -i quantopagou-postgres psql -U quantopagou -d quantopagou -q *> $null
+    if ($LASTEXITCODE -ne 0) { throw "psql $sqlFile falhou (exit=$LASTEXITCODE)" }
+}
 
 # ---------- python deps ----------
 
 if (-not (Test-Path ".venv")) {
     Say "instalando deps Python (uv sync)..."
-    python -m uv sync
+    python -m uv sync *> $null
+    if ($LASTEXITCODE -ne 0) { throw "uv sync falhou (exit=$LASTEXITCODE)" }
 }
 
 # ---------- ingest + build_marts ----------
@@ -116,12 +124,14 @@ $rawCount = (docker exec quantopagou-postgres psql -U quantopagou -d quantopagou
 if ($rawCount -eq "" -or $rawCount -eq "0" -or $Fresh) {
     Say "ingerindo fixture sintetica (raw.compras vazio)..."
     python -m uv run python -m ingest --fixture data/fixtures/compras_sample.jsonl 2026-04-15 2026-04-15 *> $null
+    if ($LASTEXITCODE -ne 0) { throw "ingest falhou (exit=$LASTEXITCODE) - veja .dev/ ou rode sem redirect para diagnosticar" }
 } else {
     Say "raw.compras ja tem $rawCount linhas (use -Fresh para resetar)" DarkGray
 }
 
 Say "rodando analytics.build_marts (canonicalizacao + refresh)..."
 python -m uv run python -m analytics.build_marts *> $null
+if ($LASTEXITCODE -ne 0) { throw "analytics.build_marts falhou (exit=$LASTEXITCODE)" }
 
 # ---------- API ----------
 
@@ -134,7 +144,7 @@ if (Process-Alive $pids.api) {
     $proc = Start-Process -FilePath "python" `
         -ArgumentList @("-m","uv","run","uvicorn","api.main:app","--host","127.0.0.1","--port","$ApiPort","--log-level","warning") `
         -RedirectStandardOutput $apiLog -RedirectStandardError "$apiLog.err" `
-        -WindowStyle Hidden -PassThru
+        -WindowStyle Hidden -PassThru -ErrorAction Stop
     $pids.api = $proc.Id
     Write-Pids $pids
     Wait-Tcp $ApiPort "API"
@@ -146,8 +156,10 @@ if (-not $SkipFront) {
     if (-not (Test-Path "frontend/node_modules/next")) {
         Say "instalando deps do frontend (npm install)..."
         Push-Location frontend
-        npm install --silent
+        npm install --silent *> $null
+        $npmExit = $LASTEXITCODE
         Pop-Location
+        if ($npmExit -ne 0) { throw "npm install falhou (exit=$npmExit)" }
     }
 
     if (Process-Alive $pids.web) {
@@ -156,12 +168,13 @@ if (-not $SkipFront) {
         Say "subindo Next.js dev na porta $WebPort (log: .dev/web.log)..."
         Remove-Item -ErrorAction SilentlyContinue $webLog
         # npm.cmd no Windows; fallback npm.
-        $npmCmd = (Get-Command npm.cmd -ErrorAction SilentlyContinue)?.Source
-        if (-not $npmCmd) { $npmCmd = (Get-Command npm).Source }
+        $npmCmdInfo = Get-Command npm.cmd -ErrorAction SilentlyContinue
+        if ($npmCmdInfo) { $npmCmd = $npmCmdInfo.Source }
+        else { $npmCmd = (Get-Command npm).Source }
         $proc = Start-Process -FilePath $npmCmd `
             -ArgumentList @("--prefix","frontend","run","dev","--","-p","$WebPort") `
             -RedirectStandardOutput $webLog -RedirectStandardError "$webLog.err" `
-            -WindowStyle Hidden -PassThru
+            -WindowStyle Hidden -PassThru -ErrorAction Stop
         $pids.web = $proc.Id
         Write-Pids $pids
         Wait-Tcp $WebPort "frontend" 90

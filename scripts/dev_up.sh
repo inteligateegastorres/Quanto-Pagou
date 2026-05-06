@@ -72,8 +72,10 @@ until docker exec quantopagou-postgres pg_isready -U quantopagou -d quantopagou 
     sleep 1
 done
 
-say "aplicando sql/001_analytics.sql (idempotente)..."
-docker exec -i quantopagou-postgres psql -U quantopagou -d quantopagou -q < sql/001_analytics.sql >/dev/null
+for sql_file in sql/001_analytics.sql sql/002_resilience.sql; do
+    say "aplicando $sql_file (idempotente)..."
+    docker exec -i quantopagou-postgres psql -U quantopagou -d quantopagou -q < "$sql_file" >/dev/null
+done
 
 # ---------- python deps ----------
 if [ ! -d ".venv" ]; then

@@ -14,8 +14,8 @@ import json
 import logging
 import time
 from collections.abc import Iterator
-from dataclasses import dataclass
-from datetime import date, datetime
+from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -49,6 +49,38 @@ class IngestResult:
     hash_sha256: str
     period_start: date
     period_end: date
+
+
+@dataclass(slots=True)
+class FailedWindow:
+    period_start: date
+    period_end: date
+    error: str
+    snapshot_id: str | None  # snapshot 'failed' registrado em raw.snapshots, se houver
+
+
+@dataclass(slots=True)
+class IngestRunSummary:
+    """Sumario de uma execucao com window-splitting: 1 ou mais sub-janelas."""
+
+    successes: list[IngestResult] = field(default_factory=list)
+    failures: list[FailedWindow] = field(default_factory=list)
+
+    @property
+    def items_total(self) -> int:
+        return sum(r.items_inserted for r in self.successes)
+
+    @property
+    def pages_total(self) -> int:
+        return sum(r.pages_fetched for r in self.successes)
+
+    @property
+    def has_any_success(self) -> bool:
+        return len(self.successes) > 0
+
+    @property
+    def has_any_failure(self) -> bool:
+        return len(self.failures) > 0
 
 
 def _build_snapshot_id(period_start: date, period_end: date) -> str:
@@ -121,10 +153,13 @@ _TRANSIENT_BODY_FRAGMENTS = (
 )
 
 
+# Backend Compras.gov.br entra em modo "EntityManager caido" por minutos
+# de cada vez (pool JPA do lado deles). 8 tentativas com backoff ate 60s
+# da uma janela de ~4min antes de desistir e deixar o split assumir.
 @retry(
     retry=retry_if_exception_type(_RetryableHTTP),
-    wait=wait_exponential(multiplier=1, min=2, max=30),
-    stop=stop_after_attempt(4),
+    wait=wait_exponential(multiplier=1, min=2, max=60),
+    stop=stop_after_attempt(8),
     reraise=True,
 )
 def _get_page(client: httpx.Client, params: dict[str, Any]) -> dict[str, Any]:
@@ -205,6 +240,41 @@ def _insert_items_batch(
     return len(rows)
 
 
+def _register_snapshot_in_progress(
+    snapshot_id: str,
+    *,
+    source: str,
+    period_start: date,
+    period_end: date,
+) -> None:
+    """Insere snapshot com status='in_progress' em transacao isolada (autocommit).
+
+    Conn separada da que fara o ingest: se a ingest_conn morrer com rollback,
+    a row de snapshot ja esta commitada, e podemos marca-la 'failed' depois.
+    """
+    with psycopg.connect(settings.database_url, autocommit=True) as bootstrap:
+        bootstrap.execute(
+            """
+            INSERT INTO raw.snapshots
+                (id, source, period_start, period_end, records_count, hash_sha256, status)
+            VALUES (%s, %s, %s, %s, 0, '', 'in_progress')
+            """,
+            (snapshot_id, source, period_start, period_end),
+        )
+
+
+def _mark_snapshot_failed(snapshot_id: str, error: str) -> None:
+    """Marca snapshot como 'failed' em conn nova. Best-effort: nunca propaga."""
+    try:
+        with psycopg.connect(settings.database_url, autocommit=True) as fail_conn:
+            fail_conn.execute(
+                "UPDATE raw.snapshots SET status='failed', error_message=%s WHERE id=%s",
+                (error[:500], snapshot_id),
+            )
+    except Exception:
+        logger.exception("Nao consegui marcar snapshot %s como failed", snapshot_id)
+
+
 def _persist_pages(
     pages: Iterator[dict[str, Any]],
     *,
@@ -223,51 +293,52 @@ def _persist_pages(
     items_inserted = 0
     started = datetime.now()
 
-    with (
-        psycopg.connect(settings.database_url) as conn,
-        gzip.open(snap_path, "wt", encoding="utf-8", compresslevel=6) as snap_fh,
-    ):
-        # raw.snapshots primeiro (FK em raw.compras). Atualizamos records_count e hash no fim.
-        conn.execute(
-            """
-            INSERT INTO raw.snapshots
-                (id, source, period_start, period_end, records_count, hash_sha256)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            """,
-            (snapshot_id, source, period_start, period_end, 0, ""),
-        )
-        conn.commit()
+    _register_snapshot_in_progress(
+        snapshot_id, source=source, period_start=period_start, period_end=period_end
+    )
 
-        try:
-            for payload in pages:
-                pages_fetched += 1
-                line = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-                hasher.update(line.encode("utf-8"))
-                snap_fh.write(line)
-                snap_fh.write("\n")
+    try:
+        with (
+            psycopg.connect(settings.database_url) as conn,
+            gzip.open(snap_path, "wt", encoding="utf-8", compresslevel=6) as snap_fh,
+        ):
+            try:
+                for payload in pages:
+                    pages_fetched += 1
+                    line = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+                    hasher.update(line.encode("utf-8"))
+                    snap_fh.write(line)
+                    snap_fh.write("\n")
 
-                items = payload.get("resultado") or []
-                items_total += len(items)
-                if items:
-                    items_inserted += _insert_items_batch(conn, snapshot_id, items)
-                    conn.commit()
+                    items = payload.get("resultado") or []
+                    items_total += len(items)
+                    if items:
+                        items_inserted += _insert_items_batch(conn, snapshot_id, items)
+                        conn.commit()
 
-                if on_progress:
-                    on_progress(
-                        page=pages_fetched,
-                        total_pages=int(payload.get("totalPaginas") or 0),
-                        items_so_far=items_total,
-                    )
-        except Exception:
-            conn.rollback()
-            raise
+                    if on_progress:
+                        on_progress(
+                            page=pages_fetched,
+                            total_pages=int(payload.get("totalPaginas") or 0),
+                            items_so_far=items_total,
+                        )
+            except Exception:
+                conn.rollback()
+                raise
 
-        hash_hex = hasher.hexdigest()
-        conn.execute(
-            "UPDATE raw.snapshots SET records_count = %s, hash_sha256 = %s WHERE id = %s",
-            (items_inserted, hash_hex, snapshot_id),
-        )
-        conn.commit()
+            hash_hex = hasher.hexdigest()
+            conn.execute(
+                """
+                UPDATE raw.snapshots
+                   SET records_count=%s, hash_sha256=%s, status='completed'
+                 WHERE id=%s
+                """,
+                (items_inserted, hash_hex, snapshot_id),
+            )
+            conn.commit()
+    except Exception as exc:
+        _mark_snapshot_failed(snapshot_id, f"{type(exc).__name__}: {exc}")
+        raise
 
     elapsed = (datetime.now() - started).total_seconds()
     logger.info(
@@ -315,6 +386,157 @@ def ingest(
             period_end=period_end,
             on_progress=on_progress,
         )
+
+
+# ---------------------------------------------------------------------------
+# Window splitting: divide a janela ao meio quando o backend deles esta
+# instavel demais para responder a janela inteira (sintoma classico:
+# 400 + "Could not open JPA EntityManager"). Recursao ate min_window_days.
+# Janelas terminais que falham viram snapshot 'failed' em raw.snapshots —
+# pipeline downstream (build_marts) ignora essas linhas porque nao ha raw.compras.
+# ---------------------------------------------------------------------------
+
+
+def _is_split_recoverable(exc: BaseException) -> bool:
+    """A excecao indica problema possivelmente especifico desta janela?"""
+    if isinstance(exc, _RetryableHTTP):
+        return True
+    if isinstance(exc, httpx.HTTPStatusError):
+        # 5xx ja sao retriable no _get_page; aqui pegamos 4xx persistentes
+        # com mensagem de backend (pode ser data range que machucou o JPA deles).
+        return 400 <= exc.response.status_code < 500
+    if isinstance(exc, httpx.HTTPError):
+        return True
+    return False
+
+
+def _split_window(
+    period_start: date, period_end: date
+) -> tuple[tuple[date, date], tuple[date, date]] | None:
+    """Divide [start, end] inclusivo em duas metades. Retorna None se start==end."""
+    length_days = (period_end - period_start).days + 1
+    if length_days < 2:
+        return None
+    half = length_days // 2
+    first_end = period_start + timedelta(days=half - 1)
+    second_start = first_end + timedelta(days=1)
+    return (period_start, first_end), (second_start, period_end)
+
+
+def _ingest_window_recursive(
+    period_start: date,
+    period_end: date,
+    *,
+    page_size: int,
+    max_pages: int | None,
+    min_window_days: int,
+    on_progress: Any,
+    on_window_event: Any,
+    summary: IngestRunSummary,
+) -> None:
+    length_days = (period_end - period_start).days + 1
+
+    if on_window_event:
+        on_window_event("start", period_start, period_end, length_days=length_days)
+
+    try:
+        result = ingest(
+            period_start,
+            period_end,
+            page_size=page_size,
+            max_pages=max_pages,
+            on_progress=on_progress,
+        )
+    except Exception as exc:
+        if not _is_split_recoverable(exc):
+            # Erro nao-relacionado a backend instavel (ex: erro de DB local).
+            # Nao adianta dividir; propaga para o caller.
+            if on_window_event:
+                on_window_event(
+                    "fatal", period_start, period_end, error=str(exc)[:300]
+                )
+            raise
+
+        if length_days <= min_window_days:
+            err = f"{type(exc).__name__}: {exc}"[:500]
+            # snapshot ja foi marcado 'failed' por _persist_pages se chegou a entrar la;
+            # caso contrario nao ha snapshot_id para listar.
+            summary.failures.append(
+                FailedWindow(period_start, period_end, err, snapshot_id=None)
+            )
+            if on_window_event:
+                on_window_event("fail", period_start, period_end, error=err)
+            return
+
+        # Divide e recurse.
+        if on_window_event:
+            on_window_event(
+                "split", period_start, period_end, error=str(exc)[:300]
+            )
+        halves = _split_window(period_start, period_end)
+        if halves is None:
+            # Defensivo: nao deveria chegar aqui (length_days > min_window_days >= 1).
+            err = f"{type(exc).__name__}: {exc}"[:500]
+            summary.failures.append(
+                FailedWindow(period_start, period_end, err, snapshot_id=None)
+            )
+            return
+        first, second = halves
+        _ingest_window_recursive(
+            first[0], first[1],
+            page_size=page_size, max_pages=max_pages,
+            min_window_days=min_window_days,
+            on_progress=on_progress, on_window_event=on_window_event,
+            summary=summary,
+        )
+        _ingest_window_recursive(
+            second[0], second[1],
+            page_size=page_size, max_pages=max_pages,
+            min_window_days=min_window_days,
+            on_progress=on_progress, on_window_event=on_window_event,
+            summary=summary,
+        )
+        return
+
+    summary.successes.append(result)
+    if on_window_event:
+        on_window_event("ok", period_start, period_end, result=result)
+
+
+def ingest_with_split(
+    period_start: date,
+    period_end: date,
+    *,
+    page_size: int = DEFAULT_PAGE_SIZE,
+    max_pages: int | None = None,
+    min_window_days: int = 1,
+    on_progress: Any = None,
+    on_window_event: Any = None,
+) -> IngestRunSummary:
+    """Ingere uma janela; em caso de falha transitoria, divide ao meio recursivamente.
+
+    `min_window_days` = 1 significa "para de dividir quando a janela tem 1 dia
+    (start == end)". Janelas terminais que falham viram FailedWindow no sumario
+    e marcam snapshot 'failed' em raw.snapshots se o erro veio de dentro do
+    _persist_pages (caso contrario snapshot_id e None).
+
+    O caller pode passar `on_window_event(event, start, end, **kw)` para receber
+    notificacoes ('start', 'ok', 'split', 'fail', 'fatal').
+    """
+    if period_start > period_end:
+        raise ValueError("period_start > period_end")
+    if min_window_days < 1:
+        raise ValueError("min_window_days must be >= 1")
+
+    summary = IngestRunSummary()
+    _ingest_window_recursive(
+        period_start, period_end,
+        page_size=page_size, max_pages=max_pages,
+        min_window_days=min_window_days,
+        on_progress=on_progress, on_window_event=on_window_event,
+        summary=summary,
+    )
+    return summary
 
 
 def ingest_fixture(
