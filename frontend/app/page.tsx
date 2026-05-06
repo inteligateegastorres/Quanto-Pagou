@@ -8,13 +8,20 @@ export default async function HomePage() {
 
   // Gancho viral: ranking dos órgãos federais que pagam mais por diesel.
   const featured = clusters.find((c) => c.cluster_id === "oleo_diesel_s10");
-  const ranking = featured
-    ? await api.rankingOrgaos(featured.cluster_id, "mediana_desc", 5)
+  const rankingFull = featured
+    ? await api.rankingOrgaos(featured.cluster_id, "mediana_desc", 50)
     : [];
+  const ranking = rankingFull.slice(0, 5);
   const featuredPares = featured ? await api.paresFor(featured.cluster_id) : [];
   const medianaPares = featuredPares[0]?.mediana
     ? Number(featuredPares[0].mediana)
     : null;
+  const insightSpreadPct =
+    rankingFull.length >= 2
+      ? (Number(rankingFull[0].mediana_orgao) -
+          Number(rankingFull[rankingFull.length - 1].mediana_orgao)) /
+        Number(rankingFull[rankingFull.length - 1].mediana_orgao)
+      : null;
 
   return (
     <div className="space-y-12">
@@ -26,6 +33,29 @@ export default async function HomePage() {
           Comparamos preços que órgãos públicos pagaram pelos mesmos itens.
           Mostramos o que está acima da mediana, com fonte primária. Não
           afirmamos irregularidade — mostramos os números.
+        </p>
+      </section>
+
+      <section className="border border-attention/40 bg-attention/5 rounded-md p-5">
+        <p className="text-xs uppercase tracking-wide text-attention font-medium mb-2">
+          Insight da semana · 06 de maio de 2026
+        </p>
+        <h2 className="text-lg font-semibold leading-snug mb-2">
+          <Link
+            href="/insight/diesel-ministerios"
+            className="no-underline hover:underline"
+          >
+            Por que ministérios pagam preços tão diferentes pelo mesmo diesel?
+          </Link>
+        </h2>
+        <p className="text-sm text-muted">
+          Em DF, no mesmo período, o spread entre o ministério que pagou mais
+          caro e o que pagou mais barato pelo litro de diesel S10 chegou a{" "}
+          {insightSpreadPct != null
+            ? `${(insightSpreadPct * 100).toFixed(0)}%`
+            : "150%"}{" "}
+          — todos comprando o mesmo combustível, na mesma esfera.{" "}
+          <Link href="/insight/diesel-ministerios">leia →</Link>
         </p>
       </section>
 

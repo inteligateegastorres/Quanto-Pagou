@@ -2,9 +2,12 @@
 
 Plataforma cívica para monitorar gastos públicos brasileiros e identificar possíveis desvios.
 
-> **Status:** sprint local — Day 5 de 7 (ver [PLANO.md](./PLANO.md) §12).
+> **Status:** sprint local — Day 6 de 7 (ver [PLANO.md](./PLANO.md) §12).
 > Pipeline completo (ingestão → resolução → marts → API → frontend) rodando em
-> `localhost`. Próximo: análise editorial real + OG images + manifesto.
+> `localhost`. Day 6 entregou: 1ª história editorial (`/insight/diesel-ministerios`),
+> OG images dinâmicas via `next/og`, banner de modo demonstração, e
+> resiliência da ingestão (window-splitting). Próximo (Day 7):
+> manifesto + landing pública + revisão jurídica preliminar.
 
 ---
 
@@ -21,16 +24,29 @@ Pronto:
   × porte) e `mart_orgao_cluster` (ranking de órgãos por cluster).
 - Quarentena visível com motivo legível (itens não-comparáveis nunca somem).
 - API FastAPI (OpenAPI nativo).
-- Frontend Next.js 16: home com ranking destacado, página de cluster, card
-  narrativo do item (template §6.1 do plano), metodologia, correções.
+- Frontend Next.js 16: home com ranking destacado + insight em destaque,
+  página de cluster, card narrativo do item (template §6.1 do plano),
+  página de insight editorial, metodologia, correções.
+- **OG images dinâmicas** (`/opengraph-image` na home, `/insight/.../opengraph-image`)
+  via `next/og` — dados puxados do mart em tempo de geração; share preview
+  em Twitter/Bluesky/WhatsApp pronto.
+- **Banner global "modo demonstração"** com link para metodologia — deixa
+  claro que números são fixture sintética enquanto API real está caída.
+- **Window-splitting recursivo** na ingestão (`ingest_with_split` +
+  `sql/002_resilience.sql` com `status` em `raw.snapshots`): janelas que
+  falham com erro transitório são divididas até `min_window_days`, e o
+  que não vingar fica como `failed` em `raw.snapshots` com
+  `error_message` legível. `scripts/sync_compras.{ps1,sh}` orquestra.
 - 28 testes unitários travando regressões do parser de unidade.
 
 Não pronto (próximo bloco do sprint):
-- Análise editorial real e OG images dinâmicas.
-- Manifesto + landing pública.
+- Manifesto + landing pública (Day 7).
+- Revisão jurídica preliminar do manifesto + página de fornecedor.
 - Tier 2 (embeddings) — diferido para Fase 1+ por design (progressive
   correctness).
-- Ingestão real do Compras.gov.br quando o backend deles estabilizar.
+- Ingestão real do Compras.gov.br quando o backend deles estabilizar
+  (resiliência já testada na prática: 3 snapshots `failed` registrados,
+  com `error_message` capturando a string `Could not open JPA EntityManager`).
 - Spiders estaduais (Tá de Pé) — Fase 2.
 
 ---
@@ -219,11 +235,13 @@ Base: `http://127.0.0.1:8000` · Docs: `/docs` · Sem auth (dados públicos).
 
 | Rota                       | Conteúdo                                                                                        |
 |----------------------------|-------------------------------------------------------------------------------------------------|
-| `/`                        | Pitch + ranking destacado de órgãos federais por mediana de preço; lista de categorias.         |
+| `/`                        | Pitch + insight em destaque + ranking de órgãos federais por mediana; lista de categorias.      |
+| `/insight/diesel-ministerios` | Análise editorial (Day 6) sobre o spread entre ministérios federais comprando o mesmo diesel S10. |
 | `/cluster/[cluster_id]`    | Distribuição p25-p75 entre pares + ranking completo de órgãos.                                  |
 | `/item/[raw_id]`           | Card narrativo do plano §6.1: barras "você vs mediana", badge de confiabilidade, sinais decompostos, agregado escondido. |
 | `/metodologia`             | Fontes, resolução, normalização de unidade, política de correção.                              |
 | `/correcoes`               | Página viva (vazia por enquanto) — onde aparecem correções pós-relato.                         |
+| `/opengraph-image`, `/insight/.../opengraph-image` | OG images dinâmicas (PNG 1200×630) geradas via `next/og`; números puxados do mart no momento da request. |
 
 ---
 
