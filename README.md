@@ -146,8 +146,8 @@ se `raw.compras` estiver vazio, roda `build_marts` e sobe API + frontend em
 background. PIDs e logs ficam em `.dev/` (gitignored). URLs ao final:
 
 - Postgres: `localhost:5433` (user/db `quantopagou`)
-- API: <http://127.0.0.1:8000> (Swagger em `/docs`)
-- Frontend: <http://127.0.0.1:3000>
+- API: <http://127.0.0.1:8001> (Swagger em `/docs`)
+- Frontend: <http://127.0.0.1:3001>
 
 ### Caminho manual (se preferir controle)
 
@@ -168,7 +168,7 @@ python -m uv run python -m ingest --fixture data/fixtures/compras_sample.jsonl 2
 python -m uv run python -m analytics.build_marts
 
 # 6. API
-python -m uv run uvicorn api.main:app --host 127.0.0.1 --port 8000
+python -m uv run uvicorn api.main:app --host 127.0.0.1 --port 8001
 
 # 7. Frontend (em outro terminal)
 cd frontend && npm install && npm run dev
@@ -238,7 +238,7 @@ python -m uv run pytest tests/ -v
 
 ## API REST (Fase 0.5)
 
-Base: `http://127.0.0.1:8000` · Docs: `/docs` · Sem auth (dados públicos).
+Base: `http://127.0.0.1:8001` · Docs: `/docs` · Sem auth (dados públicos).
 
 | Endpoint                                                | Descrição                                                  |
 |---------------------------------------------------------|------------------------------------------------------------|

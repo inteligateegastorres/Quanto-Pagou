@@ -1,7 +1,7 @@
 // Cliente da API do Quanto Pagou. Server Components fazem fetch direto.
 
 const API_BASE =
-  process.env.QUANTOPAGOU_API_BASE ?? "http://127.0.0.1:8000";
+  process.env.QUANTOPAGOU_API_BASE ?? "http://127.0.0.1:8001";
 
 export type Cluster = {
   cluster_id: string;

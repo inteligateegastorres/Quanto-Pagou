@@ -12,8 +12,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-: "${API_PORT:=8000}"
-: "${WEB_PORT:=3000}"
+: "${API_PORT:=8001}"
+: "${WEB_PORT:=3001}"
 : "${FRESH:=0}"
 : "${SKIP_FRONT:=0}"
 

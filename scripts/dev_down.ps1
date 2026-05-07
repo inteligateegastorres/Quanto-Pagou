@@ -13,8 +13,8 @@
 param(
     [switch]$All,
     [switch]$Wipe,
-    [int]$ApiPort = 8000,
-    [int]$WebPort = 3000
+    [int]$ApiPort = 8001,
+    [int]$WebPort = 3001
 )
 
 $ErrorActionPreference = "Continue"

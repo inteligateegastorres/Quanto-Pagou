@@ -11,8 +11,8 @@
 param(
     [switch]$Fresh,
     [switch]$SkipFront,
-    [int]$ApiPort = 8000,
-    [int]$WebPort = 3000
+    [int]$ApiPort = 8001,
+    [int]$WebPort = 3001
 )
 
 # Continue (nao Stop): em Windows PowerShell 5.1 com Stop, qualquer escrita em

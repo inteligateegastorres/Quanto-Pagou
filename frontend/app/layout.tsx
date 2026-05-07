@@ -44,7 +44,7 @@ export default function RootLayout({
               <Link href="/metodologia">Metodologia</Link>
               <Link href="/correcoes">Correções</Link>
               <a
-                href="http://127.0.0.1:8000/docs"
+                href="http://127.0.0.1:8001/docs"
                 target="_blank"
                 rel="noreferrer"
               >

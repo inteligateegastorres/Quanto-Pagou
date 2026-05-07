@@ -15,8 +15,8 @@ cd "$ROOT"
 
 : "${ALL:=0}"
 : "${WIPE:=0}"
-: "${API_PORT:=8000}"
-: "${WEB_PORT:=3000}"
+: "${API_PORT:=8001}"
+: "${WEB_PORT:=3001}"
 PIDS_FILE=".dev/pids.env"
 
 say() { printf "\033[1;36m==> %s\033[0m\n" "$*"; }

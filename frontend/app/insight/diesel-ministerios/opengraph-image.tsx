@@ -7,7 +7,7 @@ export const alt =
   "Por que ministérios pagam preços tão diferentes pelo mesmo diesel? · Quanto Pagou";
 
 const API_BASE =
-  process.env.QUANTOPAGOU_API_BASE ?? "http://127.0.0.1:8000";
+  process.env.QUANTOPAGOU_API_BASE ?? "http://127.0.0.1:8001";
 
 const CLUSTER_ID = "oleo_diesel_s10";
 
