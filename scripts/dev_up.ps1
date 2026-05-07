@@ -83,7 +83,12 @@ if (-not $SkipFront) { Need-Cmd "npm" }
 # Daemon do Docker Desktop esta no ar?
 docker info *> $null
 if ($LASTEXITCODE -ne 0) {
-    throw "Docker Desktop nao esta rodando. Abra o Docker Desktop (icone da bandeja ou menu Iniciar), aguarde a baleia ficar verde, e rode novamente."
+    Write-Host ""
+    Write-Host "ERRO: Docker Desktop nao esta rodando." -ForegroundColor Red
+    Write-Host "Abra o Docker Desktop (icone da bandeja ou menu Iniciar)," -ForegroundColor Yellow
+    Write-Host "aguarde a baleia ficar verde, e rode novamente." -ForegroundColor Yellow
+    Write-Host ""
+    exit 1
 }
 
 # ---------- postgres ----------
