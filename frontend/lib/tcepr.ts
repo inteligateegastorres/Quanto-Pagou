@@ -49,6 +49,49 @@ export type RankingMunicipio = {
   mediana_valor_contrato: string;
 };
 
+export type FornecedorPerfil = {
+  fornecedor_cnpj: string;
+  fornecedor_nome: string | null;
+  n_contratos_total: number;
+  valor_total: string;
+  n_orgaos_distintos: number;
+  n_municipios_distintos: number;
+  primeiro_contrato: string | null;
+  ultimo_contrato: string | null;
+  cnpj_mascarado: boolean;
+};
+
+export type FornecedorAgregado = {
+  chave: string;
+  nome: string | null;
+  n_contratos: number;
+  valor_total: string;
+};
+
+export type FornecedorContrato = {
+  contrato_id: string;
+  municipio: string | null;
+  orgao_nome: string;
+  descricao: string;
+  valor_total: string;
+  contract_date: string | null;
+  cluster_id: string | null;
+  em_quarentena: boolean;
+};
+
+export const fornecedor = {
+  perfil: (cnpj: string) =>
+    jget<FornecedorPerfil>(`/fornecedor/${encodeURIComponent(cnpj)}`),
+  porOrgao: (cnpj: string, limit = 15) =>
+    jget<FornecedorAgregado[]>(`/fornecedor/${encodeURIComponent(cnpj)}/por-orgao?limit=${limit}`),
+  porMunicipio: (cnpj: string, limit = 15) =>
+    jget<FornecedorAgregado[]>(`/fornecedor/${encodeURIComponent(cnpj)}/por-municipio?limit=${limit}`),
+  porCategoria: (cnpj: string) =>
+    jget<FornecedorAgregado[]>(`/fornecedor/${encodeURIComponent(cnpj)}/por-categoria`),
+  contratos: (cnpj: string, limit = 20) =>
+    jget<FornecedorContrato[]>(`/fornecedor/${encodeURIComponent(cnpj)}/contratos?limit=${limit}`),
+};
+
 export const tcepr = {
   resumo: (cdIbge: string) =>
     jget<TcePrSummary>(`/tce-pr/municipio/${cdIbge}/resumo`),

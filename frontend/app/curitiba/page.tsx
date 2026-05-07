@@ -350,11 +350,22 @@ function Stat({
 }
 
 function FornecedorRow({ pos, f }: { pos: number; f: FornecedorMunicipio }) {
+  // Threshold §6.5: link para perfil só se >= 5 contratos (caso contrário 404 no endpoint).
+  const podeLinkar = f.n_contratos >= 5;
+  const cnpjEnc = encodeURIComponent(f.fornecedor_cnpj);
   return (
     <li className="flex items-baseline gap-3 border-b border-line/60 py-2 text-sm">
       <span className="w-6 text-right text-muted">{pos}.</span>
       <div className="flex-1 min-w-0">
-        <div className="font-medium truncate">{f.fornecedor_nome ?? "—"}</div>
+        <div className="font-medium truncate">
+          {podeLinkar ? (
+            <Link href={`/fornecedor/${cnpjEnc}`} className="no-underline hover:underline">
+              {f.fornecedor_nome ?? "—"}
+            </Link>
+          ) : (
+            f.fornecedor_nome ?? "—"
+          )}
+        </div>
         <div className="text-xs text-muted">
           CNPJ {f.fornecedor_cnpj} · {f.n_contratos} contrato{f.n_contratos === 1 ? "" : "s"}
           {f.n_orgaos_distintos > 1 && ` · ${f.n_orgaos_distintos} órgãos`}

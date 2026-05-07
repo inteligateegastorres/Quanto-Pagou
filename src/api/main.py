@@ -145,6 +145,38 @@ class FornecedorMunicipioOut(BaseModel):
     n_orgaos_distintos: int
 
 
+class FornecedorPerfilOut(BaseModel):
+    fornecedor_cnpj: str
+    fornecedor_nome: str | None
+    n_contratos_total: int
+    valor_total: Decimal
+    n_orgaos_distintos: int
+    n_municipios_distintos: int
+    primeiro_contrato: str | None
+    ultimo_contrato: str | None
+    cnpj_mascarado: bool = Field(
+        description="True se CNPJ vem mascarado (TCE-PR mascara CPFs de PFs)"
+    )
+
+
+class FornecedorContratoOut(BaseModel):
+    contrato_id: str
+    municipio: str | None
+    orgao_nome: str
+    descricao: str
+    valor_total: Decimal
+    contract_date: str | None
+    cluster_id: str | None
+    em_quarentena: bool
+
+
+class FornecedorAgregadoOut(BaseModel):
+    chave: str
+    nome: str | None
+    n_contratos: int
+    valor_total: Decimal
+
+
 class TcePrSummaryOut(BaseModel):
     cd_ibge: str
     municipio: str
@@ -377,6 +409,167 @@ def get_item(conn: ConnDep, raw_id: int) -> ItemOut:
         motivo_quarentena=row["motivo_quarentena"],
         pares=pares,
     )
+
+
+# ----------------------------- Fornecedor -----------------------------
+
+# Guardrails do plano §6.5: threshold mínimo de 5 contratos, sem ranking
+# implícito ("pior"), linguagem factual estrita. noindex/nofollow é
+# imposto no frontend (meta tag).
+
+
+_FORNECEDOR_THRESHOLD = 5
+
+
+@app.get("/fornecedor/{cnpj}", response_model=FornecedorPerfilOut, tags=["fornecedor"])
+def fornecedor_perfil(conn: ConnDep, cnpj: str) -> FornecedorPerfilOut:
+    """Resumo do fornecedor. Threshold >= 5 contratos para gerar página
+    (filtra fornecedores eventuais, reduz risco de exposição injusta)."""
+    cnpj_normalizado = "".join(ch for ch in cnpj if ch.isdigit() or ch == "*")
+    if not cnpj_normalizado:
+        raise HTTPException(400, "cnpj inválido")
+    sql = """
+        SELECT
+            rc.fornecedor_cnpj,
+            MAX(rc.fornecedor_nome) AS fornecedor_nome,
+            COUNT(*) AS n_contratos_total,
+            SUM(rc.valor_total) AS valor_total,
+            COUNT(DISTINCT rc.orgao_codigo) AS n_orgaos_distintos,
+            COUNT(DISTINCT rc.raw_payload->>'cd_tce') AS n_municipios_distintos,
+            MIN(rc.contract_date)::text AS primeiro_contrato,
+            MAX(rc.contract_date)::text AS ultimo_contrato
+        FROM raw.compras rc
+        WHERE rc.fornecedor_cnpj = %s
+        GROUP BY rc.fornecedor_cnpj
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (cnpj_normalizado,))
+        row = cur.fetchone()
+    if row is None or row["n_contratos_total"] < _FORNECEDOR_THRESHOLD:
+        raise HTTPException(
+            404,
+            f"fornecedor {cnpj_normalizado} sem perfil público (mínimo {_FORNECEDOR_THRESHOLD} contratos)",
+        )
+    return FornecedorPerfilOut(
+        fornecedor_cnpj=row["fornecedor_cnpj"],
+        fornecedor_nome=row["fornecedor_nome"],
+        n_contratos_total=row["n_contratos_total"],
+        valor_total=row["valor_total"] or Decimal(0),
+        n_orgaos_distintos=row["n_orgaos_distintos"],
+        n_municipios_distintos=row["n_municipios_distintos"],
+        primeiro_contrato=row["primeiro_contrato"],
+        ultimo_contrato=row["ultimo_contrato"],
+        cnpj_mascarado="*" in row["fornecedor_cnpj"],
+    )
+
+
+@app.get(
+    "/fornecedor/{cnpj}/por-orgao",
+    response_model=list[FornecedorAgregadoOut],
+    tags=["fornecedor"],
+)
+def fornecedor_por_orgao(
+    conn: ConnDep, cnpj: str, limit: int = Query(default=15, ge=1, le=100)
+) -> list[FornecedorAgregadoOut]:
+    sql = """
+        SELECT
+            rc.orgao_codigo AS chave,
+            MAX(rc.orgao_nome) AS nome,
+            COUNT(*) AS n_contratos,
+            ROUND(SUM(rc.valor_total)::numeric, 2) AS valor_total
+        FROM raw.compras rc
+        WHERE rc.fornecedor_cnpj = %s
+        GROUP BY 1
+        ORDER BY valor_total DESC NULLS LAST
+        LIMIT %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (cnpj, limit))
+        return [FornecedorAgregadoOut(**r) for r in cur.fetchall()]
+
+
+@app.get(
+    "/fornecedor/{cnpj}/por-municipio",
+    response_model=list[FornecedorAgregadoOut],
+    tags=["fornecedor"],
+)
+def fornecedor_por_municipio(
+    conn: ConnDep, cnpj: str, limit: int = Query(default=15, ge=1, le=100)
+) -> list[FornecedorAgregadoOut]:
+    sql = """
+        SELECT
+            COALESCE(mp.cd_ibge, rc.raw_payload->>'cd_tce') AS chave,
+            COALESCE(mp.nome, rc.raw_payload->>'municipio') AS nome,
+            COUNT(*) AS n_contratos,
+            ROUND(SUM(rc.valor_total)::numeric, 2) AS valor_total
+        FROM raw.compras rc
+        LEFT JOIN analytics.municipio_pr mp ON mp.cd_tce = rc.raw_payload->>'cd_tce'
+        WHERE rc.fornecedor_cnpj = %s
+        GROUP BY 1, 2
+        ORDER BY valor_total DESC NULLS LAST
+        LIMIT %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (cnpj, limit))
+        return [FornecedorAgregadoOut(**r) for r in cur.fetchall()]
+
+
+@app.get(
+    "/fornecedor/{cnpj}/por-categoria",
+    response_model=list[FornecedorAgregadoOut],
+    tags=["fornecedor"],
+)
+def fornecedor_por_categoria(
+    conn: ConnDep, cnpj: str
+) -> list[FornecedorAgregadoOut]:
+    sql = """
+        SELECT
+            COALESCE(ic.cluster_id, '_quarentena') AS chave,
+            COALESCE(cr.descricao_canonica, 'Sem categoria mapeada') AS nome,
+            COUNT(*) AS n_contratos,
+            ROUND(SUM(rc.valor_total)::numeric, 2) AS valor_total
+        FROM raw.compras rc
+        JOIN analytics.item_canonical ic ON ic.raw_id = rc.id
+        LEFT JOIN analytics.cluster_registry cr
+            ON cr.cluster_id = ic.cluster_id AND cr.cluster_version = ic.cluster_version
+        WHERE rc.fornecedor_cnpj = %s
+        GROUP BY 1, 2
+        ORDER BY valor_total DESC NULLS LAST
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (cnpj,))
+        return [FornecedorAgregadoOut(**r) for r in cur.fetchall()]
+
+
+@app.get(
+    "/fornecedor/{cnpj}/contratos",
+    response_model=list[FornecedorContratoOut],
+    tags=["fornecedor"],
+)
+def fornecedor_contratos(
+    conn: ConnDep, cnpj: str, limit: int = Query(default=20, ge=1, le=100)
+) -> list[FornecedorContratoOut]:
+    """Top contratos do fornecedor por valor (mais recentes desempatam)."""
+    sql = """
+        SELECT
+            rc.source_id AS contrato_id,
+            COALESCE(mp.nome, rc.raw_payload->>'municipio') AS municipio,
+            rc.orgao_nome,
+            rc.descricao,
+            rc.valor_total,
+            rc.contract_date::text AS contract_date,
+            ic.cluster_id,
+            ic.em_quarentena
+        FROM raw.compras rc
+        JOIN analytics.item_canonical ic ON ic.raw_id = rc.id
+        LEFT JOIN analytics.municipio_pr mp ON mp.cd_tce = rc.raw_payload->>'cd_tce'
+        WHERE rc.fornecedor_cnpj = %s
+        ORDER BY rc.valor_total DESC NULLS LAST, rc.contract_date DESC NULLS LAST
+        LIMIT %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (cnpj, limit))
+        return [FornecedorContratoOut(**r) for r in cur.fetchall()]
 
 
 # ----------------------------- TCE-PR ---------------------------------
