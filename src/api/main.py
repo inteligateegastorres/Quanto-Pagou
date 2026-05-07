@@ -32,6 +32,12 @@ from pydantic import BaseModel, Field
 from ingest.config import settings
 
 
+# Threshold de contratos para gerar perfil publico de fornecedor (guardrail
+# §6.5 do plano: filtra fornecedores eventuais, reduz risco de exposicao
+# injusta). Reusado em /fornecedor/{cnpj} e em /fornecedores (listagem).
+_FORNECEDOR_THRESHOLD = 5
+
+
 # ----------------------------- pool -----------------------------------
 
 
@@ -144,6 +150,24 @@ class FornecedorMunicipioOut(BaseModel):
     n_contratos: int
     valor_total_periodo: Decimal
     n_orgaos_distintos: int
+
+
+class MunicipioListItemOut(BaseModel):
+    cd_tce: str
+    cd_ibge: str | None
+    nome: str
+    porte: str
+    catalogado: bool
+    n_contratos: int
+    valor_total: Decimal
+
+
+class FornecedorListItemOut(BaseModel):
+    fornecedor_cnpj: str
+    fornecedor_nome: str | None
+    n_contratos: int
+    valor_total: Decimal
+    n_municipios_distintos: int
 
 
 class MunicipioInfoOut(BaseModel):
@@ -422,6 +446,119 @@ def get_item(conn: ConnDep, raw_id: int) -> ItemOut:
     )
 
 
+# ----------------------------- Listings ------------------------------
+
+
+@app.get(
+    "/municipios",
+    response_model=list[MunicipioListItemOut],
+    tags=["municipio"],
+)
+def list_municipios(
+    conn: ConnDep,
+    search: str | None = Query(default=None, description="Filtra por nome (case-insensitive, sem acento)"),
+    limit: int = Query(default=50, ge=1, le=399),
+) -> list[MunicipioListItemOut]:
+    """Lista municipios PR com contratos no banco (TCE-PR). Sem search,
+    devolve top N por numero de contratos. Com search, filtra por nome."""
+    sql = """
+        SELECT
+            COALESCE(mp.cd_tce, rc.raw_payload->>'cd_tce') AS cd_tce,
+            mp.cd_ibge AS cd_ibge,
+            COALESCE(mp.nome, rc.raw_payload->>'municipio') AS nome,
+            COALESCE(mp.porte, 'municipio_pr_pequeno') AS porte,
+            (mp.cd_tce IS NOT NULL) AS catalogado,
+            COUNT(*) AS n_contratos,
+            ROUND(SUM(rc.valor_total)::numeric, 2) AS valor_total
+        FROM raw.compras rc
+        LEFT JOIN analytics.municipio_pr mp ON mp.cd_tce = rc.raw_payload->>'cd_tce'
+        WHERE rc.source = 'tce_pr/contrato'
+          AND (
+              %s::text IS NULL
+              OR unaccent(lower(COALESCE(mp.nome, rc.raw_payload->>'municipio')))
+                  LIKE '%%' || unaccent(lower(%s)) || '%%'
+          )
+        GROUP BY 1, 2, 3, 4, 5
+        ORDER BY n_contratos DESC
+        LIMIT %s
+    """
+    # unaccent extension may not be installed; fallback graceful
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, (search, search, limit))
+            return [MunicipioListItemOut(**r) for r in cur.fetchall()]
+    except psycopg.errors.UndefinedFunction:
+        conn.rollback()
+        # fallback sem unaccent: case-insensitive simples
+        sql_fb = sql.replace("unaccent(lower(", "lower(").replace(")) LIKE", ") LIKE").replace(") || '%%'", ") || '%%'")
+        # mais simples: refazer
+        sql_fb = """
+            SELECT
+                COALESCE(mp.cd_tce, rc.raw_payload->>'cd_tce') AS cd_tce,
+                mp.cd_ibge AS cd_ibge,
+                COALESCE(mp.nome, rc.raw_payload->>'municipio') AS nome,
+                COALESCE(mp.porte, 'municipio_pr_pequeno') AS porte,
+                (mp.cd_tce IS NOT NULL) AS catalogado,
+                COUNT(*) AS n_contratos,
+                ROUND(SUM(rc.valor_total)::numeric, 2) AS valor_total
+            FROM raw.compras rc
+            LEFT JOIN analytics.municipio_pr mp ON mp.cd_tce = rc.raw_payload->>'cd_tce'
+            WHERE rc.source = 'tce_pr/contrato'
+              AND (
+                  %s::text IS NULL
+                  OR lower(COALESCE(mp.nome, rc.raw_payload->>'municipio'))
+                      LIKE '%%' || lower(%s) || '%%'
+              )
+            GROUP BY 1, 2, 3, 4, 5
+            ORDER BY n_contratos DESC
+            LIMIT %s
+        """
+        with conn.cursor() as cur:
+            cur.execute(sql_fb, (search, search, limit))
+            return [MunicipioListItemOut(**r) for r in cur.fetchall()]
+
+
+@app.get(
+    "/fornecedores",
+    response_model=list[FornecedorListItemOut],
+    tags=["fornecedor"],
+)
+def list_fornecedores(
+    conn: ConnDep,
+    search: str | None = Query(default=None, description="Filtra por nome ou CNPJ (case-insensitive)"),
+    min_contratos: int = Query(
+        default=_FORNECEDOR_THRESHOLD,
+        ge=1,
+        description="Filtra fornecedores com pelo menos N contratos (default = threshold da pagina de perfil)",
+    ),
+    limit: int = Query(default=50, ge=1, le=200),
+) -> list[FornecedorListItemOut]:
+    """Lista fornecedores com contratos no banco. Default = top por volume,
+    threshold de 5 contratos (alinhado com a pagina /fornecedor/[cnpj])."""
+    sql = """
+        SELECT
+            rc.fornecedor_cnpj,
+            MAX(rc.fornecedor_nome) AS fornecedor_nome,
+            COUNT(*) AS n_contratos,
+            ROUND(SUM(rc.valor_total)::numeric, 2) AS valor_total,
+            COUNT(DISTINCT rc.raw_payload->>'cd_tce') AS n_municipios_distintos
+        FROM raw.compras rc
+        WHERE rc.fornecedor_cnpj IS NOT NULL
+          AND (
+              %s::text IS NULL
+              OR lower(rc.fornecedor_nome) LIKE '%%' || lower(%s) || '%%'
+              OR rc.fornecedor_cnpj LIKE '%%' || %s || '%%'
+          )
+        GROUP BY rc.fornecedor_cnpj
+        HAVING COUNT(*) >= %s
+        ORDER BY valor_total DESC NULLS LAST
+        LIMIT %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (search, search, search, min_contratos, limit))
+        return [FornecedorListItemOut(**r) for r in cur.fetchall()]
+
+
 # ----------------------------- Municipio (resolver) -------------------
 
 
@@ -482,10 +619,8 @@ def municipio_info(conn: ConnDep, key: str) -> MunicipioInfoOut:
 
 # Guardrails do plano §6.5: threshold mínimo de 5 contratos, sem ranking
 # implícito ("pior"), linguagem factual estrita. noindex/nofollow é
-# imposto no frontend (meta tag).
-
-
-_FORNECEDOR_THRESHOLD = 5
+# imposto no frontend (meta tag). _FORNECEDOR_THRESHOLD definido no topo
+# do modulo para reuso na listagem.
 
 
 @app.get("/fornecedor/{cnpj}", response_model=FornecedorPerfilOut, tags=["fornecedor"])

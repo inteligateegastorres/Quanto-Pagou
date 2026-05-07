@@ -38,6 +38,7 @@ export default function RootLayout({
               Quanto Pagou
             </Link>
             <nav className="text-sm text-muted flex gap-5 flex-wrap justify-end">
+              <Link href="/buscar">Buscar</Link>
               <Link href="/manifesto">Manifesto</Link>
               <Link href="/insight/diesel-ministerios">Insights</Link>
               <Link href="/curitiba">Curitiba</Link>

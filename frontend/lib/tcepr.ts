@@ -103,6 +103,37 @@ export type MunicipioInfo = {
   catalogado: boolean;
 };
 
+export type MunicipioListItem = MunicipioInfo & {
+  n_contratos: number;
+  valor_total: string;
+};
+
+export type FornecedorListItem = {
+  fornecedor_cnpj: string;
+  fornecedor_nome: string | null;
+  n_contratos: number;
+  valor_total: string;
+  n_municipios_distintos: number;
+};
+
+export const buscar = {
+  municipios: (opts: { search?: string; limit?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (opts.search) qs.set("search", opts.search);
+    if (opts.limit != null) qs.set("limit", String(opts.limit));
+    const q = qs.toString();
+    return jget<MunicipioListItem[]>(`/municipios${q ? "?" + q : ""}`);
+  },
+  fornecedores: (opts: { search?: string; min_contratos?: number; limit?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (opts.search) qs.set("search", opts.search);
+    if (opts.min_contratos != null) qs.set("min_contratos", String(opts.min_contratos));
+    if (opts.limit != null) qs.set("limit", String(opts.limit));
+    const q = qs.toString();
+    return jget<FornecedorListItem[]>(`/fornecedores${q ? "?" + q : ""}`);
+  },
+};
+
 export const tcepr = {
   resolveMunicipio: (key: string) =>
     jget<MunicipioInfo>(`/municipio/${encodeURIComponent(key)}/info`),
