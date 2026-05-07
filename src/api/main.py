@@ -145,6 +145,16 @@ class FornecedorMunicipioOut(BaseModel):
     n_orgaos_distintos: int
 
 
+class MunicipioInfoOut(BaseModel):
+    cd_tce: str
+    cd_ibge: str | None
+    nome: str
+    porte: str
+    catalogado: bool = Field(
+        description="True se o municipio esta na tabela municipio_pr"
+    )
+
+
 class FornecedorPerfilOut(BaseModel):
     fornecedor_cnpj: str
     fornecedor_nome: str | None
@@ -408,6 +418,62 @@ def get_item(conn: ConnDep, raw_id: int) -> ItemOut:
         em_quarentena=row["em_quarentena"],
         motivo_quarentena=row["motivo_quarentena"],
         pares=pares,
+    )
+
+
+# ----------------------------- Municipio (resolver) -------------------
+
+
+@app.get("/municipio/{key}/info", response_model=MunicipioInfoOut, tags=["municipio"])
+def municipio_info(conn: ConnDep, key: str) -> MunicipioInfoOut:
+    """Resolve cd_tce ou cd_ibge para info canonica do municipio.
+
+    Aceita 6 digitos (cd_tce) ou 7 digitos (cd_ibge). Para municipios fora
+    da tabela analytics.municipio_pr, busca no raw.compras (TCE-PR) e
+    devolve nome inferido + porte=municipio_pr_pequeno (default).
+    """
+    if not key.isdigit() or len(key) not in (6, 7):
+        raise HTTPException(400, "key deve ter 6 (cd_tce) ou 7 (cd_ibge) digitos")
+    is_tce = len(key) == 6
+    sql_cat = """
+        SELECT cd_tce, cd_ibge, nome, porte
+        FROM analytics.municipio_pr
+        WHERE (%s::boolean AND cd_tce = %s) OR (NOT %s::boolean AND cd_ibge = %s)
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql_cat, (is_tce, key, is_tce, key))
+        row = cur.fetchone()
+    if row:
+        return MunicipioInfoOut(
+            cd_tce=row["cd_tce"],
+            cd_ibge=row["cd_ibge"],
+            nome=row["nome"],
+            porte=row["porte"],
+            catalogado=True,
+        )
+    # Nao catalogado — busca em raw.compras pelo cd_tce (so funciona se for cd_tce)
+    if not is_tce:
+        raise HTTPException(404, f"municipio cd_ibge={key} nao catalogado e nao posso inferir cd_tce")
+    sql_raw = """
+        SELECT raw_payload->>'cd_tce' AS cd_tce,
+               MAX(raw_payload->>'municipio') AS nome
+        FROM raw.compras
+        WHERE source = 'tce_pr/contrato'
+          AND raw_payload->>'cd_tce' = %s
+        GROUP BY 1
+        LIMIT 1
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql_raw, (key,))
+        row = cur.fetchone()
+    if row is None:
+        raise HTTPException(404, f"municipio cd_tce={key} nao encontrado")
+    return MunicipioInfoOut(
+        cd_tce=row["cd_tce"],
+        cd_ibge=None,
+        nome=row["nome"] or "—",
+        porte="municipio_pr_pequeno",
+        catalogado=False,
     )
 
 

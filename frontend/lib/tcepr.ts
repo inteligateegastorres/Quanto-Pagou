@@ -92,7 +92,17 @@ export const fornecedor = {
     jget<FornecedorContrato[]>(`/fornecedor/${encodeURIComponent(cnpj)}/contratos?limit=${limit}`),
 };
 
+export type MunicipioInfo = {
+  cd_tce: string;
+  cd_ibge: string | null;
+  nome: string;
+  porte: string;
+  catalogado: boolean;
+};
+
 export const tcepr = {
+  resolveMunicipio: (key: string) =>
+    jget<MunicipioInfo>(`/municipio/${encodeURIComponent(key)}/info`),
   resumo: (cdIbge: string) =>
     jget<TcePrSummary>(`/tce-pr/municipio/${cdIbge}/resumo`),
   contratosPorCluster: (cdIbge: string, opts: { cluster_id?: string; limit?: number } = {}) => {

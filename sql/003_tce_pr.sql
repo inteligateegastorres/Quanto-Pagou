@@ -25,29 +25,48 @@ CREATE TABLE IF NOT EXISTS analytics.municipio_pr (
 COMMENT ON TABLE analytics.municipio_pr IS
     'Catalogo dos 399 municipios do PR com porte para o pipeline TCE-PR.';
 
--- Seed inicial: top municipios + porte por tier de populacao.
--- Tier 1 (capital + grandes >300k): grande
--- Tier 2 (medio 50-300k): medio
--- Demais: pequeno (default)
+-- Seed inicial: 35 municipios mais expressivos do PR com porte por tier.
+-- cd_tce e cd_ibge sao chaves OFICIAIS distintas (TCE-PR usa primeiros 6
+-- digitos do IBGE; o digito verificador IBGE eh determinístico).
+-- Tier 1 (capital + grandes >250k habitantes): grande
+-- Tier 2 (medio 50-250k): medio
+-- Demais municipios PR ficam como 'municipio_pr_pequeno' por default.
 INSERT INTO analytics.municipio_pr (cd_tce, cd_ibge, nome, porte, populacao) VALUES
-    ('410690', '4106902', 'CURITIBA',                       'municipio_pr_grande', 1773733),
-    ('411370', '4113700', 'LONDRINA',                       'municipio_pr_grande', 580870),
-    ('411520', '4115200', 'MARINGA',                        'municipio_pr_grande', 436472),
-    ('410500', '4105050', 'CASCAVEL',                       'municipio_pr_grande', 332333),
-    ('411740', '4117406', 'PONTA GROSSA',                   'municipio_pr_grande', 358838),
-    ('410830', '4108304', 'FOZ DO IGUACU',                  'municipio_pr_grande', 285415),
-    ('412550', '4125506', 'SAO JOSE DOS PINHAIS',           'municipio_pr_grande', 329058),
-    ('410480', '4104808', 'COLOMBO',                        'municipio_pr_medio', 220678),
-    ('410260', '4102604', 'ARAUCARIA',                      'municipio_pr_medio', 142010),
-    ('411330', '4113304', 'GUARAPUAVA',                     'municipio_pr_medio', 181504),
-    ('411020', '4110102', 'PARANAGUA',                      'municipio_pr_medio', 159679),
-    ('411410', '4114104', 'MARECHAL CANDIDO RONDON',        'municipio_pr_medio',  53272),
-    ('410450', '4104501', 'CIANORTE',                       'municipio_pr_medio',  82911),
-    ('410585', '4105805', 'CAMPO LARGO',                    'municipio_pr_medio', 132017),
-    ('410775', '4107754', 'FAZENDA RIO GRANDE',             'municipio_pr_medio', 100662),
-    ('411450', '4114501', 'MEDIANEIRA',                     'municipio_pr_medio',  46720),
-    ('410435', '4104351', 'CHOPINZINHO',                    'municipio_pr_medio',  20146),
-    ('411990', '4119905', 'SAO JOAO DO IVAI',               'municipio_pr_pequeno', 11625)
+    ('410690', '4106902', 'CURITIBA',                  'municipio_pr_grande',  1773733),
+    ('411370', '4113700', 'LONDRINA',                  'municipio_pr_grande',   580870),
+    ('411520', '4115200', 'MARINGA',                   'municipio_pr_grande',   436472),
+    ('410480', '4104808', 'CASCAVEL',                  'municipio_pr_grande',   332333),
+    ('411990', '4119905', 'PONTA GROSSA',              'municipio_pr_grande',   358838),
+    ('410830', '4108304', 'FOZ DO IGUACU',             'municipio_pr_grande',   285415),
+    ('412550', '4125506', 'SAO JOSE DOS PINHAIS',      'municipio_pr_grande',   329058),
+    ('412770', '4127700', 'TOLEDO',                    'municipio_pr_medio',    142809),
+    ('410140', '4101408', 'APUCARANA',                 'municipio_pr_medio',    136234),
+    ('411850', '4118501', 'PATO BRANCO',               'municipio_pr_medio',     83894),
+    ('410550', '4105508', 'CIANORTE',                  'municipio_pr_medio',     83567),
+    ('410840', '4108403', 'FRANCISCO BELTRAO',         'municipio_pr_medio',     94390),
+    ('412810', '4128104', 'UMUARAMA',                  'municipio_pr_medio',    113261),
+    ('410940', '4109401', 'GUARAPUAVA',                'municipio_pr_medio',    181504),
+    ('411460', '4114609', 'MARECHAL CANDIDO RONDON',   'municipio_pr_medio',     53272),
+    ('410430', '4104303', 'CAMPO MOURAO',              'municipio_pr_medio',     95406),
+    ('411180', '4111803', 'JACAREZINHO',               'municipio_pr_medio',     39476),
+    ('410420', '4104204', 'CAMPO LARGO',               'municipio_pr_medio',    132017),
+    ('410180', '4101804', 'ARAUCARIA',                 'municipio_pr_medio',    142010),
+    ('410490', '4104907', 'CASTRO',                    'municipio_pr_medio',     71929),
+    ('410150', '4101507', 'ARAPONGAS',                 'municipio_pr_medio',    127116),
+    ('411580', '4115804', 'MEDIANEIRA',                'municipio_pr_medio',     46720),
+    ('412710', '4127106', 'TELEMACO BORBA',            'municipio_pr_medio',     76728),
+    ('411840', '4118402', 'PARANAVAI',                 'municipio_pr_medio',     86374),
+    ('411020', '4110201', 'PARANAGUA',                 'municipio_pr_medio',    159679),
+    ('410775', '4107754', 'FAZENDA RIO GRANDE',        'municipio_pr_medio',    100662),
+    ('410450', '4104501', 'COLOMBO',                   'municipio_pr_medio',    220678),
+    ('411095', '4110951', 'ITAIPULANDIA',              'municipio_pr_pequeno',   12231),
+    ('410880', '4108809', 'GUAIRA',                    'municipio_pr_medio',     31426),
+    ('412410', '4124103', 'SANTO ANTONIO DA PLATINA',  'municipio_pr_medio',     43889),
+    ('411605', '4116059', 'MISSAL',                    'municipio_pr_pequeno',   10474),
+    ('411400', '4114005', 'MAMBORE',                   'municipio_pr_pequeno',   13961),
+    ('412740', '4127405', 'TERRA ROXA',                'municipio_pr_pequeno',   17537),
+    ('412060', '4120606', 'PRUDENTOPOLIS',             'municipio_pr_medio',     51728),
+    ('411150', '4111506', 'IVAIPORA',                  'municipio_pr_medio',     30021)
 ON CONFLICT (cd_tce) DO UPDATE SET
     cd_ibge   = EXCLUDED.cd_ibge,
     nome      = EXCLUDED.nome,
