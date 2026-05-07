@@ -7,7 +7,8 @@ import {
   type FornecedorMunicipio,
   type RankingMunicipio,
 } from "@/lib/tcepr";
-import { fmtBRL } from "@/lib/api";
+import { fmtBRL, fmtBRLCompact } from "@/lib/api";
+import { Stat } from "@/lib/Stat";
 
 export const dynamic = "force-dynamic";
 
@@ -147,7 +148,8 @@ export default async function CuritibaPage({
           />
           <Stat
             label="Volume total"
-            value={fmtBRL(resumo.valor_total)}
+            value={fmtBRLCompact(resumo.valor_total)}
+            hint={fmtBRL(resumo.valor_total)}
           />
           <Stat
             label="Cobertura por cluster"
@@ -327,24 +329,6 @@ export default async function CuritibaPage({
           sobre os ZIPs do TCE — toda correção é reprocessável.
         </p>
       </section>
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-}) {
-  return (
-    <div className="border border-line rounded-md p-4">
-      <div className="text-xs text-muted uppercase tracking-wide">{label}</div>
-      <div className="text-xl font-mono font-semibold">{value}</div>
-      {hint && <div className="text-xs text-muted mt-1">{hint}</div>}
     </div>
   );
 }

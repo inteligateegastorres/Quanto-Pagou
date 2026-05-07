@@ -226,10 +226,15 @@ function Stat({
         ? "text-ok"
         : "text-ink";
   return (
-    <div className="space-y-1">
-      <div className="text-xs text-muted uppercase tracking-wide">{label}</div>
-      <div className={`text-xl font-mono font-semibold ${tone}`}>{value}</div>
-      {hint && <div className="text-xs text-muted">{hint}</div>}
+    <div className="space-y-1 min-w-0 overflow-hidden">
+      <div className="text-xs text-muted uppercase tracking-wide truncate">{label}</div>
+      <div
+        className={`text-xl font-mono font-semibold whitespace-nowrap overflow-hidden text-ellipsis ${tone}`}
+        title={value}
+      >
+        {value}
+      </div>
+      {hint && <div className="text-xs text-muted truncate" title={hint}>{hint}</div>}
     </div>
   );
 }

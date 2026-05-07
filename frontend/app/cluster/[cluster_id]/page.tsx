@@ -110,10 +110,16 @@ function Stat({
   highlight?: boolean;
 }) {
   return (
-    <div>
-      <div className="text-xs text-muted uppercase tracking-wide">{label}</div>
+    <div className="min-w-0 overflow-hidden">
+      <div className="text-xs text-muted uppercase tracking-wide truncate">
+        {label}
+      </div>
       <div
-        className={`font-mono ${highlight ? "text-base font-semibold" : ""}`}
+        className={
+          "font-mono whitespace-nowrap overflow-hidden text-ellipsis " +
+          (highlight ? "text-base font-semibold" : "")
+        }
+        title={value}
       >
         {value}
       </div>

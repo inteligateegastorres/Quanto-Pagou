@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { fmtBRL } from "@/lib/api";
+import { fmtBRL, fmtBRLCompact } from "@/lib/api";
+import { Stat } from "@/lib/Stat";
 import {
   fornecedor as fornecedorApi,
   type FornecedorPerfil,
@@ -107,7 +108,11 @@ export default async function FornecedorPage({
           label="Contratos registrados"
           value={perfil.n_contratos_total.toLocaleString("pt-BR")}
         />
-        <Stat label="Volume contratado" value={fmtBRL(perfil.valor_total)} />
+        <Stat
+          label="Volume contratado"
+          value={fmtBRLCompact(perfil.valor_total)}
+          hint={fmtBRL(perfil.valor_total)}
+        />
         <Stat
           label="Órgãos contratantes"
           value={String(perfil.n_orgaos_distintos)}
@@ -199,24 +204,6 @@ export default async function FornecedorPage({
         </p>
       </footer>
     </article>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-}) {
-  return (
-    <div className="border border-line rounded-md p-4">
-      <div className="text-xs text-muted uppercase tracking-wide">{label}</div>
-      <div className="text-xl font-mono font-semibold">{value}</div>
-      {hint && <div className="text-xs text-muted mt-1">{hint}</div>}
-    </div>
   );
 }
 

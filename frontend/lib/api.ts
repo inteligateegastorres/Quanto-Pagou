@@ -94,3 +94,23 @@ export const fmtNum = (n: number | string, dec = 2) =>
     minimumFractionDigits: dec,
     maximumFractionDigits: dec,
   }).format(Number(n));
+
+// Formato compacto pra valores grandes — usado em stat cards onde
+// o numero completo transborda. Mantem precisao razoavel:
+//   >= 1 bi -> "R$ 5,12 bi"
+//   >= 1 mi -> "R$ 234,5 mi"
+//   >= 1 mil -> "R$ 234,5 mil"
+//   else  -> fmtBRL completo (R$ 1.234,56)
+// Para listagens detalhadas (linha de contrato, ranking pequeno) usar
+// fmtBRL; para cards de resumo no topo de pagina, usar fmtBRLCompact.
+export const fmtBRLCompact = (n: number | string | null | undefined): string => {
+  if (n == null) return "-";
+  const v = Number(n);
+  if (!Number.isFinite(v)) return "-";
+  const abs = Math.abs(v);
+  const sign = v < 0 ? "-" : "";
+  if (abs >= 1e9) return `${sign}R$ ${(v / 1e9).toFixed(2).replace(".", ",")} bi`;
+  if (abs >= 1e6) return `${sign}R$ ${(v / 1e6).toFixed(1).replace(".", ",")} mi`;
+  if (abs >= 1e3) return `${sign}R$ ${(v / 1e3).toFixed(1).replace(".", ",")} mil`;
+  return fmtBRL(v);
+};

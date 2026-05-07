@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { api, fmtBRL } from "@/lib/api";
+import { api, fmtBRL, fmtBRLCompact } from "@/lib/api";
+import { Stat } from "@/lib/Stat";
 import { buscar } from "@/lib/tcepr";
 
 export const dynamic = "force-dynamic";
@@ -388,12 +389,3 @@ export default async function HomePage() {
   );
 }
 
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="border border-line rounded-md p-4">
-      <div className="text-xs text-muted uppercase tracking-wide">{label}</div>
-      <div className="text-xl font-mono font-semibold">{value}</div>
-      {hint && <div className="text-xs text-muted mt-1">{hint}</div>}
-    </div>
-  );
-}

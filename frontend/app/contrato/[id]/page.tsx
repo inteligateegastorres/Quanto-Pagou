@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { fmtBRL } from "@/lib/api";
+import { Stat } from "@/lib/Stat";
 import { contrato as contratoApi, type ContratoDetalhe } from "@/lib/tcepr";
 
 export const dynamic = "force-dynamic";
@@ -306,24 +307,6 @@ export default async function ContratoPage({
         </p>
       </section>
     </article>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-}) {
-  return (
-    <div className="border border-line rounded-md p-3">
-      <div className="text-xs text-muted uppercase tracking-wide">{label}</div>
-      <div className="text-base font-mono font-semibold">{value}</div>
-      {hint && <div className="text-xs text-muted mt-1">{hint}</div>}
-    </div>
   );
 }
 

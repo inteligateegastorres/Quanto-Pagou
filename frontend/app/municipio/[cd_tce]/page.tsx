@@ -8,7 +8,8 @@ import {
   type MunicipioInfo,
   type RankingMunicipio,
 } from "@/lib/tcepr";
-import { fmtBRL } from "@/lib/api";
+import { fmtBRL, fmtBRLCompact } from "@/lib/api";
+import { Stat } from "@/lib/Stat";
 
 export const dynamic = "force-dynamic";
 
@@ -157,7 +158,11 @@ export default async function MunicipioPage({
             value={resumo.n_contratos_total.toLocaleString("pt-BR")}
             hint="ano 2025-2026"
           />
-          <Stat label="Volume total" value={fmtBRL(resumo.valor_total)} />
+          <Stat
+            label="Volume total"
+            value={fmtBRLCompact(resumo.valor_total)}
+            hint={fmtBRL(resumo.valor_total)}
+          />
           <Stat
             label="Cobertura por cluster"
             value={`${(resumo.cobertura_pct * 100).toFixed(0)}%`}
@@ -216,16 +221,6 @@ export default async function MunicipioPage({
         Fonte: TCE-PR PIT (ZIP semanal com 399 municípios). Imprecisões em{" "}
         <Link href="/correcoes">/correcoes</Link>.
       </section>
-    </div>
-  );
-}
-
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="border border-line rounded-md p-4">
-      <div className="text-xs text-muted uppercase tracking-wide">{label}</div>
-      <div className="text-xl font-mono font-semibold">{value}</div>
-      {hint && <div className="text-xs text-muted mt-1">{hint}</div>}
     </div>
   );
 }
