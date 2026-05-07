@@ -24,9 +24,12 @@ from rich.logging import RichHandler
 from analytics.resolution import (
     CanonicalRow,
     GoldenCluster,
+    KeywordCluster,
     _compile_patterns,
     canonicalize,
+    canonicalize_tce_pr_row,
     load_golden_set,
+    load_keyword_clusters,
     load_unit_conversion,
 )
 from ingest.config import settings
@@ -35,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 
 _SELECT_RAW = """
-SELECT id, catmat_id, catser_id, descricao, valor_unitario, raw_payload
+SELECT id, source, catmat_id, catser_id, descricao, valor_unitario, valor_total, raw_payload
 FROM raw.compras
 """
 
@@ -117,11 +120,13 @@ def run(dry_run: bool = False) -> dict[str, Any]:
     golden_by_catmat, all_clusters = load_golden_set()
     conv = load_unit_conversion()
     compiled = _compile_patterns(conv)
+    keyword_clusters = load_keyword_clusters()
     logger.info(
-        "Carregado: %d clusters golden / %d catmat_ids mapeados / %d patterns",
+        "Carregado: %d clusters golden / %d catmat_ids mapeados / %d patterns / %d clusters keyword",
         len(all_clusters),
         len(golden_by_catmat),
         len(compiled),
+        len(keyword_clusters),
     )
 
     sintetico_clusters: dict[tuple[str, str], dict[str, Any]] = {}
@@ -133,10 +138,38 @@ def run(dry_run: bool = False) -> dict[str, Any]:
             conn.commit()
         logger.info("cluster_registry: %d clusters golden seeded", seeded)
 
+        # Seed clusters de keyword no registry (TCE-PR e similares).
+        if keyword_clusters:
+            with conn.cursor() as cur:
+                cur.executemany(
+                    _UPSERT_REGISTRY,
+                    [
+                        (
+                            kc.cluster_id,
+                            kc.cluster_version,
+                            kc.descricao_canonica,
+                            kc.categoria,
+                        )
+                        for kc in keyword_clusters
+                    ],
+                )
+            if not dry_run:
+                conn.commit()
+            logger.info(
+                "cluster_registry: %d clusters keyword (Tier 1.5)",
+                len(keyword_clusters),
+            )
+
+        n_tce_pr = 0
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(_SELECT_RAW)
             for raw in cur:
-                cr = canonicalize(raw, golden_by_catmat, conv, _compiled=compiled)
+                source = raw.get("source") or ""
+                if source.startswith("tce_pr/"):
+                    cr = canonicalize_tce_pr_row(raw, keyword_clusters)
+                    n_tce_pr += 1
+                else:
+                    cr = canonicalize(raw, golden_by_catmat, conv, _compiled=compiled)
                 canonicals.append(cr)
                 # Cluster sinteticos descobertos durante a resolucao
                 if cr.cluster_id and cr.metodo_resolucao == "tier1_catmat_sintetico":
@@ -186,13 +219,22 @@ def run(dry_run: bool = False) -> dict[str, Any]:
             conn.commit()
             logger.info("item_canonical: %d linhas upserted", len(canonicals))
 
-            # Refresh marts.
-            console.print("[dim]REFRESH MATERIALIZED VIEW analytics.mart_pares...[/]")
-            conn.execute("REFRESH MATERIALIZED VIEW analytics.mart_pares")
-            console.print(
-                "[dim]REFRESH MATERIALIZED VIEW analytics.mart_orgao_cluster...[/]"
-            )
-            conn.execute("REFRESH MATERIALIZED VIEW analytics.mart_orgao_cluster")
+            # Refresh marts (federal + tce_pr).
+            for mv in (
+                "analytics.mart_pares",
+                "analytics.mart_orgao_cluster",
+                "analytics.mart_contratos_municipio",
+                "analytics.mart_fornecedores_municipio",
+            ):
+                console.print(f"[dim]REFRESH MATERIALIZED VIEW {mv}...[/]")
+                try:
+                    conn.execute(f"REFRESH MATERIALIZED VIEW {mv}")
+                except psycopg.errors.UndefinedTable:
+                    conn.rollback()
+                    logger.warning(
+                        "MV %s nao existe ainda — rode sql/003_tce_pr.sql primeiro",
+                        mv,
+                    )
             conn.commit()
         else:
             logger.info("[dry-run] %d linhas seriam upserted", len(canonicals))
@@ -201,8 +243,10 @@ def run(dry_run: bool = False) -> dict[str, Any]:
         stats = {
             "linhas_raw": len(canonicals),
             "linhas_canonical": len(canonicals),
+            "linhas_tce_pr": n_tce_pr,
             "em_quarentena": n_quarentena,
             "clusters_golden": len(all_clusters),
+            "clusters_keyword": len(keyword_clusters),
             "clusters_sinteticos": len(sintetico_clusters),
             "elapsed_s": round((datetime.now() - started).total_seconds(), 2),
         }
@@ -210,6 +254,12 @@ def run(dry_run: bool = False) -> dict[str, Any]:
             with conn.cursor() as cur:
                 cur.execute("SELECT COUNT(*) FROM analytics.mart_pares")
                 stats["mart_pares_rows"] = cur.fetchone()[0]
+                for mv in ("mart_contratos_municipio", "mart_fornecedores_municipio"):
+                    try:
+                        cur.execute(f"SELECT COUNT(*) FROM analytics.{mv}")
+                        stats[f"{mv}_rows"] = cur.fetchone()[0]
+                    except psycopg.errors.UndefinedTable:
+                        conn.rollback()
                 cur.execute("SELECT COUNT(*) FROM analytics.mart_orgao_cluster")
                 stats["mart_orgao_rows"] = cur.fetchone()[0]
         return stats

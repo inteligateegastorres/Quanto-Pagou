@@ -1,0 +1,91 @@
+# Cluster por keyword em descrição livre (dsObjeto do TCE-PR).
+#
+# Tier 1.5: aplicado quando não há CATMAT (fontes municipais/estaduais
+# como TCE-PR só publicam descrição textual livre por contrato).
+#
+# Regras:
+#   - Patterns são regex case-insensitive (sem acentos no alvo após
+#     normalização — a descrição é normalizada antes do match).
+#   - Primeira regra que casa vence (ordem importa).
+#   - Cada regra define cluster_id + cluster_version + categoria.
+#   - Confiança fixa em 0.6 (entre CATMAT direto = 1.0 e nada = 0.0).
+#   - cluster_version segue o golden federal (v1) para alinhar com cluster_registry.
+#
+# Manter pequeno e cobrir só categorias-piloto. Aumentar quando houver
+# tráfego e feedback (progressive correctness).
+
+clusters:
+  - cluster_id: merenda_escolar
+    cluster_version: v1
+    descricao_canonica: "Merenda escolar (alimentação)"
+    categoria: alimentacao_escolar
+    patterns:
+      - '\bmerenda\b'
+      - '\balimentac[aã]o\s+escolar\b'
+      - '\bg[eê]neros\s+aliment[ií]cios\b.*\b(escola|cme|creche|educac)'
+      - '\bpnae\b'
+
+  - cluster_id: combustivel_servicos
+    cluster_version: v1
+    descricao_canonica: "Combustíveis (gasolina, diesel, etanol, gás)"
+    categoria: combustivel
+    patterns:
+      - '\bcombust[ií]vel\b'
+      - '\b(gasolina|[oó]leo\s+diesel|etanol|gnv|glp)\b'
+      - '\babastecimento\b.*\b(ve[ií]culo|frota)'
+      - '\bdiesel\s+s\s*-?\s*10\b'
+
+  - cluster_id: medicamentos
+    cluster_version: v1
+    descricao_canonica: "Medicamentos e insumos farmacêuticos"
+    categoria: saude
+    patterns:
+      - '\bmedicament(o|os)\b'
+      - '\bf[aá]rmac(o|os)\b'
+      - '\binsumo(s)?\s+farmac[eê]utico'
+      - '\bmateria(l|is)\s+hospitalar'
+
+  - cluster_id: papel_escritorio
+    cluster_version: v1
+    descricao_canonica: "Papel e material de escritório"
+    categoria: escritorio
+    patterns:
+      - '\bpapel(\s+sulfite|\s+a4)\b'
+      - '\bmaterial\s+de\s+escrit[oó]rio\b'
+      - '\bsuprimentos?\s+de\s+inform[aá]tica\b'
+
+  - cluster_id: limpeza_higiene
+    cluster_version: v1
+    descricao_canonica: "Material de limpeza e higiene"
+    categoria: limpeza
+    patterns:
+      - '\bmateria(l|is)\s+(de\s+)?limpeza\b'
+      - '\bproduto(s)?\s+(de\s+)?higiene\b'
+      - '\bdetergente|saneante|desinfetante\b'
+
+  - cluster_id: obras_pavimentacao
+    cluster_version: v1
+    descricao_canonica: "Obras de pavimentação e infraestrutura urbana"
+    categoria: obras
+    patterns:
+      - '\bpavimentac[aã]o\b'
+      - '\brecapeamento\b'
+      - '\bdrenagem\b.*\b(urbana|via|rua|estrada)'
+      - '\bcalcamento\b|\bpasseio\s+publico\b'
+
+  - cluster_id: obras_edificacao
+    cluster_version: v1
+    descricao_canonica: "Obras de edificação e reforma predial"
+    categoria: obras
+    patterns:
+      - '\bservic(o|os)\s+de\s+engenharia\b'
+      - '\b(reforma|construc[aã]o|restaurac[aã]o|substituic[aã]o\s+(da\s+)?cobertura|pintura)\b.*\b(predio|edif[ií]cio|fachada|sede|escola|cme|unidade\s+de\s+saude|ubs|paco|secretari)'
+      - '\b(reforma|construc[aã]o)\s+(de\s+|da\s+|do\s+)?(escola|creche|posto\s+de\s+saude|unidade\s+de\s+saude|ubs|biblioteca|paco|sede)'
+
+  - cluster_id: transporte_escolar
+    cluster_version: v1
+    descricao_canonica: "Transporte escolar"
+    categoria: transporte
+    patterns:
+      - '\btransporte\s+escolar\b'
+      - '\bservico(s)?\s+de\s+transporte\b.*\b(escola|aluno|estudante)'

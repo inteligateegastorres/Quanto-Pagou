@@ -3,6 +3,23 @@
 	- x
 	- etc
 
+- Alterar o nome do projeto: "Quanto Pagou" -> "Radar Público"
+	- Tagline: "Transparência comparativa de compras públicas"
+	- Onde mexer (lista preliminar — confirmar antes de executar):
+		- README.md, PLANO.md, DEPLOY.md (referências textuais e título)
+		- frontend/app/layout.tsx (header + metadata.title)
+		- frontend/app/page.tsx (h1 do hero)
+		- frontend/app/manifesto/page.tsx (várias menções a "Quanto Pagou")
+		- frontend/app/insight/diesel-ministerios/* (metadata + corpo)
+		- frontend/app/opengraph-image.tsx + insight/.../opengraph-image.tsx
+		- frontend/package.json (name)
+		- src/api/main.py, scripts/dev_*.{ps1,sh}, sync_compras.{ps1,sh}
+		- container postgres (quantopagou-postgres -> radarpublico-postgres) e DB name
+		- variáveis env (.env.example, .env.production.example)
+		- nome da org GitHub planejado (era quanto-pagou; vira radar-publico?)
+		- domínio: confirmar disponibilidade radarpublico.org / .com.br
+	- Considerar um redirect 301 caso já tenha sido divulgado em algum lugar.
+
 ---
 Excelente. Li com atenção o plano v4. Você está absolutamente certo: o momento é de executar, e o plano já internalizou as principais lições das versões anteriores (progressive correctness, desacoplamento editorial/técnico, guardrails jurídicos).
 

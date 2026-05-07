@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="pt-BR" xml:lang="pt-br">
+<head>
+    <!-- title, meta tags, list of stylesheets, etc ... -->
+    <title>Consolidado - TCE-PR</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <meta name="description" content="TCEPR" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+    <link href="/favicon.ico" rel="shortcut icon" type="image/x-icon" />
+
+    <link href="/Theme/css/CssBundleInit?v=uVArEMfQ95zZJiPsUu_I0qf__B28_kclrttbukWYQR81" rel="stylesheet"/>
+
+    <link href="/Theme/css/CssBundlePlugins?v=rSmx8HHE1IH47ug80Nt6xGXI8uDs2_-J6naE0RBVKAA1" rel="stylesheet"/>
+
+    <link href="/Theme/css/CssBundleAceInit?v=vmmnRP6vALT6U86df2alHTd8dAbxcSBcz8ab5Stj0ek1" rel="stylesheet"/>
+
+    <!--[if lte IE 9]>
+        <link href="/Theme/css/CssBundleAceIe9?v=lDZSfAFlBKboq1hN4kKwXgumcpbkmTXE1-awqodR2so1" rel="stylesheet"/>
+
+    <![endif]-->
+    <link href="/Styles/CssBundleTemaTC?v=3uiMRrQm7Wgcju1PD8BY5BznAMQiOlPNgCcZvucw7rs1" rel="stylesheet"/>
+
+
+    <link href="/Styles/CssBundleCustom?v=JN4-hMbGWqtdL02rtqG1xppefdT9tY_xmLvSYfOgLtk1" rel="stylesheet"/>
+
+    <!-- Principal js only -->
+
+    <script type="text/javascript">
+        var origem = 'DadosConsulta';
+        var baseUrl = 'https://pit.tce.pr.gov.br/';
+
+        //Verifica se existem mensagens a serem exibidas e preenche as constantes necessárias
+        var CONST_TIPO_REQUEST = "";
+        var CONST_MENSAGEM_REQUEST = "";
+    </script>
+
+    <script src="/Theme/js/JSBundleAceExtra?v=84GZnXyneE5c3qDmGzsFNfGFhb64SBg4VGshImWOOeo1"></script>
+
+    <script src="/Theme/js/JSBundleJquery?v=wq3g5SYG9VhyhQeOyE0kapP9xBSvndizi1v9v9XNhGs1"></script>
+
+    <script src="/Theme/js/JSBundleBootstrap?v=DDzGQFwAHvsS6ybjyGBIlCvTT2HN8ld6P5-jqvj9ZBw1"></script>
+
+    <script src="/Theme/js/JSBundlePlugins?v=EaBQELzpgzGKhmC-qcwxUqmHrYSsaT_fdaHEh4KDYg01"></script>
+
+    <script src="/Theme/js/JSBundleAce?v=6o-QhIUKUuIP02X_YLJHF6hs1-g44mMTaWBKMZiGnhI1"></script>
+
+
+    <!--[if lte IE 9]>
+        <script src="/Theme/js/JSBundleJqueryIE?v=I7FYc7uUyUQRigvFtHATTtPKObg9rR_X9HnduBwjLUc1"></script>
+
+        <script src="/Theme/js/JSBundleCanvasIE?v=H_6M1iVAMa8lTnBL7r8FqxyS1k4Y1vl1mQWqCBZdcQw1"></script>
+
+        <script src="/Theme/js/JSBundleIe8Html5?v=6hKvrQliv7GqJRJYnpGuJoxO5yUT0YT8cjxvTa6Qyx01"></script>
+
+    <![endif]-->
+    <script type='text/javascript'>
+        var appInsights = window.appInsights || function (config) {
+            function r(config) { t[config] = function () { var i = arguments; t.queue.push(function () { t[config].apply(t, i) }) } }
+            var t = { config: config }, u = document, e = window, o = 'script', s = u.createElement(o), i, f; for (s.src = config.url || '//az416426.vo.msecnd.net/scripts/a/ai.0.js', u.getElementsByTagName(o)[0].parentNode.appendChild(s), t.cookie = u.cookie, t.queue = [], i = ['Event', 'Exception', 'Metric', 'PageView', 'Trace', 'Ajax']; i.length;)r('track' + i.pop()); return r('setAuthenticatedUserContext'), r('clearAuthenticatedUserContext'), config.disableExceptionTracking || (i = 'onerror', r('_' + i), f = e[i], e[i] = function (config, r, u, e, o) { var s = f && f(config, r, u, e, o); return s !== !0 && t['_' + i](config, r, u, e, o), s }), t
+        }({
+            instrumentationKey: '9a49ab25-290b-4248-a153-f25c6b4e30ab'
+        });
+
+        window.appInsights = appInsights;
+        appInsights.trackPageView();
+    </script>
+</head>
+
+<body class="no-skin tema-tc">
+    <div class="navbar navbar-default" id="navbar">
+        <div id="navbar-container" class="navbar-container">
+            <div class="navbar-header pull-left">
+                <button type="button" class="navbar-toggle menu-toggler pull-left" id="menu-toggler" data-target="#sidebar">
+                    <span class="sr-only">Toggle sidebar</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+
+                <a href="https://servicos.tce.pr.gov.br/TCEPR/Tribunal/Relacon" class="navbar-brand" target="_self">
+                    <small>
+                        <i class="fa ico-tce-pr"></i>
+                        TCEPR
+                    </small>
+                </a>
+
+                <span class="sp-titulo">Portal de Informações para Todos</span>
+            </div>
+
+            
+            <div class="navbar-buttons navbar-header pull-right ">
+                <ul class="nav ace-nav"> 
+            <!-- Botões de notificação -->
+               </ul>
+            </div>
+            
+            <div class="navbar-buttons navbar-header pull-right" role="navigation">
+                <ul class="nav ace-nav">
+                    <li class="light-blue">
+
+                            <a data-toggle="dropdown" href="#" class="dropdown-toggle">
+                                <img class="nav-user-photo" src="/Theme/avatars/avatar2.png" alt="avatar" />
+                                <label class="user-info">Seja Bem-vindo<small>TCE-PR</small></label>
+                            </a>
+                            <ul class="user-menu dropdown-menu dropdown-menu-right dropdown-yellow dropdown-caret dropdown-close">
+                            <li><a onclick="login();" data-url="/Home/IniciaLogin" id="btnLogin" ><i class="ace-icon fa fa-user"></i> Entrar</a></li>
+                        
+                            </ul>
+
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-container" id="main-container">
+        <div class="sidebar responsive" id="sidebar">
+            <!-- sidebar goes here -->
+            
+
+    <ul class="nav nav-list">
+            <li style="height:40px;" class="">
+                &nbsp;
+            </li>
+                    <li class=" ">
+                <a id="_Home_Index_GET_In&#237;cio_Mapa_MapaConsulta_Index_GET_Mapa_" href="/Mapa/MapaConsulta" class="dropdown-toggle">
+                    <i class="menu-icon glyphicon glyphicon-map-marker"></i>
+                    <span class="menu-text">
+                        Mapa
+                    </span>
+                        <b class="arrow fa fa-angle-down"></b>
+                </a>
+                <b class="arrow"></b>
+
+
+<ul class="submenu">
+            <li class=" ">
+                <a href="/Mapa/MapaObras" class="">
+                    <i class="menu-icon fa fa-caret-right"></i>
+                        <i class="fa  fa-road"></i>
+                        &nbsp;
+                    <span class="menu-text">
+                        Obras
+                    </span>
+                </a>
+                <b class="arrow"></b>
+            </li>
+            <li class=" ">
+                <a href="/Mapa/MapaMunicipios" class="">
+                    <i class="menu-icon fa fa-caret-right"></i>
+                        <i class="fa  fa-building-o"></i>
+                        &nbsp;
+                    <span class="menu-text">
+                        Munic&#237;pios
+                    </span>
+                </a>
+                <b class="arrow"></b>
+            </li>
+            <li class=" ">
+                <a href="/Mapa/MapaReceitas" class="">
+                    <i class="menu-icon fa fa-caret-right"></i>
+                        <i class="fa  fa-bar-chart"></i>
+                        &nbsp;
+                    <span class="menu-text">
+                        Receitas
+                    </span>
+                </a>
+                <b class="arrow"></b>
+            </li>
+</ul>            </li>
+            <li class=" ">
+                <a id="_Home_Index_GET_In&#237;cio_Graficos_GraficoConsulta_Consulta_GET_Gr&#225;ficos_" href="/Graficos/GraficoConsulta/Consulta" class="dropdown-toggle">
+                    <i class="menu-icon fa fa-line-chart"></i>
+                    <span class="menu-text">
+                        Gr&#225;ficos
+                    </span>
+                        <b class="arrow fa fa-angle-down"></b>
+                </a>
+                <b class="arrow"></b>
+
+
+<ul class="submenu">
+            <li class=" ">
+                <a href="/Graficos/GraficoReceita/Receitas" class="">
+                    <i class="menu-icon fa fa-caret-right"></i>
+                        <i class="fa  fa-bar-chart"></i>
+                        &nbsp;
+                    <span class="menu-text">
+                        Receita
+                    </span>
+                </a>
+                <b class="arrow"></b>
+            </li>
+            <li class=" ">
+                <a href="/Graficos/GraficoDespesa/Despesas" class="">
+                    <i class="menu-icon fa fa-caret-right"></i>
+                        <i class="fa  fa-bar-chart"></i>
+                        &nbsp;
+                    <span class="menu-text">
+                        Despesa
+                    </span>
+                </a>
+                <b class="arrow"></b>
+            </li>
+</ul>            </li>
+            <li class=" ">
+                <a id="_Home_Index_GET_In&#237;cio_Processos_ProcessosConsulta_Consulta_GET_Processos_" href="/Processos/ProcessosConsulta/Consulta" class="">
+                    <i class="menu-icon fa fa-university"></i>
+                    <span class="menu-text">
+                        Processos
+                    </span>
+                </a>
+                <b class="arrow"></b>
+            </li>
+            <li class=" ">
+                <a id="_Home_Index_GET_In&#237;cio_Entidade_EntidadeConsulta_Index_GET_Painel de Entidades_" href="/Entidade" class="">
+                    <i class="menu-icon fa fa-building-o"></i>
+                    <span class="menu-text">
+                        Painel de Entidades
+                    </span>
+                </a>
+                <b class="arrow"></b>
+            </li>
+            <li class=" ">
+                <a id="_Home_Index_GET_In&#237;cio_Receitas_ReceitaConsulta_Consulta_GET_Receitas_" href="/Receitas" class="">
+                    <i class="menu-icon fa fa-calculator"></i>
+                    <span class="menu-text">
+                        Receitas
+                    </span>
+                </a>
+                <b class="arrow"></b>
+            </li>
+            <li class=" ">
+                <a id="_Home_Index_GET_In&#237;cio_Despesa_DespesaConsulta_Index_GET_Despesas_" href="/Despesa/DespesaConsulta/Index" class="dropdown-toggle">
+                    <i class="menu-icon fa fa-cart-plus"></i>
+                    <span class="menu-text">
+                        Despesas
+                    </span>
+                        <b class="arrow fa fa-angle-down"></b>
+                </a>
+                <b class="arrow"></b>
+
+
+<ul class="submenu">
+            <li class=" ">
+                <a href="/Despesa/DespesaConsulta/Credor" class="">
+                    <i class="menu-icon fa fa-caret-right"></i>
+                        <i class="fa  fa-street-view"></i>
+                        &nbsp;
+                    <span class="menu-text">
+                        Credor
+                    </span>
+                </a>
+                <b class="arrow"></b>
+            </li>
+            <li class=" ">
+                <a href="/Despesa/DespesaConsultaClassificacaoPadrao/ClassificacaoPadrao" class="">
+                    <i class="menu-icon fa fa-caret-right"></i>
+                        <i class="fa  fa fa-list"></i>
+                        &nbsp;
+                    <span class="menu-text">
+                        Classific. Padr&#227;o
+                    </span>
+                </a>
+                <b class="arrow"></b>
+            </li>
+            <li class=" ">
+                <a href="/Despesa/DespesaConsultaClassificacaoEntidade/ClassificacaoEntidade" class="">
+                    <i class="menu-icon fa fa-caret-right"></i>
+                        <i class="fa  fa fa-list"></i>
+                        &nbsp;
+                    <span class="menu-text">
+                        Classific. Entidade
+                    </span>
+                </a>
+                <b class="arrow"></b>
+            </li>
+</ul>            </li>
+            <li class=" ">
+                <a id="_Home_Index_GET_In&#237;cio_Combustiveis_CombustiveisConsulta_Index_GET_Combust&#237;veis_" href="/Combustiveis/CombustiveisConsulta" class="">
+                    <i class="menu-icon fa fa-car"></i>
+                    <span class="menu-text">
+                        Combust&#237;veis
+                    </span>
+                </a>
+                <b class="arrow"></b>
+            </li>
+            <li class=" ">
+                <a id="_Home_Index_GET_In&#237;cio_Diarias_DiariaConsulta_DiariaBI_GET_Di&#225;rias_" href="/Diarias/DiariaConsulta/DiariaBI" class="">
+                    <i class="menu-icon fa fa-plane"></i>
+                    <span class="menu-text">
+                        Di&#225;rias
+                    </span>
+                </a>
+                <b class="arrow"></b>
+            </li>
+            <li class=" ">
+                <a id="_Home_Index_GET_In&#237;cio_Obra_ObraConsulta_Index_GET_Obras_" href="/Obra/ObraConsulta/Index" class="dropdown-toggle">
+                    <i class="menu-icon fa fa-road"></i>
+                    <span class="menu-text">
+                        Obras
+                    </span>
+                        <b class="arrow fa fa-angle-down"></b>
+                </a>
+                <b class="arrow"></b>
+
+
+<ul class="submenu">
+            <li class=" ">
+                <a href="/Obra/ObraConsulta/Contratado" class="">
+                    <i class="menu-icon fa fa-caret-right"></i>
+                        <i class="fa  fa fa-user"></i>
+                        &nbsp;
+                    <span class="menu-text">
+                        Painel de Obras
+                    </span>
+                </a>
+                <b class="arrow"></b>
+            </li>
+            <li class=" ">
+                <a href="/Obra" class="">
+                    <i class="menu-icon fa fa-caret-right"></i>
+                        <i class="fa  fa fa-list-alt"></i>
+                        &nbsp;
+                    <span class="menu-text">
+                        Consulta Avan&#231;ada
+                    </span>
+                </a>
+                <b class="arrow"></b>
+            </li>
+</ul>            </li>
+            <li class=" ">
+                <a id="_Home_Index_GET_In&#237;cio__ContratoConsulta_Consulta_GET_Contratos_" href="/ContratoConsulta/Consulta" class="">
+                    <i class="menu-icon fa fa-file-excel-o"></i>
+                    <span class="menu-text">
+                        Contratos
+                    </span>
+                </a>
+                <b class="arrow"></b>
+            </li>
+            <li class=" ">
+                <a id="_Home_Index_GET_In&#237;cio_Licitacao_LicitacaoConsulta_Consulta_GET_Licita&#231;&#245;es_" href="/Licitacao" class="">
+                    <i class="menu-icon fa fa-gavel"></i>
+                    <span class="menu-text">
+                        Licita&#231;&#245;es
+                    </span>
+                </a>
+                <b class="arrow"></b>
+            </li>
+            <li class=" ">
+                <a id="_Home_Index_GET_In&#237;cio_Convenios_ConveniosConsulta_ConvenioBI_GET_Conv&#234;nios_" href="/Convenios/ConveniosConsulta/ConvenioBI" class="">
+                    <i class="menu-icon fa fa-users"></i>
+                    <span class="menu-text">
+                        Conv&#234;nios
+                    </span>
+                </a>
+                <b class="arrow"></b>
+            </li>
+            <li class=" ">
+                <a id="_Home_Index_GET_In&#237;cio_Educacao_Educacao_EducacaoBI_GET_Educa&#231;&#227;o_" href="/Educacao/Educacao/EducacaoBI" class="">
+                    <i class="menu-icon fa fa-book"></i>
+                    <span class="menu-text">
+                        Educa&#231;&#227;o
+                    </span>
+                </a>
+                <b class="arrow"></b>
+            </li>
+            <li class=" ">
+                <a id="_Home_Index_GET_In&#237;cio_EmendasParlamentares_EmendasParlamentaresConsulta_EmendasParlamentaresBI_GET_Emendas_" href="/EmendasParlamentares/EmendasParlamentaresConsulta/EmendasParlamentaresBI" class="">
+                    <i class="menu-icon fa fa-bar-chart"></i>
+                    <span class="menu-text">
+                        Emendas
+                    </span>
+                </a>
+                <b class="arrow"></b>
+            </li>
+            <li class=" ">
+                <a id="_Home_Index_GET_In&#237;cio_RelatoriosFiscalizacao_RelatoriosFiscalizacaoConsulta_RelatoriosFiscalizacaoBI_GET_Relat&#243;rios de Fiscal._" href="/RelatoriosFiscalizacao/RelatoriosFiscalizacaoConsulta/RelatoriosFiscalizacaoBI" class="">
+                    <i class="menu-icon fa fa-book"></i>
+                    <span class="menu-text">
+                        Relat&#243;rios de Fiscal.
+                    </span>
+                </a>
+                <b class="arrow"></b>
+            </li>
+            <li class=" ">
+                <a id="_Home_Index_GET_In&#237;cio_GestaoMunicipal_GestaoMunicipal_GestaoFocoBI_GET_Gest&#227;o em Foco_" href="/GestaoMunicipal/GestaoMunicipal/GestaoFocoBI" class="">
+                    <i class="menu-icon fa fa-pie-chart"></i>
+                    <span class="menu-text">
+                        Gest&#227;o em Foco
+                    </span>
+                </a>
+                <b class="arrow"></b>
+            </li>
+            <li class="active open ">
+                <a id="_Home_Index_GET_In&#237;cio_Dados_DadosConsulta_Consulta_GET_Download de Dados_" href="/Dados/DadosConsulta/Consulta" class="dropdown-toggle">
+                    <i class="menu-icon fa fa fa-database"></i>
+                    <span class="menu-text">
+                        Download de Dados
+                    </span>
+                        <b class="arrow fa fa-angle-down"></b>
+                </a>
+                <b class="arrow"></b>
+
+
+<ul class="submenu">
+            <li class=" ">
+                <a href="/Dados/DadosConsulta/Consulta" class="">
+                    <i class="menu-icon fa fa-caret-right"></i>
+                    <span class="menu-text">
+                        Munic&#237;pios
+                    </span>
+                </a>
+                <b class="arrow"></b>
+            </li>
+            <li class="active ">
+                <a href="/Dados/DadosConsulta/Consolidado" class="">
+                    <i class="menu-icon fa fa-caret-right"></i>
+                    <span class="menu-text">
+                        Consolidado
+                    </span>
+                </a>
+                <b class="arrow"></b>
+            </li>
+</ul>            </li>
+    </ul>
+
+
+            <div class="sidebar-toggle sidebar-collapse" id="sidebar-collapse">
+                <i class="ace-icon fa fa-angle-double-left" data-icon1="ace-icon fa fa-angle-double-left" data-icon2="ace-icon fa fa-angle-double-right"></i>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="breadcrumbs">
+                <!-- breadcrumbs goes here -->
+                <i class="menu-icon fa fa-home"></i>
+                
+    <ul class="breadcrumb">
+                <li><a href="/">In&#237;cio</a></li>
+                <li><a href="/Dados/DadosConsulta/Consulta">Download de Dados</a></li>
+                    <li class="active">Consolidado</li>
+    </ul>
+
+                <!--div class="nav-search" id="nav-search">
+                    <form class="form-search">
+                        <span class="input-icon">
+                            <input type="text" placeholder="ID Atividade" class="nav-search-input" id="nav-search-input" autocomplete="off">
+                            <i class="ace-icon fa fa-search nav-search-icon"></i>
+                        </span>
+                    </form>
+                </div-->
+            </div>
+
+            <div class="page-content">
+                <!-- setting box goes here if needed -->
+
+                <div class="row">
+                    <div class="col-xs-12">
+                        
+
+<script src="/Scripts/AreaDados?v=NNNBgPOk5rnutaSg2p0EP4pspgtQQtaXVvFtt2feISY1"></script>
+
+
+<div class="conteudoRelacon">
+    <div class="col-xs-12">
+        <h3 class="header smaller lighter blue">
+            Download de Dados
+        </h3>
+        <div class="col-xs-12" style="margin-top: 1%;">
+            <div class="col-xs-12" id="textoDados">
+
+                <span style="font-size: 14px;">
+                    O painel <strong>Download de Dados</strong> do Portal Informação para Todos tem como objetivo disponibilizar dados brutos em formato aberto para download. Isso significa que cidadãos e entidades da sociedade civil poderão acessar os dados públicos captados das <strong>públicas municipais do Estado Paraná</strong> e, com eles, desenvolver as análises desejadas.
+                    <br />
+                    <br />
+                    Para baixar os dados clique no <strong>ano</strong> desejado, o arquivo contém os dados de todos os munucípios. Além dos arquivos com temas como Licitações, Contratos, Despesas, dentre outros está disponível também o arquivo de <strong>relacionamentos</strong> que contém os vínculos entre os temas.
+                    <br />
+                    <br />
+                    Os arquivos para Download de Dados são gerados uma vez por semana, abrangendo dados de remessas fechadas e estão sujeitos a mudanças (acréscimos, alterações ou exclusões), tanto de seus registros quanto de sua forma, por iniciativa dos próprios jurisdicionados ou necessidades e determinações do Tribunal de Contas do Estado do Paraná.
+                    <br />
+                    <br />
+                    <strong>As informações utilizadas para a geração dos arquivos de Download de Dados são declaradas pelas entidades jurisdicionadas e são de sua inteira responsabilidade.</strong>
+                    <br />
+                    <br />
+                </span>
+            </div>
+        </div>
+        <div class="clearfix"></div>
+        <div class="row-fluid">
+            <div class="col-xs-2">
+                <a href="https://pit.tce.pr.gov.br/Arquivos/2013_PIT_TodosArquivos.zip" role="button" class="btn btn-xlg customSize btn-block"><i class="ace-icon fa fa-download align-top fa-download"></i>2013</a>
+            </div>
+            <div class="col-xs-2">
+                <a href="https://pit.tce.pr.gov.br/Arquivos/2014_PIT_TodosArquivos.zip" role="button" class="btn btn-xlg customSize btn-block"><i class="ace-icon fa fa-download align-top fa-download"></i>2014</a>
+            </div>
+            <div class="col-xs-2">
+                <a href="https://pit.tce.pr.gov.br/Arquivos/2015_PIT_TodosArquivos.zip" role="button" class="btn btn-xlg customSize btn-block"><i class="ace-icon fa fa-download align-top fa-download"></i>2015</a>
+            </div>
+            <div class="col-xs-2">
+                <a href="https://pit.tce.pr.gov.br/Arquivos/2016_PIT_TodosArquivos.zip" role="button" class="btn btn-xlg customSize btn-block"><i class="ace-icon fa fa-download align-top fa-download"></i>2016</a>
+            </div>
+            <div class="col-xs-2">
+                <a href="https://pit.tce.pr.gov.br/Arquivos/2017_PIT_TodosArquivos.zip" role="button" class="btn btn-xlg customSize btn-block"><i class="ace-icon fa fa-download align-top fa-download"></i>2017</a>
+            </div>
+            <div class="col-xs-2">
+                <a href="https://pit.tce.pr.gov.br/Arquivos/2018_PIT_TodosArquivos.zip" role="button" class="btn btn-xlg customSize btn-block"><i class="ace-icon fa fa-download align-top fa-download"></i>2018</a>
+            </div>
+            <div class="col-xs-2">
+                <a href="https://pit.tce.pr.gov.br/Arquivos/2019_PIT_TodosArquivos.zip" role="button" class="btn btn-xlg customSize btn-block"><i class="ace-icon fa fa-download align-top fa-download"></i>2019</a>
+            </div>
+            <div class="col-xs-2">
+                <a href="https://pit.tce.pr.gov.br/Arquivos/2020_PIT_TodosArquivos.zip" role="button" class="btn btn-xlg customSize btn-block"><i class="ace-icon fa fa-download align-top fa-download"></i>2020</a>
+            </div>
+            <div class="col-xs-2">
+                <a href="https://pit.tce.pr.gov.br/Arquivos/2021_PIT_TodosArquivos.zip" role="button" class="btn btn-xlg customSize btn-block"><i class="ace-icon fa fa-download align-top fa-download"></i>2021</a>
+            </div>
+            <div class="col-xs-2">
+                <a href="https://pit.tce.pr.gov.br/Arquivos/2022_PIT_TodosArquivos.zip" role="button" class="btn btn-xlg customSize btn-block"><i class="ace-icon fa fa-download align-top fa-download"></i>2022</a>
+            </div>
+            <div class="col-xs-2">
+                <a href="https://pit.tce.pr.gov.br/Arquivos/2023_PIT_TodosArquivos.zip" role="button" class="btn btn-xlg customSize btn-block"><i class="ace-icon fa fa-download align-top fa-download"></i>2023</a>
+            </div>
+            <div class="col-xs-2">
+                <a href="https://pit.tce.pr.gov.br/Arquivos/2024_PIT_TodosArquivos.zip" role="button" class="btn btn-xlg customSize btn-block"><i class="ace-icon fa fa-download align-top fa-download"></i>2024</a>
+            </div>
+            <div class="col-xs-2">
+                <a href="https://pit.tce.pr.gov.br/Arquivos/2025_PIT_TodosArquivos.zip" role="button" class="btn btn-xlg customSize btn-block"><i class="ace-icon fa fa-download align-top fa-download"></i>2025</a>
+            </div>
+            <div class="col-xs-2">
+                <a href="https://pit.tce.pr.gov.br/Arquivos/2026_PIT_TodosArquivos.zip" role="button" class="btn btn-xlg customSize btn-block"><i class="ace-icon fa fa-download align-top fa-download"></i>2026</a>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="clearfix"></div>
+
+                        <!-- page content goes here -->
+                    </div><!-- /.col -->
+                </div><!-- /.row -->
+            </div><!-- /.page-content -->
+        </div><!-- /.main-content -->
+        <div class="footer"><div class="footer-inner"><div class="footer-content bigger-120"><a href="http://www.tce.pr.gov.br/" class="blue">Tribunal de Contas do Estado do Paraná</a> - Portal de Informações para Todos - <small>v2024.4.19.0</small></div></div></div>
+        <!-- footer area -->
+
+    </div><!-- /.main-container -->
+    
+    
+    <div class="tabLoading" id="tabLoadingBase" style="display:none;"><span><img src="/Styles/images/imagem_carregamento.gif" />Carregando</span></div>
+</body>
+</html>
+
+<script>
+    (function (i, s, o, g, r, a, m) {
+        i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+            (i[r].q = i[r].q || []).push(arguments)
+        }, i[r].l = 1 * new Date(); a = s.createElement(o),
+        m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+    })(window, document, 'script', 'https://www.google-analytics.com/analytics.js', 'ga');
+
+    ga('create', 'UA-2108192-16', 'auto');
+    ga('send', 'pageview');
+
+</script>
+
+<script type="text/javascript">
+    function login() {
+        var temp = window.location.href;
+        var urlEncoded = encodeURIComponent(temp);
+        var url = $("#btnLogin").data('url') + '?UrlRedirect=' + urlEncoded;
+
+        window.location.href = url;
+    }
+</script>

@@ -104,6 +104,85 @@ def load_unit_conversion(path: Path | None = None) -> dict[str, Any]:
         return yaml.safe_load(fh)
 
 
+# Cluster por keyword (Tier 1.5) — usado para fontes municipais/estaduais que
+# nao publicam CATMAT, so descricao livre (ex: TCE-PR dsObjeto). Ordem importa
+# (primeiro pattern que casa vence).
+
+
+@dataclass(slots=True, frozen=True)
+class KeywordCluster:
+    cluster_id: str
+    cluster_version: str
+    descricao_canonica: str
+    categoria: str
+    patterns: tuple[re.Pattern[str], ...]
+
+
+def load_keyword_clusters(path: Path | None = None) -> list[KeywordCluster]:
+    """Carrega config/cluster_keywords.yaml. Compila regexes case-insensitive
+    com flag re.UNICODE; o caller normaliza a descricao para upper antes."""
+    p = path or CONFIG_DIR / "cluster_keywords.yaml"
+    if not p.exists():
+        return []
+    with p.open("r", encoding="utf-8") as fh:
+        data = yaml.safe_load(fh) or {}
+    out: list[KeywordCluster] = []
+    for entry in data.get("clusters") or []:
+        compiled = tuple(
+            re.compile(pat, re.IGNORECASE | re.UNICODE)
+            for pat in entry.get("patterns") or []
+        )
+        out.append(
+            KeywordCluster(
+                cluster_id=entry["cluster_id"],
+                cluster_version=entry["cluster_version"],
+                descricao_canonica=entry["descricao_canonica"],
+                categoria=entry["categoria"],
+                patterns=compiled,
+            )
+        )
+    return out
+
+
+def resolve_cluster_by_keyword(
+    descricao: str,
+    keyword_clusters: list[KeywordCluster],
+) -> Resolution:
+    """Tier 1.5: cluster por keyword em descricao livre.
+
+    Confianca fixa em 0.6 (entre CATMAT direto = 1.0 e nada = 0.0). Primeira
+    regra que casa vence — ordem do YAML define prioridade.
+    """
+    if not descricao:
+        return Resolution(
+            cluster_id=None,
+            cluster_version=None,
+            categoria=None,
+            metodo_resolucao="sem_cluster",
+            confianca_resolucao=0.0,
+            descricao_canonica=None,
+        )
+    for kc in keyword_clusters:
+        for pat in kc.patterns:
+            if pat.search(descricao):
+                return Resolution(
+                    cluster_id=kc.cluster_id,
+                    cluster_version=kc.cluster_version,
+                    categoria=kc.categoria,
+                    metodo_resolucao="tier1_keyword_dsobjeto",
+                    confianca_resolucao=0.60,
+                    descricao_canonica=kc.descricao_canonica,
+                )
+    return Resolution(
+        cluster_id=None,
+        cluster_version=None,
+        categoria=None,
+        metodo_resolucao="sem_cluster",
+        confianca_resolucao=0.0,
+        descricao_canonica=None,
+    )
+
+
 # ----------------------------- resolucao -------------------------------
 
 
@@ -308,6 +387,57 @@ def canonicalize(
         ente_nivel=ente_nivel,
         uf=uf,
         porte=porte,
+        em_quarentena=em_quarentena,
+        motivo_quarentena=";".join(motivos) if motivos else None,
+    )
+
+
+def canonicalize_tce_pr_row(
+    raw_row: dict[str, Any],
+    keyword_clusters: list[KeywordCluster],
+) -> CanonicalRow:
+    """Canonicalizacao para fontes TCE-PR (granularidade contrato).
+
+    Diferenca-chave vs `canonicalize()` federal:
+      - Cluster vem de keyword em descricao (Tier 1.5), nao CATMAT.
+      - `unidade_base = 'contrato'`, `fator_conversao = 1.0`.
+      - `valor_unitario_normalizado = valor_total` (1 contrato = 1 unidade).
+      - Itens sem cluster vao para quarentena com motivo legivel.
+      - Ente_nivel/uf/porte sao fixos (municipal/PR/None) — porte fica para
+        o SQL resolver via JOIN com analytics.municipio_pr.
+    """
+    raw_id = int(raw_row["id"])
+    descricao = raw_row.get("descricao") or ""
+    valor_total = raw_row.get("valor_total")
+
+    res = resolve_cluster_by_keyword(descricao, keyword_clusters)
+
+    em_quarentena = res.cluster_id is None
+    motivos: list[str] = []
+    if em_quarentena:
+        motivos.append("sem_cluster_keyword")
+
+    valor_norm: float | None = None
+    if valor_total is not None:
+        try:
+            valor_norm = float(valor_total)
+        except (TypeError, ValueError):
+            em_quarentena = True
+            motivos.append("valor_total_invalido")
+
+    return CanonicalRow(
+        raw_id=raw_id,
+        cluster_id=res.cluster_id,
+        cluster_version=res.cluster_version,
+        metodo_resolucao=res.metodo_resolucao,
+        confianca_resolucao=res.confianca_resolucao,
+        unidade_label="contrato",
+        unidade_base="contrato",
+        fator_conversao=1.0,
+        valor_unitario_normalizado=valor_norm,
+        ente_nivel="municipal",
+        uf="PR",
+        porte=None,  # resolvido no SQL via JOIN com analytics.municipio_pr
         em_quarentena=em_quarentena,
         motivo_quarentena=";".join(motivos) if motivos else None,
     )

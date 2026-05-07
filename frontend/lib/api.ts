@@ -58,7 +58,7 @@ export type Item = {
   pares: Pares | null;
 };
 
-async function jget<T>(path: string): Promise<T> {
+export async function jget<T>(path: string): Promise<T> {
   const r = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
   if (!r.ok) throw new Error(`API ${path} -> ${r.status}`);
   return (await r.json()) as T;

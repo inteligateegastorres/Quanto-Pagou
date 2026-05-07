@@ -110,6 +110,43 @@ class QuarentenaResumoOut(BaseModel):
     n: int
 
 
+class ContratoMunicipioOut(BaseModel):
+    cluster_id: str
+    cluster_version: str
+    cd_ibge: str | None
+    municipio: str | None
+    porte: str
+    orgao_codigo: str
+    orgao_nome: str
+    n_contratos: int
+    valor_total_periodo: Decimal
+    mediana_valor_contrato: Decimal
+    p25_valor: Decimal
+    p75_valor: Decimal
+
+
+class FornecedorMunicipioOut(BaseModel):
+    cd_ibge: str | None
+    municipio: str | None
+    fornecedor_cnpj: str
+    fornecedor_nome: str | None
+    n_contratos: int
+    valor_total_periodo: Decimal
+    n_orgaos_distintos: int
+
+
+class TcePrSummaryOut(BaseModel):
+    cd_ibge: str
+    municipio: str
+    n_contratos_total: int
+    valor_total: Decimal
+    n_em_cluster: int
+    n_em_quarentena: int
+    cobertura_pct: float = Field(
+        description="Pct de contratos que casaram com algum cluster keyword"
+    )
+
+
 class ItemOut(BaseModel):
     raw_id: int
     cluster_id: str | None
@@ -330,3 +367,148 @@ def get_item(conn: ConnDep, raw_id: int) -> ItemOut:
         motivo_quarentena=row["motivo_quarentena"],
         pares=pares,
     )
+
+
+# ----------------------------- TCE-PR ---------------------------------
+
+# Os endpoints abaixo usam mart_contratos_municipio e
+# mart_fornecedores_municipio, que sao especificos da fonte tce_pr/contrato.
+# Granularidade e por contrato (nao por item) — comparacao por valor de
+# contrato com objeto similar (cluster por keyword em dsObjeto).
+
+
+@app.get(
+    "/tce-pr/municipio/{cd_ibge}/resumo",
+    response_model=TcePrSummaryOut,
+    tags=["tce-pr"],
+)
+def tce_pr_municipio_resumo(conn: ConnDep, cd_ibge: str) -> TcePrSummaryOut:
+    """Resumo de contratos do TCE-PR para um municipio."""
+    sql = """
+        SELECT
+            mp.cd_ibge AS cd_ibge,
+            COALESCE(mp.nome, rc.raw_payload->>'municipio') AS municipio,
+            COUNT(*) AS n_total,
+            SUM(rc.valor_total) AS valor_total,
+            COUNT(*) FILTER (WHERE ic.em_quarentena = FALSE) AS n_cluster,
+            COUNT(*) FILTER (WHERE ic.em_quarentena = TRUE)  AS n_quarentena
+        FROM raw.compras rc
+        JOIN analytics.item_canonical ic ON ic.raw_id = rc.id
+        LEFT JOIN analytics.municipio_pr mp ON mp.cd_tce = rc.raw_payload->>'cd_tce'
+        WHERE rc.source = 'tce_pr/contrato'
+          AND mp.cd_ibge = %s
+        GROUP BY 1, 2
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (cd_ibge,))
+        row = cur.fetchone()
+    if row is None or row["n_total"] == 0:
+        raise HTTPException(404, f"sem dados TCE-PR para cd_ibge={cd_ibge}")
+    n_total = row["n_total"]
+    n_cluster = row["n_cluster"]
+    cobertura = (n_cluster / n_total) if n_total > 0 else 0.0
+    return TcePrSummaryOut(
+        cd_ibge=row["cd_ibge"],
+        municipio=row["municipio"] or "",
+        n_contratos_total=n_total,
+        valor_total=row["valor_total"] or Decimal(0),
+        n_em_cluster=n_cluster,
+        n_em_quarentena=row["n_quarentena"],
+        cobertura_pct=round(cobertura, 4),
+    )
+
+
+@app.get(
+    "/tce-pr/municipio/{cd_ibge}/contratos-por-cluster",
+    response_model=list[ContratoMunicipioOut],
+    tags=["tce-pr"],
+)
+def tce_pr_contratos_por_cluster(
+    conn: ConnDep,
+    cd_ibge: str,
+    cluster_id: str | None = None,
+    limit: int = Query(default=20, ge=1, le=200),
+) -> list[ContratoMunicipioOut]:
+    """Para um municipio, mostra agregados por cluster x orgao (gancho viral).
+
+    Sem cluster_id: lista todos os clusters com algum contrato.
+    Com cluster_id: filtra para um cluster especifico (top orgaos do municipio).
+    """
+    sql = """
+        SELECT cluster_id, cluster_version, cd_ibge, municipio, porte,
+               orgao_codigo, orgao_nome, n_contratos, valor_total_periodo,
+               mediana_valor_contrato, p25_valor, p75_valor
+        FROM analytics.mart_contratos_municipio
+        WHERE cd_ibge = %s
+          AND (%s::text IS NULL OR cluster_id = %s)
+        ORDER BY valor_total_periodo DESC
+        LIMIT %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (cd_ibge, cluster_id, cluster_id, limit))
+        return [ContratoMunicipioOut(**r) for r in cur.fetchall()]
+
+
+@app.get(
+    "/tce-pr/municipio/{cd_ibge}/fornecedores",
+    response_model=list[FornecedorMunicipioOut],
+    tags=["tce-pr"],
+)
+def tce_pr_fornecedores(
+    conn: ConnDep,
+    cd_ibge: str,
+    limit: int = Query(default=20, ge=1, le=200),
+) -> list[FornecedorMunicipioOut]:
+    """Top fornecedores de um municipio do PR (por valor acumulado)."""
+    sql = """
+        SELECT cd_ibge, municipio, fornecedor_cnpj, fornecedor_nome,
+               n_contratos, valor_total_periodo, n_orgaos_distintos
+        FROM analytics.mart_fornecedores_municipio
+        WHERE cd_ibge = %s
+        ORDER BY valor_total_periodo DESC
+        LIMIT %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (cd_ibge, limit))
+        return [FornecedorMunicipioOut(**r) for r in cur.fetchall()]
+
+
+@app.get(
+    "/tce-pr/cluster/{cluster_id}/comparacao-municipios",
+    response_model=list[ContratoMunicipioOut],
+    tags=["tce-pr"],
+)
+def tce_pr_comparacao_municipios(
+    conn: ConnDep,
+    cluster_id: str,
+    cluster_version: str = "v1",
+    porte: str | None = None,
+    order: str = Query(default="mediana_desc"),
+    limit: int = Query(default=30, ge=1, le=200),
+) -> list[ContratoMunicipioOut]:
+    """Compara municipios PR para um cluster especifico (ex: merenda escolar).
+
+    Permite filtrar por porte (municipio_pr_grande/medio/pequeno) para garantir
+    que so aparece comparacao entre pares de mesmo tamanho — guardrail do plano.
+    """
+    order_sql = {
+        "mediana_desc": "mediana_valor_contrato DESC",
+        "mediana_asc": "mediana_valor_contrato ASC",
+        "total_desc": "valor_total_periodo DESC",
+        "n_desc": "n_contratos DESC",
+    }.get(order)
+    if order_sql is None:
+        raise HTTPException(400, f"order invalido: {order}")
+    sql = f"""
+        SELECT cluster_id, cluster_version, cd_ibge, municipio, porte,
+               orgao_codigo, orgao_nome, n_contratos, valor_total_periodo,
+               mediana_valor_contrato, p25_valor, p75_valor
+        FROM analytics.mart_contratos_municipio
+        WHERE cluster_id = %s AND cluster_version = %s
+          AND (%s::text IS NULL OR porte = %s)
+        ORDER BY {order_sql}
+        LIMIT %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (cluster_id, cluster_version, porte, porte, limit))
+        return [ContratoMunicipioOut(**r) for r in cur.fetchall()]

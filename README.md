@@ -27,7 +27,19 @@ Pronto:
 - Frontend Next.js 16: landing pública (home reformulada com pitch +
   3 CTAs + boletim + status), manifesto, ranking destacado, insight
   editorial, página de cluster, card narrativo do item (template §6.1
-  do plano), metodologia, correções.
+  do plano), metodologia, correções, **página `/curitiba`** com dados
+  reais TCE-PR (top fornecedores + contratos por categoria-piloto) e
+  busca textual em diários oficiais via Querido Diário.
+- **Pipeline TCE-PR (Day 8+)** — coexiste com o federal sob
+  `source='tce_pr/contrato'`. ZIP anual público em
+  `pit.tce.pr.gov.br/Arquivos/{ano}_PIT_TodosArquivos.zip` (2025: 1,29 GB,
+  399 municípios PR, atualizado semanal). Adapter `src/ingest/tce_pr.py`
+  baixa + extrai sub-zips por município + parseia XML `<Contrato/>`.
+  Granularidade **por contrato** (TCE não publica item-a-item). Cluster
+  por **keyword em `dsObjeto`** (Tier 1.5, 8 categorias em
+  `config/cluster_keywords.yaml`); threshold separado ≥ 0.5. Marts
+  dedicados: `mart_contratos_municipio` e `mart_fornecedores_municipio`.
+  Validado com 7 cidades PR, 13.737 contratos em 2 segundos.
 - **OG images dinâmicas** (`/opengraph-image` na home, `/insight/.../opengraph-image`)
   via `next/og` — dados puxados do mart em tempo de geração; share preview
   em Twitter/Bluesky/WhatsApp pronto.
@@ -242,6 +254,7 @@ Base: `http://127.0.0.1:8000` · Docs: `/docs` · Sem auth (dados públicos).
 |----------------------------|-------------------------------------------------------------------------------------------------|
 | `/`                        | Landing pública (Day 7): pitch + 3 CTAs + insight + ranking + categorias + boletim + status.    |
 | `/manifesto`               | Por que existe a plataforma — gap do Painel de Preços + tese + princípios + licenças.          |
+| `/curitiba`                | Compras públicas de Curitiba (TCE-PR PIT): top fornecedores, contratos por categoria-piloto, busca textual em diários oficiais. |
 | `/insight/diesel-ministerios` | Análise editorial (Day 6) sobre o spread entre ministérios federais comprando o mesmo diesel S10. |
 | `/cluster/[cluster_id]`    | Distribuição p25-p75 entre pares + ranking completo de órgãos.                                  |
 | `/item/[raw_id]`           | Card narrativo do plano §6.1: barras "você vs mediana", badge de confiabilidade, sinais decompostos, agregado escondido. |
