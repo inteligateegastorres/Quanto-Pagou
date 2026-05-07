@@ -3,6 +3,27 @@
 	- x
 	- etc
 
+- Comparação por escola individual (Caso 2 da conversa de 2026-05-07)
+	- TCE-PR não publica nesse nível: granularidade é POR ÓRGÃO MUNICIPAL
+	  (Prefeitura, Câmara, Secretaria, Fundação, autarquia). Nome de
+	  escola individual aparece, no máximo, dentro do dsObjeto como
+	  texto livre.
+	- Para chegar em "Escola X vs Escola Y" precisa fonte adicional:
+		- (a) LLM resolver no dsObjeto: extrai nome de escola e qtd
+		  do texto. Custo recorrente; recall provável <50%; ruim para
+		  comparação numérica.
+		- (b) PNCP NFe (já explorado, pausado): nomeOrgaoDestinatario
+		  pode ser mais granular em alguns casos. Mas só 20% das NFes
+		  têm itens preenchidos, e mesmo assim a "escola" geralmente
+		  não aparece como entidade distinta.
+		- (c) Sistema próprio do município (ex: Curitiba publica em
+		  transparencia.curitiba.pr.gov.br/conteudo/compras.aspx —
+		  servidor bloqueia probe atualmente). Variação por município,
+		  sem API uniforme inter-municipal — vira N spiders frágeis.
+	- Decisão: deixar pra Fase 2+ se houver demanda específica. Não é
+	  bloqueio do produto principal (município x município já basta
+	  pro gancho viral "Top cidades que pagam mais caro pela merenda").
+
 - /cluster/[cluster_id]: detecção de tipo de cluster (~80 LOC)
 	- Hoje a página consulta só analytics.mart_orgao_cluster, que filtra
 	  confianca_resolucao >= 0.75. Os 19 clusters TCE-PR têm confiança
