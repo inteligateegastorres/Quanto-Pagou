@@ -23,9 +23,10 @@ clusters:
     descricao_canonica: "Credenciamento de prestadores de saúde"
     categoria: saude
     patterns:
-      - 'credenciamento.{0,80}(?:pessoa|prestador).{0,80}(?:saude|saúde|m[eé]dic|hospitalar)'
+      - 'credenciamento.{0,80}(?:pessoa|prestador|profission|empresa).{0,80}(?:saude|saúde|m[eé]dic|hospitalar)'
       - 'chamamento\s+p[uú]blico.{0,80}(?:saude|saúde|m[eé]dic|hospitalar)'
       - 'contratac[aã]o\s+(?:de\s+)?(?:pessoa|empresa).{0,80}(?:m[eé]dic|hospitalar|emerg[eê]ncia|urg[eê]ncia)'
+      - 'credenciamento.{0,80}(?:fisic|jur[ií]dic|profissional)s?\s+(?:para|na|atuant).{0,80}(?:saude|saúde|m[eé]dic|hospital)'
 
   - cluster_id: material_medico_hospitalar
     cluster_version: v1
@@ -146,6 +147,25 @@ clusters:
       - '\b(?:incentivo|fomento)\s+(?:[aà]\s+)?cultura\b'
       - '\bchamamento\s+p[uú]blico.{0,80}cultura\b'
       - '\bedital\s+(?:de\s+)?(?:incentivo|fomento|premiac[aã]o)\b.{0,80}(?:cultura|art|m[uú]sica|teatro|cinema)'
+      - '\bcredenciamento.{0,40}(?:oficina|oficinante)'
+
+  - cluster_id: agricultura_familiar
+    cluster_version: v1
+    descricao_canonica: "Agricultura familiar (PNAE produtor, credenciamento)"
+    categoria: agricultura
+    patterns:
+      - '\bagricultura\s+familiar\b'
+      - '\bprodutor(?:es)?\s+(?:individuais\s+da\s+)?agric'
+      - '\bcredenciamento\s+(?:de\s+)?(?:produto|agricultor)'
+
+  - cluster_id: materiais_construcao_geral
+    cluster_version: v1
+    descricao_canonica: "Materiais de construção (geral)"
+    categoria: construcao
+    patterns:
+      - '\bmateriais?\s+(?:de\s+)?construc[aã]o\b'
+      - '\bcimento\b.{0,40}(?:obra|construc)'
+      - '\b(?:areia|brita|cal|tijol|telha|argamassa|gesso)\b'
 
   - cluster_id: transporte_escolar
     cluster_version: v1
