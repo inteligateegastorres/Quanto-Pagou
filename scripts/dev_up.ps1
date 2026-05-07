@@ -80,6 +80,12 @@ Need-Cmd "docker"
 Need-Cmd "python"
 if (-not $SkipFront) { Need-Cmd "npm" }
 
+# Daemon do Docker Desktop esta no ar?
+docker info *> $null
+if ($LASTEXITCODE -ne 0) {
+    throw "Docker Desktop nao esta rodando. Abra o Docker Desktop (icone da bandeja ou menu Iniciar), aguarde a baleia ficar verde, e rode novamente."
+}
+
 # ---------- postgres ----------
 
 if ($Fresh) {
@@ -103,8 +109,8 @@ do {
 } while (-not $ok -and (Get-Date) -lt $deadline)
 if (-not $ok) { throw "postgres nao ficou healthy em 60s" }
 
-# Aplicar migrations idempotentes na ordem (analytics + resilience)
-foreach ($sqlFile in @("sql/001_analytics.sql", "sql/002_resilience.sql")) {
+# Aplicar migrations idempotentes na ordem (analytics + resilience + tce_pr)
+foreach ($sqlFile in @("sql/001_analytics.sql", "sql/002_resilience.sql", "sql/003_tce_pr.sql")) {
     Say "aplicando $sqlFile..."
     Get-Content $sqlFile -Raw | docker exec -i quantopagou-postgres psql -U quantopagou -d quantopagou -q *> $null
     if ($LASTEXITCODE -ne 0) { throw "psql $sqlFile falhou (exit=$LASTEXITCODE)" }

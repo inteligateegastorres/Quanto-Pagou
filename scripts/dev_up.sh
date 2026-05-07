@@ -56,6 +56,12 @@ need docker
 need python
 [ "$SKIP_FRONT" = "1" ] || need npm
 
+# Daemon do Docker no ar? (Desktop no Windows/macOS, ou systemctl no Linux)
+if ! docker info >/dev/null 2>&1; then
+    echo "ERRO: docker daemon nao esta rodando. Abra o Docker Desktop ou inicie o servico." >&2
+    exit 1
+fi
+
 # ---------- postgres ----------
 if [ "$FRESH" = "1" ]; then
     warn "modo FRESH: derrubando container + volume"
@@ -72,7 +78,7 @@ until docker exec quantopagou-postgres pg_isready -U quantopagou -d quantopagou 
     sleep 1
 done
 
-for sql_file in sql/001_analytics.sql sql/002_resilience.sql; do
+for sql_file in sql/001_analytics.sql sql/002_resilience.sql sql/003_tce_pr.sql; do
     say "aplicando $sql_file (idempotente)..."
     docker exec -i quantopagou-postgres psql -U quantopagou -d quantopagou -q < "$sql_file" >/dev/null
 done
