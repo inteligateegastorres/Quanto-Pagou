@@ -127,6 +127,7 @@ class ContratoMunicipioOut(BaseModel):
 
 class RankingMunicipioOut(BaseModel):
     cluster_id: str
+    cd_tce: str
     cd_ibge: str
     municipio: str
     porte: str
@@ -608,6 +609,34 @@ def fornecedor_por_categoria(
 
 
 @app.get(
+    "/fornecedor/{cnpj}/por-modalidade",
+    response_model=list[FornecedorAgregadoOut],
+    tags=["fornecedor"],
+)
+def fornecedor_por_modalidade(
+    conn: ConnDep, cnpj: str
+) -> list[FornecedorAgregadoOut]:
+    """Distribuicao de contratos do fornecedor por modalidade de licitacao.
+    'sem_modalidade' = contratos onde nao foi possivel resolver via
+    Licitacao + LicitacaoXContrato (fragmentado, ano cruzado, ou modalidade
+    fora do mapa normalizado). Mostrado para nao esconder volume."""
+    sql = """
+        SELECT
+            COALESCE(rc.modalidade, 'sem_modalidade') AS chave,
+            COALESCE(rc.modalidade, 'Sem modalidade resolvida') AS nome,
+            COUNT(*) AS n_contratos,
+            ROUND(SUM(rc.valor_total)::numeric, 2) AS valor_total
+        FROM raw.compras rc
+        WHERE rc.fornecedor_cnpj = %s
+        GROUP BY 1, 2
+        ORDER BY valor_total DESC NULLS LAST
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (cnpj,))
+        return [FornecedorAgregadoOut(**r) for r in cur.fetchall()]
+
+
+@app.get(
     "/fornecedor/{cnpj}/contratos",
     response_model=list[FornecedorContratoOut],
     tags=["fornecedor"],
@@ -770,6 +799,7 @@ def tce_pr_ranking_municipios(
     sql = f"""
         SELECT
             ic.cluster_id,
+            mp.cd_tce AS cd_tce,
             mp.cd_ibge AS cd_ibge,
             COALESCE(mp.nome, rc.raw_payload->>'municipio') AS municipio,
             COALESCE(mp.porte, 'municipio_pr_pequeno') AS porte,
@@ -785,7 +815,7 @@ def tce_pr_ranking_municipios(
           AND ic.cluster_id = %s
           AND (%s::text IS NULL OR COALESCE(mp.porte, 'municipio_pr_pequeno') = %s)
           AND mp.cd_ibge IS NOT NULL
-        GROUP BY 1, 2, 3, 4
+        GROUP BY 1, 2, 3, 4, 5
         ORDER BY {order_sql}
         LIMIT %s
     """

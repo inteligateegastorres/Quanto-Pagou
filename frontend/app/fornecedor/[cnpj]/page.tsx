@@ -41,11 +41,12 @@ export default async function FornecedorPage({
     notFound();
   }
 
-  const [porOrgao, porMunicipio, porCategoria, contratos] =
+  const [porOrgao, porMunicipio, porCategoria, porModalidade, contratos] =
     await Promise.allSettled([
       fornecedorApi.porOrgao(cnpj, 10),
       fornecedorApi.porMunicipio(cnpj, 10),
       fornecedorApi.porCategoria(cnpj),
+      fornecedorApi.porModalidade(cnpj),
       fornecedorApi.contratos(cnpj, 10),
     ]);
 
@@ -55,6 +56,8 @@ export default async function FornecedorPage({
     porMunicipio.status === "fulfilled" ? porMunicipio.value : [];
   const categorias =
     porCategoria.status === "fulfilled" ? porCategoria.value : [];
+  const modalidades =
+    porModalidade.status === "fulfilled" ? porModalidade.value : [];
   const ctos =
     contratos.status === "fulfilled" ? contratos.value : [];
 
@@ -153,6 +156,15 @@ export default async function FornecedorPage({
           titulo="Distribuição por categoria-piloto"
           legenda='Categorias mapeadas pelos clusters keyword (config/cluster_keywords.yaml). "Sem categoria mapeada" = contratos cujo objeto não casa com nenhum cluster atual; ainda visíveis no detalhe.'
           linhas={categorias}
+          totalRef={Number(perfil.valor_total)}
+        />
+      )}
+
+      {modalidades.length > 0 && (
+        <Block
+          titulo="Distribuição por modalidade de licitação"
+          legenda='Modalidade resolvida via Licitacao.xml + LicitacaoXContrato.xml (TCE-PR). "Sem modalidade resolvida" agrupa contratos onde a ligação licitação-contrato não foi recuperável; presença alta de dispensa/inexigibilidade pode ser legítima ou ponto de atenção, depende do contexto.'
+          linhas={modalidades}
           totalRef={Number(perfil.valor_total)}
         />
       )}

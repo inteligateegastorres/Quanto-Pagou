@@ -459,6 +459,19 @@ function ComparacaoCard({
           const isCidade = r.cd_ibge === cdIbgeCidade;
           const m = Number(r.mediana_valor_contrato);
           const acima = medianaGlobal > 0 ? (m - medianaGlobal) / medianaGlobal : 0;
+          const nomeNode = isCidade ? (
+            <>
+              {r.municipio}
+              <span className="ml-2 text-xs text-attention">← você</span>
+            </>
+          ) : (
+            <Link
+              href={`/municipio/${r.cd_tce}`}
+              className="no-underline hover:underline"
+            >
+              {r.municipio}
+            </Link>
+          );
           return (
             <li
               key={r.cd_ibge}
@@ -468,14 +481,7 @@ function ComparacaoCard({
               }
             >
               <span className="w-6 text-right text-muted">{idx + 1}.</span>
-              <span className="flex-1 min-w-0 truncate">
-                {r.municipio}
-                {isCidade && (
-                  <span className="ml-2 text-xs text-attention">
-                    ← você
-                  </span>
-                )}
-              </span>
+              <span className="flex-1 min-w-0 truncate">{nomeNode}</span>
               <span className="text-xs text-muted w-20 text-right">
                 {r.n_contratos} c.
               </span>

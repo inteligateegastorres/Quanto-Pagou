@@ -128,35 +128,122 @@ def _list_municipios(year_zip: Path) -> list[str]:
     return sorted(cods)
 
 
-def _extract_contrato_xml(
-    year_zip: Path, ano: int, cd_tce: str
+def _extract_inner_xml(
+    year_zip: Path, sub_zip_name: str, inner_xml_name: str
 ) -> ET.Element | None:
-    """Extrai e parseia o XML de Contratos de um municipio. Retorna None
-    se municipio nao tem Contrato.xml ou esta vazio (65 bytes = XML vazio).
-    """
-    sub_name = f"{ano}_{cd_tce}_Contrato.zip"
-    inner_xml = f"{ano}_{cd_tce}_Contrato.xml"
+    """Extrai e parseia um XML especifico de dentro de um sub-zip.
+    Retorna None se sub-zip nao existe ou XML esta vazio."""
     try:
         with zipfile.ZipFile(year_zip) as outer:
-            with outer.open(sub_name) as sub_fh:
+            with outer.open(sub_zip_name) as sub_fh:
                 sub_bytes = sub_fh.read()
         with zipfile.ZipFile(io.BytesIO(sub_bytes)) as inner:
-            with inner.open(inner_xml) as xml_fh:
+            with inner.open(inner_xml_name) as xml_fh:
                 xml_bytes = xml_fh.read()
     except KeyError:
-        # municipio nao tem o arquivo
         return None
     if len(xml_bytes) < 100:
-        # XML vazio (so o root) — pula
         return None
-    # XML do TCE vem com BOM utf-8 inicial
     if xml_bytes.startswith(b"\xef\xbb\xbf"):
         xml_bytes = xml_bytes[3:]
     try:
         return ET.fromstring(xml_bytes)
     except ET.ParseError as e:
-        logger.warning("Parse XML falhou para %s: %s", sub_name, e)
+        logger.warning("Parse XML falhou para %s/%s: %s", sub_zip_name, inner_xml_name, e)
         return None
+
+
+def _extract_contrato_xml(
+    year_zip: Path, ano: int, cd_tce: str
+) -> ET.Element | None:
+    """Extrai o XML de Contratos. None se municipio nao tem dados."""
+    return _extract_inner_xml(
+        year_zip,
+        f"{ano}_{cd_tce}_Contrato.zip",
+        f"{ano}_{cd_tce}_Contrato.xml",
+    )
+
+
+# Modalidades do TCE-PR -> normalizadas. Conjunto observado em 2025-Curitiba +
+# documentacao do TCE. Usamos snake_case sem acento; valores nao mapeados
+# caem como None (modalidade desconhecida).
+_MODALIDADE_MAP: dict[str, str] = {
+    "pregao": "pregao",
+    "processo dispensa": "dispensa",
+    "dispensa": "dispensa",
+    "dispensa de licitacao": "dispensa",
+    "concorrencia": "concorrencia",
+    "tomada de precos": "tomada_precos",
+    "convite": "convite",
+    "concurso": "concurso",
+    "leilao": "leilao",
+    "inexigibilidade": "inexigibilidade",
+    "inexigibilidade de licitacao": "inexigibilidade",
+    "credenciamento": "credenciamento",
+    "chamamento publico": "chamamento_publico",
+    "rdc": "rdc",
+}
+
+
+def _normalize_modalidade(raw: str | None) -> str | None:
+    """Normaliza dsModalidadeLicitacao para snake_case auditavel."""
+    if not raw:
+        return None
+    # remove acentos manualmente nas mais comuns
+    s = raw.strip().lower()
+    s = (s
+         .replace("ã", "a").replace("á", "a").replace("â", "a")
+         .replace("é", "e").replace("ê", "e")
+         .replace("í", "i")
+         .replace("ó", "o").replace("ô", "o").replace("õ", "o")
+         .replace("ú", "u").replace("ç", "c"))
+    return _MODALIDADE_MAP.get(s)
+
+
+def _build_modalidade_lookup(
+    year_zip: Path, ano: int, cd_tce: str
+) -> dict[str, str | None]:
+    """Constroi {idContrato: modalidade_normalizada} via JOIN em memoria
+    de Licitacao.xml + LicitacaoXContrato.xml. Retorna dict vazio se
+    nenhum dos dois XMLs existe ou tem dados.
+
+    O JOIN e necessario porque o TCE-PR publica modalidade na Licitacao,
+    nao no Contrato; um contrato eh ligado a uma licitacao via tabela de
+    relacionamento.
+    """
+    licit_root = _extract_inner_xml(
+        year_zip,
+        f"{ano}_{cd_tce}_Licitacao.zip",
+        f"{ano}_{cd_tce}_Licitacao.xml",
+    )
+    rel_root = _extract_inner_xml(
+        year_zip,
+        f"{ano}_{cd_tce}_Relacionamentos.zip",
+        f"{ano}_{cd_tce}_LicitacaoXContrato.xml",
+    )
+    if licit_root is None or rel_root is None:
+        return {}
+
+    # idLicitacao -> modalidade_normalizada
+    modalidade_por_licitacao: dict[str, str | None] = {}
+    for elem in licit_root.findall(".//Licitacao"):
+        id_lic = elem.attrib.get("idLicitacao")
+        if not id_lic:
+            continue
+        modalidade_por_licitacao[id_lic] = _normalize_modalidade(
+            elem.attrib.get("dsModalidadeLicitacao")
+        )
+
+    # idContrato -> modalidade
+    out: dict[str, str | None] = {}
+    for elem in rel_root.findall(".//LicitacaoXContrato"):
+        id_contrato = elem.attrib.get("idContrato")
+        id_lic = elem.attrib.get("idLicitacao")
+        if id_contrato and id_lic and id_lic in modalidade_por_licitacao:
+            mod = modalidade_por_licitacao[id_lic]
+            if mod is not None:
+                out[id_contrato] = mod
+    return out
 
 
 def _parse_date(value: str | None) -> date | None:
@@ -177,9 +264,15 @@ def _parse_decimal(value: str | None) -> float | None:
         return None
 
 
-def _coerce_contrato_row(elem: ET.Element) -> dict[str, Any] | None:
+def _coerce_contrato_row(
+    elem: ET.Element,
+    modalidade_por_contrato: dict[str, str | None] | None = None,
+) -> dict[str, Any] | None:
     """Mapeia um <Contrato/> para colunas de raw.compras.
     Retorna None se faltar campo essencial (idContrato, dsObjeto, vlContrato).
+
+    `modalidade_por_contrato` opcional: dict {idContrato: modalidade_normalizada}
+    pre-construido por _build_modalidade_lookup; se None, modalidade fica NULL.
     """
     a = elem.attrib
     id_contrato = a.get("idContrato")
@@ -215,6 +308,12 @@ def _coerce_contrato_row(elem: ET.Element) -> dict[str, Any] | None:
         "data_referencia": a.get("DataReferencia"),
     }
 
+    modalidade = (
+        modalidade_por_contrato.get(id_contrato)
+        if modalidade_por_contrato
+        else None
+    )
+
     return {
         "source": SOURCE,
         "source_id": id_contrato,
@@ -231,7 +330,7 @@ def _coerce_contrato_row(elem: ET.Element) -> dict[str, Any] | None:
         "unidade": "contrato",
         "valor_unitario": vl_contrato,
         "valor_total": vl_contrato,
-        "modalidade": None,  # vem de Licitacao.xml + LicitacaoXContrato.xml; TODO fase 2
+        "modalidade": modalidade,
         "raw_payload": raw_payload,
     }
 
@@ -240,6 +339,8 @@ def iter_contratos(
     year_zip: Path, ano: int, *, municipios: list[str] | None = None
 ) -> Iterator[tuple[str, dict[str, Any]]]:
     """Itera (cd_tce, contrato_row) ao longo dos municipios. Pula vazios.
+    Modalidade resolvida via lookup interno de Licitacao + LicitacaoXContrato
+    por municipio (1 par de XMLs por municipio, descartado apos o yield).
 
     `municipios=None` significa todos. Lista pequena facilita teste/sample.
     """
@@ -249,8 +350,9 @@ def iter_contratos(
         root = _extract_contrato_xml(year_zip, ano, cd_tce)
         if root is None:
             continue
+        modalidade_lookup = _build_modalidade_lookup(year_zip, ano, cd_tce)
         for elem in root.findall(".//Contrato"):
-            row = _coerce_contrato_row(elem)
+            row = _coerce_contrato_row(elem, modalidade_lookup)
             if row is None:
                 continue
             yield cd_tce, row
@@ -340,9 +442,12 @@ def ingest_year(
                     if on_municipio:
                         on_municipio(stats)
                     continue
+                modalidade_lookup = _build_modalidade_lookup(
+                    year_zip_path, ano, cd_tce
+                )
                 rows: list[dict[str, Any]] = []
                 for elem in root.findall(".//Contrato"):
-                    row = _coerce_contrato_row(elem)
+                    row = _coerce_contrato_row(elem, modalidade_lookup)
                     if row is None:
                         continue
                     row["snapshot_id"] = snapshot_id

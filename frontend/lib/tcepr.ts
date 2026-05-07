@@ -41,6 +41,7 @@ export type FornecedorMunicipio = {
 
 export type RankingMunicipio = {
   cluster_id: string;
+  cd_tce: string;
   cd_ibge: string;
   municipio: string;
   porte: string;
@@ -88,6 +89,8 @@ export const fornecedor = {
     jget<FornecedorAgregado[]>(`/fornecedor/${encodeURIComponent(cnpj)}/por-municipio?limit=${limit}`),
   porCategoria: (cnpj: string) =>
     jget<FornecedorAgregado[]>(`/fornecedor/${encodeURIComponent(cnpj)}/por-categoria`),
+  porModalidade: (cnpj: string) =>
+    jget<FornecedorAgregado[]>(`/fornecedor/${encodeURIComponent(cnpj)}/por-modalidade`),
   contratos: (cnpj: string, limit = 20) =>
     jget<FornecedorContrato[]>(`/fornecedor/${encodeURIComponent(cnpj)}/contratos?limit=${limit}`),
 };
