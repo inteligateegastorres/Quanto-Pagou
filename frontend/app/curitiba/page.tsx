@@ -1,7 +1,12 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { qd, fmtDate, type Gazette } from "@/lib/qd";
-import { tcepr, type ContratoMunicipio, type FornecedorMunicipio } from "@/lib/tcepr";
+import {
+  tcepr,
+  type ContratoMunicipio,
+  type FornecedorMunicipio,
+  type RankingMunicipio,
+} from "@/lib/tcepr";
 import { fmtBRL } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -62,6 +67,34 @@ export default async function CuritibaPage({
     if (!porCluster.has(key)) porCluster.set(key, []);
     porCluster.get(key)!.push(row);
   }
+
+  // Para os top 5 clusters de Curitiba (por volume), buscar ranking de
+  // municipios PR de mesmo porte para mostrar onde Curitiba se posiciona.
+  const topClustersCwb = Array.from(porCluster.entries())
+    .map(([id, rows]) => ({
+      id,
+      total: rows.reduce((s, r) => s + Number(r.valor_total_periodo), 0),
+    }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 5)
+    .map((c) => c.id);
+
+  const rankings = await Promise.allSettled(
+    topClustersCwb.map((cid) =>
+      tcepr.rankingMunicipios(cid, {
+        porte: "municipio_pr_grande",
+        order: "mediana_desc",
+        limit: 30,
+      }),
+    ),
+  );
+  const comparacoes: { cluster_id: string; rows: RankingMunicipio[] }[] = [];
+  topClustersCwb.forEach((cid, i) => {
+    const r = rankings[i];
+    if (r.status === "fulfilled" && r.value.length > 1) {
+      comparacoes.push({ cluster_id: cid, rows: r.value });
+    }
+  });
 
   return (
     <div className="space-y-12 max-w-3xl">
@@ -172,6 +205,30 @@ export default async function CuritibaPage({
               key={clusterId}
               clusterId={clusterId}
               rows={rows}
+            />
+          ))}
+        </section>
+      )}
+
+      {comparacoes.length > 0 && (
+        <section className="space-y-4">
+          <h2 className="text-xl font-semibold">
+            Como Curitiba se compara
+          </h2>
+          <p className="text-sm text-muted">
+            Para os clusters mais expressivos em volume contratado em Curitiba,
+            mostramos o ranking pela <strong>mediana do valor de contrato</strong>{" "}
+            entre cidades-pares paranaenses (mesmo porte:{" "}
+            <em>municipio_pr_grande</em>). Curitiba aparece destacada. A
+            granularidade é por contrato — mediana alta indica contratos
+            individuais maiores, não necessariamente preço-por-item maior.
+          </p>
+          {comparacoes.map(({ cluster_id, rows }) => (
+            <ComparacaoCard
+              key={cluster_id}
+              clusterId={cluster_id}
+              rows={rows}
+              cdIbgeCidade={CURITIBA_CD_IBGE}
             />
           ))}
         </section>
@@ -350,6 +407,82 @@ function ClusterCard({
             </span>
           </li>
         ))}
+      </ol>
+    </article>
+  );
+}
+
+function ComparacaoCard({
+  clusterId,
+  rows,
+  cdIbgeCidade,
+}: {
+  clusterId: string;
+  rows: RankingMunicipio[];
+  cdIbgeCidade: string;
+}) {
+  // pos da cidade no ranking (1-indexed) ou -1 se nao aparece
+  const sorted = [...rows].sort(
+    (a, b) =>
+      Number(b.mediana_valor_contrato) - Number(a.mediana_valor_contrato),
+  );
+  const totalCidades = sorted.length;
+  // mediana global (do conjunto retornado)
+  const medianas = sorted.map((r) => Number(r.mediana_valor_contrato));
+  const medianaGlobal =
+    medianas.length === 0
+      ? 0
+      : medianas[Math.floor(medianas.length / 2)];
+
+  return (
+    <article className="border border-line rounded-md p-4 bg-white">
+      <header className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
+        <h3 className="text-base font-semibold">{prettyCluster(clusterId)}</h3>
+        <span className="text-xs text-muted">
+          {totalCidades} cidades-pares · mediana entre cidades:{" "}
+          <strong>{fmtBRL(medianaGlobal)}</strong>
+        </span>
+      </header>
+      <ol className="text-sm space-y-1">
+        {sorted.map((r, idx) => {
+          const isCidade = r.cd_ibge === cdIbgeCidade;
+          const m = Number(r.mediana_valor_contrato);
+          const acima = medianaGlobal > 0 ? (m - medianaGlobal) / medianaGlobal : 0;
+          return (
+            <li
+              key={r.cd_ibge}
+              className={
+                "flex items-baseline gap-3 border-b border-line/60 py-1 " +
+                (isCidade ? "bg-attention/5 font-medium" : "")
+              }
+            >
+              <span className="w-6 text-right text-muted">{idx + 1}.</span>
+              <span className="flex-1 min-w-0 truncate">
+                {r.municipio}
+                {isCidade && (
+                  <span className="ml-2 text-xs text-attention">
+                    ← você
+                  </span>
+                )}
+              </span>
+              <span className="text-xs text-muted w-20 text-right">
+                {r.n_contratos} c.
+              </span>
+              <span className="font-mono w-28 text-right">{fmtBRL(m)}</span>
+              {Math.abs(acima) > 0.05 && (
+                <span
+                  className={
+                    "text-xs w-14 text-right " +
+                    (acima > 0 ? "text-attention" : "text-ok")
+                  }
+                >
+                  {acima > 0 ? "+" : ""}
+                  {(acima * 100).toFixed(0)}%
+                </span>
+              )}
+            </li>
+          );
+        })}
       </ol>
     </article>
   );

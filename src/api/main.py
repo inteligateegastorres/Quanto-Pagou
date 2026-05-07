@@ -125,6 +125,16 @@ class ContratoMunicipioOut(BaseModel):
     p75_valor: Decimal
 
 
+class RankingMunicipioOut(BaseModel):
+    cluster_id: str
+    cd_ibge: str
+    municipio: str
+    porte: str
+    n_contratos: int
+    valor_total_periodo: Decimal
+    mediana_valor_contrato: Decimal
+
+
 class FornecedorMunicipioOut(BaseModel):
     cd_ibge: str | None
     municipio: str | None
@@ -471,6 +481,58 @@ def tce_pr_fornecedores(
     with conn.cursor() as cur:
         cur.execute(sql, (cd_ibge, limit))
         return [FornecedorMunicipioOut(**r) for r in cur.fetchall()]
+
+
+@app.get(
+    "/tce-pr/cluster/{cluster_id}/ranking-municipios",
+    response_model=list[RankingMunicipioOut],
+    tags=["tce-pr"],
+)
+def tce_pr_ranking_municipios(
+    conn: ConnDep,
+    cluster_id: str,
+    porte: str | None = None,
+    order: str = Query(default="mediana_desc"),
+    limit: int = Query(default=20, ge=1, le=200),
+) -> list[RankingMunicipioOut]:
+    """Ranking de municipios PR para um cluster (soma todos os orgaos do
+    municipio). Permite filtro por porte para garantir comparacao entre pares
+    de mesmo tamanho. Vai direto na raw.compras + item_canonical para nao
+    depender da granularidade do mart_contratos_municipio (que e por orgao).
+    """
+    order_sql = {
+        "mediana_desc": "mediana_valor_contrato DESC",
+        "mediana_asc": "mediana_valor_contrato ASC",
+        "total_desc": "valor_total_periodo DESC",
+        "n_desc": "n_contratos DESC",
+    }.get(order)
+    if order_sql is None:
+        raise HTTPException(400, f"order invalido: {order}")
+    sql = f"""
+        SELECT
+            ic.cluster_id,
+            mp.cd_ibge AS cd_ibge,
+            COALESCE(mp.nome, rc.raw_payload->>'municipio') AS municipio,
+            COALESCE(mp.porte, 'municipio_pr_pequeno') AS porte,
+            COUNT(*) AS n_contratos,
+            ROUND(SUM(rc.valor_total)::numeric, 2) AS valor_total_periodo,
+            ROUND(percentile_cont(0.5) WITHIN GROUP (
+                ORDER BY rc.valor_total)::numeric, 2) AS mediana_valor_contrato
+        FROM raw.compras rc
+        JOIN analytics.item_canonical ic ON ic.raw_id = rc.id
+        LEFT JOIN analytics.municipio_pr mp ON mp.cd_tce = rc.raw_payload->>'cd_tce'
+        WHERE rc.source = 'tce_pr/contrato'
+          AND ic.em_quarentena = FALSE
+          AND ic.cluster_id = %s
+          AND (%s::text IS NULL OR COALESCE(mp.porte, 'municipio_pr_pequeno') = %s)
+          AND mp.cd_ibge IS NOT NULL
+        GROUP BY 1, 2, 3, 4
+        ORDER BY {order_sql}
+        LIMIT %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (cluster_id, porte, porte, limit))
+        return [RankingMunicipioOut(**r) for r in cur.fetchall()]
 
 
 @app.get(

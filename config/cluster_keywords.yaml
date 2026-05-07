@@ -11,10 +11,42 @@
 #   - Confiança fixa em 0.6 (entre CATMAT direto = 1.0 e nada = 0.0).
 #   - cluster_version segue o golden federal (v1) para alinhar com cluster_registry.
 #
-# Manter pequeno e cobrir só categorias-piloto. Aumentar quando houver
-# tráfego e feedback (progressive correctness).
+# Manter pequeno-medio e cobrir categorias-piloto + as mais frequentes
+# observadas em quarentena. Aumentar quando houver tráfego e feedback
+# (progressive correctness).
 
 clusters:
+  # Mais especificas primeiro — credenciamento de servicos de saude
+  # tem que ser pego antes de uma regra mais ampla de "saude".
+  - cluster_id: servicos_saude_credenciamento
+    cluster_version: v1
+    descricao_canonica: "Credenciamento de prestadores de saúde"
+    categoria: saude
+    patterns:
+      - 'credenciamento.{0,80}(?:pessoa|prestador).{0,80}(?:saude|saúde|m[eé]dic|hospitalar)'
+      - 'chamamento\s+p[uú]blico.{0,80}(?:saude|saúde|m[eé]dic|hospitalar)'
+      - 'contratac[aã]o\s+(?:de\s+)?(?:pessoa|empresa).{0,80}(?:m[eé]dic|hospitalar|emerg[eê]ncia|urg[eê]ncia)'
+
+  - cluster_id: material_medico_hospitalar
+    cluster_version: v1
+    descricao_canonica: "Material médico-hospitalar e insumos"
+    categoria: saude
+    patterns:
+      - '\bmateria(?:l|is)\s+m[eé]dic[oa]?[\s-]+hospitalar(?:es)?\b'
+      - '\bmateria(?:l|is)\s+hospitalar(?:es)?\b'
+      - '\binsumos?\s+(?:m[eé]dic|hospitalar|farmac[eê]utic)'
+      - '\b(?:material|equipamento)s?\s+hospitalar(?:es)?\b'
+      - '\bregistro\s+de\s+precos?.{0,80}\bmateria(?:l|is)\s+hospitalar'
+
+  - cluster_id: medicamentos
+    cluster_version: v1
+    descricao_canonica: "Medicamentos e fármacos"
+    categoria: saude
+    patterns:
+      - '\bmedicament(?:o|os)\b'
+      - '\bf[aá]rmac(?:o|os)\b'
+      - '\bdrogas?\b.{0,40}(?:saude|saúde|hospital|farmac)'
+
   - cluster_id: merenda_escolar
     cluster_version: v1
     descricao_canonica: "Merenda escolar (alimentação)"
@@ -22,7 +54,7 @@ clusters:
     patterns:
       - '\bmerenda\b'
       - '\balimentac[aã]o\s+escolar\b'
-      - '\bg[eê]neros\s+aliment[ií]cios\b.*\b(escola|cme|creche|educac)'
+      - '\bg[eê]neros\s+aliment[ií]cios\b'
       - '\bpnae\b'
 
   - cluster_id: combustivel_servicos
@@ -31,27 +63,18 @@ clusters:
     categoria: combustivel
     patterns:
       - '\bcombust[ií]vel\b'
-      - '\b(gasolina|[oó]leo\s+diesel|etanol|gnv|glp)\b'
-      - '\babastecimento\b.*\b(ve[ií]culo|frota)'
+      - '\b(?:gasolina|[oó]leo\s+diesel|etanol|gnv|glp)\b'
+      - '\babastecimento\b.{0,40}\b(?:ve[ií]culo|frota)'
       - '\bdiesel\s+s\s*-?\s*10\b'
-
-  - cluster_id: medicamentos
-    cluster_version: v1
-    descricao_canonica: "Medicamentos e insumos farmacêuticos"
-    categoria: saude
-    patterns:
-      - '\bmedicament(o|os)\b'
-      - '\bf[aá]rmac(o|os)\b'
-      - '\binsumo(s)?\s+farmac[eê]utico'
-      - '\bmateria(l|is)\s+hospitalar'
 
   - cluster_id: papel_escritorio
     cluster_version: v1
-    descricao_canonica: "Papel e material de escritório"
+    descricao_canonica: "Papel, expediente e material de escritório"
     categoria: escritorio
     patterns:
-      - '\bpapel(\s+sulfite|\s+a4)\b'
-      - '\bmaterial\s+de\s+escrit[oó]rio\b'
+      - '\bpapel(?:\s+sulfite|\s+a4)?\b'
+      - '\bmaterial\s+(?:de\s+)?(?:escrit[oó]rio|expediente)\b'
+      - '\bmateriais?\s+de\s+expediente\b'
       - '\bsuprimentos?\s+de\s+inform[aá]tica\b'
 
   - cluster_id: limpeza_higiene
@@ -59,9 +82,78 @@ clusters:
     descricao_canonica: "Material de limpeza e higiene"
     categoria: limpeza
     patterns:
-      - '\bmateria(l|is)\s+(de\s+)?limpeza\b'
-      - '\bproduto(s)?\s+(de\s+)?higiene\b'
-      - '\bdetergente|saneante|desinfetante\b'
+      - '\bmateria(?:l|is)\s+(?:de\s+)?(?:limpeza|higiene\s+e\s+limpeza|higiene)\b'
+      - '\b(?:produtos?|insumos?)\s+(?:de\s+)?(?:limpeza|higiene)\b'
+      - '\b(?:detergente|saneante|desinfetante|cloro|hipoclorito)\b'
+
+  - cluster_id: uniformes_epi
+    cluster_version: v1
+    descricao_canonica: "Uniformes profissionais e EPI"
+    categoria: vestuario_profissional
+    patterns:
+      - '\buniformes?\b'
+      - '\bepi(?:''s)?\b'
+      - '\bequipamentos?\s+de\s+protec[aã]o\s+individual\b'
+
+  - cluster_id: materiais_construcao_eletrico
+    cluster_version: v1
+    descricao_canonica: "Material elétrico para construção/manutenção"
+    categoria: construcao
+    patterns:
+      - '\bmateriais?\s+el[eé]tricos?\b'
+      - '\b(?:fio|cabo|disjuntor|reator|tomada|interruptor|lampada|l[aâ]mpada)s?\b.{0,40}\b(?:el[eé]tric|construc|manut)'
+
+  - cluster_id: materiais_construcao_hidraulico
+    cluster_version: v1
+    descricao_canonica: "Material hidráulico para construção/manutenção"
+    categoria: construcao
+    patterns:
+      - '\bmateriais?\s+hidra(?:u|ú)licos?\b'
+      - '\b(?:tubo|conex[aã]o|registro|cano|hidr[oô]metro|joelho|tee|valvula)s?\b.{0,40}\b(?:hidra|construc|aguá|esgoto)'
+
+  - cluster_id: eletrodomesticos_mobiliario
+    cluster_version: v1
+    descricao_canonica: "Eletrodomésticos e mobiliário"
+    categoria: equipamento_durável
+    patterns:
+      - '\beletrodom[eé]sticos?\b'
+      - '\b(?:mobili[aá]ri|m[oó]vel|m[oó]veis)\b'
+      - '\b(?:geladeira|fog[aã]o|microondas|aspirador|condicionador)\b'
+
+  - cluster_id: materiais_escolares
+    cluster_version: v1
+    descricao_canonica: "Materiais escolares e didáticos"
+    categoria: educacao
+    patterns:
+      - '\bmateriais?\s+escolares?\b'
+      - '\bmateriais?\s+did[aá]tic[ao]s?\b'
+      - '\bkits?\s+escolares?\b'
+
+  - cluster_id: materiais_agricolas
+    cluster_version: v1
+    descricao_canonica: "Materiais e ferramentas agrícolas"
+    categoria: agricultura
+    patterns:
+      - '\bmateriais?\s+(?:e\s+)?ferramentas?\s+agr[ií]col(?:a|as)\b'
+      - '\bmateriais?\s+agr[ií]col(?:a|as)\b'
+      - '\binsumos?\s+agr[ií]col(?:a|as)\b'
+
+  - cluster_id: incentivo_cultura
+    cluster_version: v1
+    descricao_canonica: "Incentivo à cultura (chamamentos, editais)"
+    categoria: cultura
+    patterns:
+      - '\b(?:incentivo|fomento)\s+(?:[aà]\s+)?cultura\b'
+      - '\bchamamento\s+p[uú]blico.{0,80}cultura\b'
+      - '\bedital\s+(?:de\s+)?(?:incentivo|fomento|premiac[aã]o)\b.{0,80}(?:cultura|art|m[uú]sica|teatro|cinema)'
+
+  - cluster_id: transporte_escolar
+    cluster_version: v1
+    descricao_canonica: "Transporte escolar"
+    categoria: transporte
+    patterns:
+      - '\btransporte\s+escolar\b'
+      - '\bservic(?:o|os)\s+de\s+transporte\b.{0,40}\b(?:escola|aluno|estudante)'
 
   - cluster_id: obras_pavimentacao
     cluster_version: v1
@@ -70,7 +162,7 @@ clusters:
     patterns:
       - '\bpavimentac[aã]o\b'
       - '\brecapeamento\b'
-      - '\bdrenagem\b.*\b(urbana|via|rua|estrada)'
+      - '\bdrenagem\b.{0,40}\b(?:urbana|via|rua|estrada)'
       - '\bcalcamento\b|\bpasseio\s+publico\b'
 
   - cluster_id: obras_edificacao
@@ -78,14 +170,6 @@ clusters:
     descricao_canonica: "Obras de edificação e reforma predial"
     categoria: obras
     patterns:
-      - '\bservic(o|os)\s+de\s+engenharia\b'
-      - '\b(reforma|construc[aã]o|restaurac[aã]o|substituic[aã]o\s+(da\s+)?cobertura|pintura)\b.*\b(predio|edif[ií]cio|fachada|sede|escola|cme|unidade\s+de\s+saude|ubs|paco|secretari)'
-      - '\b(reforma|construc[aã]o)\s+(de\s+|da\s+|do\s+)?(escola|creche|posto\s+de\s+saude|unidade\s+de\s+saude|ubs|biblioteca|paco|sede)'
-
-  - cluster_id: transporte_escolar
-    cluster_version: v1
-    descricao_canonica: "Transporte escolar"
-    categoria: transporte
-    patterns:
-      - '\btransporte\s+escolar\b'
-      - '\bservico(s)?\s+de\s+transporte\b.*\b(escola|aluno|estudante)'
+      - '\bservic(?:o|os)\s+de\s+engenharia\b'
+      - '\b(?:reforma|construc[aã]o|restaurac[aã]o|substituic[aã]o\s+(?:da\s+)?cobertura|pintura)\b.{0,80}\b(?:predio|edif[ií]cio|fachada|sede|escola|cme|ubs|paco|secretari)'
+      - '\b(?:reforma|construc[aã]o)\s+(?:de\s+|da\s+|do\s+)?(?:escola|creche|posto\s+de\s+saude|unidade\s+de\s+saude|ubs|biblioteca|paco|sede)'

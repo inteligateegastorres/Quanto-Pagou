@@ -39,6 +39,16 @@ export type FornecedorMunicipio = {
   n_orgaos_distintos: number;
 };
 
+export type RankingMunicipio = {
+  cluster_id: string;
+  cd_ibge: string;
+  municipio: string;
+  porte: string;
+  n_contratos: number;
+  valor_total_periodo: string;
+  mediana_valor_contrato: string;
+};
+
 export const tcepr = {
   resumo: (cdIbge: string) =>
     jget<TcePrSummary>(`/tce-pr/municipio/${cdIbge}/resumo`),
@@ -64,6 +74,19 @@ export const tcepr = {
     if (opts.limit != null) qs.set("limit", String(opts.limit));
     return jget<ContratoMunicipio[]>(
       `/tce-pr/cluster/${encodeURIComponent(clusterId)}/comparacao-municipios?${qs.toString()}`,
+    );
+  },
+  rankingMunicipios: (
+    clusterId: string,
+    opts: { porte?: string; order?: string; limit?: number } = {},
+  ) => {
+    const qs = new URLSearchParams();
+    if (opts.porte) qs.set("porte", opts.porte);
+    if (opts.order) qs.set("order", opts.order);
+    if (opts.limit != null) qs.set("limit", String(opts.limit));
+    const q = qs.toString();
+    return jget<RankingMunicipio[]>(
+      `/tce-pr/cluster/${encodeURIComponent(clusterId)}/ranking-municipios${q ? "?" + q : ""}`,
     );
   },
 };
