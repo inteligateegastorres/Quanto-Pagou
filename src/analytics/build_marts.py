@@ -21,6 +21,7 @@ from psycopg.rows import dict_row
 from rich.console import Console
 from rich.logging import RichHandler
 
+from analytics.escolas import extrair_escola
 from analytics.resolution import (
     CanonicalRow,
     GoldenCluster,
@@ -218,6 +219,43 @@ def run(dry_run: bool = False) -> dict[str, Any]:
                 )
             conn.commit()
             logger.info("item_canonical: %d linhas upserted", len(canonicals))
+
+            # Popula analytics.escola_mencao a partir do dsObjeto dos
+            # contratos TCE-PR. Limpa antes (extracao e funcao pura).
+            console.print("[dim]Reconstruindo analytics.escola_mencao...[/]")
+            # cursor com row_factory=dict_row para acessar por nome
+            with conn.cursor(row_factory=dict_row) as cur:
+                cur.execute("TRUNCATE analytics.escola_mencao")
+                cur.execute(
+                    """
+                    SELECT id, descricao, raw_payload->>'cd_tce' AS cd_tce
+                    FROM raw.compras WHERE source = 'tce_pr/contrato'
+                    """
+                )
+                rows_para_inserir: list[tuple[int, str, str, str, str | None]] = []
+                for r in cur.fetchall():
+                    ext = extrair_escola(r["descricao"])
+                    if ext is None:
+                        continue
+                    rows_para_inserir.append(
+                        (r["id"], ext.nome, ext.slug, ext.padrao, r["cd_tce"])
+                    )
+                if rows_para_inserir:
+                    with conn.cursor() as cur2:
+                        cur2.executemany(
+                            """
+                            INSERT INTO analytics.escola_mencao
+                                (raw_id, escola_nome, escola_slug, padrao, cd_tce)
+                            VALUES (%s, %s, %s, %s, %s)
+                            ON CONFLICT (raw_id) DO NOTHING
+                            """,
+                            rows_para_inserir,
+                        )
+            conn.commit()
+            logger.info(
+                "escola_mencao: %d mencoes detectadas",
+                len(rows_para_inserir),
+            )
 
             # Refresh marts (federal + tce_pr).
             for mv in (

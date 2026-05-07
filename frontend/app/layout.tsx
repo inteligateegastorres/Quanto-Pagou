@@ -42,6 +42,7 @@ export default function RootLayout({
             <nav className="text-sm text-muted flex gap-5 flex-wrap justify-end">
               <Link href="/buscar">Buscar</Link>
               <Link href="/comparar">Comparar</Link>
+              <Link href="/escolas">Escolas</Link>
               <Link href="/manifesto">Manifesto</Link>
               <Link href="/metodologia">Metodologia</Link>
               <Link href="/correcoes">Correções</Link>

@@ -180,6 +180,28 @@ class MunicipioInfoOut(BaseModel):
     )
 
 
+class EscolaListItemOut(BaseModel):
+    escola_slug: str
+    escola_nome: str  # primeiro nome observado (variantes podem existir)
+    n_mencoes: int
+    n_municipios: int
+    valor_total: Decimal
+
+
+class EscolaContratoOut(BaseModel):
+    raw_id: int
+    contrato_id: str | None
+    municipio: str | None
+    cd_tce: str | None
+    orgao_nome: str | None
+    descricao: str
+    valor_total: Decimal | None
+    contract_date: str | None
+    cluster_id: str | None
+    padrao: str  # qual regex casou (auditoria)
+    escola_nome: str  # nome exato extraido (varia entre contratos)
+
+
 class ContratoDetalheOut(BaseModel):
     raw_id: int
     source: str
@@ -589,6 +611,89 @@ def contrato_detalhe(conn: ConnDep, raw_id: int) -> ContratoDetalheOut:
         cd_ibge=row["cd_ibge"],
         municipio_nome=row["municipio_nome"],
     )
+
+
+# ----------------------------- Escolas (catalogo) ---------------------
+
+# Catalogo de obras escolares: ~270-1000 mencoes de escola individual
+# extraidas via regex em src/analytics/escolas.py. Cobertura geral ~0.17%
+# do raw.compras — feature de catalogo de transparencia, NAO ranking
+# (volume baixo demais para comparacao estatistica). Concentrado em
+# obras_edificacao (29% do cluster).
+
+
+@app.get(
+    "/escolas",
+    response_model=list[EscolaListItemOut],
+    tags=["escolas"],
+)
+def list_escolas(
+    conn: ConnDep,
+    search: str | None = Query(default=None, description="Filtra por nome (case-insensitive)"),
+    cd_tce: str | None = Query(default=None, description="Filtra por municipio (cd_tce)"),
+    limit: int = Query(default=50, ge=1, le=500),
+) -> list[EscolaListItemOut]:
+    """Lista escolas detectadas, ordenadas por numero de mencoes."""
+    sql = """
+        SELECT
+            em.escola_slug,
+            (
+                SELECT em2.escola_nome FROM analytics.escola_mencao em2
+                WHERE em2.escola_slug = em.escola_slug
+                ORDER BY length(em2.escola_nome) ASC LIMIT 1
+            ) AS escola_nome,
+            COUNT(*) AS n_mencoes,
+            COUNT(DISTINCT em.cd_tce) AS n_municipios,
+            ROUND(SUM(rc.valor_total)::numeric, 2) AS valor_total
+        FROM analytics.escola_mencao em
+        JOIN raw.compras rc ON rc.id = em.raw_id
+        WHERE (%s::text IS NULL OR lower(em.escola_nome) LIKE '%%' || lower(%s) || '%%')
+          AND (%s::text IS NULL OR em.cd_tce = %s)
+        GROUP BY em.escola_slug
+        ORDER BY n_mencoes DESC, valor_total DESC NULLS LAST
+        LIMIT %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (search, search, cd_tce, cd_tce, limit))
+        return [EscolaListItemOut(**r) for r in cur.fetchall()]
+
+
+@app.get(
+    "/escolas/{slug}/contratos",
+    response_model=list[EscolaContratoOut],
+    tags=["escolas"],
+)
+def escola_contratos(
+    conn: ConnDep, slug: str, limit: int = Query(default=50, ge=1, le=200)
+) -> list[EscolaContratoOut]:
+    """Contratos vinculados a uma escola pelo slug. Ordem: maior valor primeiro."""
+    sql = """
+        SELECT
+            rc.id AS raw_id,
+            rc.source_id AS contrato_id,
+            COALESCE(mp.nome, rc.raw_payload->>'municipio') AS municipio,
+            em.cd_tce,
+            rc.orgao_nome,
+            rc.descricao,
+            rc.valor_total,
+            rc.contract_date::text AS contract_date,
+            ic.cluster_id,
+            em.padrao,
+            em.escola_nome
+        FROM analytics.escola_mencao em
+        JOIN raw.compras rc ON rc.id = em.raw_id
+        LEFT JOIN analytics.item_canonical ic ON ic.raw_id = rc.id
+        LEFT JOIN analytics.municipio_pr mp ON mp.cd_tce = em.cd_tce
+        WHERE em.escola_slug = %s
+        ORDER BY rc.valor_total DESC NULLS LAST, rc.contract_date DESC NULLS LAST
+        LIMIT %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (slug, limit))
+        rows = cur.fetchall()
+    if not rows:
+        raise HTTPException(404, f"escola '{slug}' nao encontrada")
+    return [EscolaContratoOut(**r) for r in rows]
 
 
 # ----------------------------- Listings ------------------------------

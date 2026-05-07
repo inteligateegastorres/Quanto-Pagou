@@ -3,16 +3,23 @@
 	- x
 	- etc
 
-- Comparação por escola individual (Caso 2 da conversa de 2026-05-07)
-	- TCE-PR não publica nesse nível: granularidade é POR ÓRGÃO MUNICIPAL
-	  (Prefeitura, Câmara, Secretaria, Fundação, autarquia). Nome de
-	  escola individual aparece, no máximo, dentro do dsObjeto como
-	  texto livre.
-	- Para chegar em "Escola X vs Escola Y" precisa fonte adicional:
-		- (a) LLM resolver no dsObjeto: extrai nome de escola e qtd
-		  do texto. Custo recorrente; recall provável <50%; ruim para
-		  comparação numérica.
-		- (b) PNCP NFe (já explorado, pausado): nomeOrgaoDestinatario
+- Comparação por escola individual — ADIADA com explicação
+	- Probe rodado em 2026-05-07: para 99% dos contratos relacionados
+	  a escola, o objeto descreve programa/rede ("PNAE", "rede municipal",
+	  "Escolas e CMEIs Municipais") e não escola específica. Cobertura
+	  por regex no dsObjeto: ~270-1.000 contratos do PR todo (0,17% de
+	  156k), concentrada em obras_edificacao (29% do cluster).
+	- Implementado escopo limitado em 2026-05-07: catálogo
+	  "Obras escolares no Paraná" (/escolas) — 506 escolas únicas em
+	  997 menções, sem ranking, só auditoria. NÃO é a comparação por
+	  escola que estaria no plano de produto; é o que dá com a fonte.
+	- Para "Escola X vs Escola Y" de verdade ainda precisa fonte
+	  adicional. Opções permanecem:
+		- (a) LLM resolver no dsObjeto: para os 99% restantes, dsObjeto
+		  só tem programa, não escola — LLM não inventa o que não está
+		  no texto. Não resolve. Pode marginalmente melhorar os 1%
+		  restantes onde a regex falhou.
+		- (b) PNCP NFe (já explorado e pausado): nomeOrgaoDestinatario
 		  pode ser mais granular em alguns casos. Mas só 20% das NFes
 		  têm itens preenchidos, e mesmo assim a "escola" geralmente
 		  não aparece como entidade distinta.
@@ -20,9 +27,12 @@
 		  transparencia.curitiba.pr.gov.br/conteudo/compras.aspx —
 		  servidor bloqueia probe atualmente). Variação por município,
 		  sem API uniforme inter-municipal — vira N spiders frágeis.
-	- Decisão: deixar pra Fase 2+ se houver demanda específica. Não é
-	  bloqueio do produto principal (município x município já basta
-	  pro gancho viral "Top cidades que pagam mais caro pela merenda").
+	- Conclusão: comparação por escola NÃO É BLOQUEIO do produto
+	  principal. Município x município (já existe via /comparar)
+	  serve para o gancho viral "Top cidades que pagam mais caro pela
+	  merenda". Reabrir só se: (i) houver demanda jornalística
+	  específica, OU (ii) algum município publicar dados estruturados
+	  por escola.
 
 - /cluster/[cluster_id]: detecção de tipo de cluster (~80 LOC)
 	- Hoje a página consulta só analytics.mart_orgao_cluster, que filtra

@@ -121,6 +121,43 @@ export const contrato = {
     jget<ContratoDetalhe>(`/contrato/${rawId}`),
 };
 
+export type EscolaListItem = {
+  escola_slug: string;
+  escola_nome: string;
+  n_mencoes: number;
+  n_municipios: number;
+  valor_total: string;
+};
+
+export type EscolaContrato = {
+  raw_id: number;
+  contrato_id: string | null;
+  municipio: string | null;
+  cd_tce: string | null;
+  orgao_nome: string | null;
+  descricao: string;
+  valor_total: string | null;
+  contract_date: string | null;
+  cluster_id: string | null;
+  padrao: string;
+  escola_nome: string;
+};
+
+export const escolas = {
+  lista: (opts: { search?: string; cd_tce?: string; limit?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (opts.search) qs.set("search", opts.search);
+    if (opts.cd_tce) qs.set("cd_tce", opts.cd_tce);
+    if (opts.limit != null) qs.set("limit", String(opts.limit));
+    const q = qs.toString();
+    return jget<EscolaListItem[]>(`/escolas${q ? "?" + q : ""}`);
+  },
+  contratos: (slug: string, limit = 50) =>
+    jget<EscolaContrato[]>(
+      `/escolas/${encodeURIComponent(slug)}/contratos?limit=${limit}`,
+    ),
+};
+
 export const fornecedor = {
   perfil: (cnpj: string) =>
     jget<FornecedorPerfil>(`/fornecedor/${encodeURIComponent(cnpj)}`),

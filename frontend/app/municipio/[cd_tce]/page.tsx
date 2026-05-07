@@ -176,15 +176,50 @@ export default async function MunicipioPage({
       )}
 
       {fornecedores.length > 0 && (
-        <section>
-          <h2 className="text-xl font-semibold mb-3">
-            Top fornecedores por volume
-          </h2>
+        <section className="space-y-3">
+          <div className="flex items-baseline justify-between flex-wrap gap-2">
+            <h2 className="text-xl font-semibold">
+              Top fornecedores por volume
+            </h2>
+            <Link
+              href={`/buscar?f=&m=${encodeURIComponent(info.nome)}`}
+              className="text-xs text-muted no-underline"
+            >
+              ver todos →
+            </Link>
+          </div>
           <ol className="space-y-2">
             {fornecedores.map((f, i) => (
               <FornecedorRow key={`${f.fornecedor_cnpj}-${f.fornecedor_nome}`} pos={i + 1} f={f} />
             ))}
           </ol>
+
+          <div className="border border-line rounded-md p-4 mt-4 bg-paper space-y-2">
+            <p className="text-sm font-medium">Quem fornece o quê em {info.nome}?</p>
+            <p className="text-xs text-muted">
+              Atalhos de busca por categoria — abrem a página de comparação
+              filtrada pelo cluster selecionado, com {info.nome} pré-selecionada
+              e cidades-pares paranaenses do mesmo porte.
+            </p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {[
+                { id: "merenda_escolar", nome: "Merenda escolar" },
+                { id: "transporte_escolar", nome: "Transporte escolar" },
+                { id: "medicamentos", nome: "Medicamentos" },
+                { id: "combustivel_servicos", nome: "Combustíveis" },
+                { id: "limpeza_higiene", nome: "Limpeza e higiene" },
+                { id: "obras_pavimentacao", nome: "Obras de pavimentação" },
+              ].map((c) => (
+                <Link
+                  key={c.id}
+                  href={`/comparar?cluster=${c.id}&municipios=${info.cd_tce}`}
+                  className="border border-line rounded-md px-3 py-1.5 text-xs no-underline hover:border-ink"
+                >
+                  {c.nome}
+                </Link>
+              ))}
+            </div>
+          </div>
         </section>
       )}
 
