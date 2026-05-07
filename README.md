@@ -36,10 +36,13 @@ Pronto:
   399 municípios PR, atualizado semanal). Adapter `src/ingest/tce_pr.py`
   baixa + extrai sub-zips por município + parseia XML `<Contrato/>`.
   Granularidade **por contrato** (TCE não publica item-a-item). Cluster
-  por **keyword em `dsObjeto`** (Tier 1.5, 8 categorias em
+  por **keyword em `dsObjeto`** (Tier 1.5, 19 categorias em
   `config/cluster_keywords.yaml`); threshold separado ≥ 0.5. Marts
   dedicados: `mart_contratos_municipio` e `mart_fornecedores_municipio`.
-  Validado com 7 cidades PR, 13.737 contratos em 2 segundos.
+  **Validação estadual:** 156.679 contratos de 397 municípios em 55s
+  + build em 50s; 121.526 fornecedores únicos; cobertura keyword
+  33,6% (52.669 / 156.679). UI de comparação entre cidades-pares
+  ativa via endpoint `/tce-pr/cluster/{id}/ranking-municipios`.
 - **OG images dinâmicas** (`/opengraph-image` na home, `/insight/.../opengraph-image`)
   via `next/og` — dados puxados do mart em tempo de geração; share preview
   em Twitter/Bluesky/WhatsApp pronto.
