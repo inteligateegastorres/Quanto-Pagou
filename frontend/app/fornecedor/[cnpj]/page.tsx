@@ -47,7 +47,7 @@ export default async function FornecedorPage({
       fornecedorApi.porMunicipio(cnpj, 10),
       fornecedorApi.porCategoria(cnpj),
       fornecedorApi.porModalidade(cnpj),
-      fornecedorApi.contratos(cnpj, 10),
+      fornecedorApi.contratos(cnpj, 30),
     ]);
 
   const orgaos =
@@ -171,10 +171,16 @@ export default async function FornecedorPage({
 
       {ctos.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-xl font-semibold">Top contratos por valor</h2>
+          <h2 className="text-xl font-semibold">
+            Contratos do fornecedor ({ctos.length} mais relevantes)
+          </h2>
+          <p className="text-sm text-muted">
+            Cada linha é clicável e abre o detalhe do contrato com link para a
+            fonte primária (ZIP do TCE-PR ou API Compras.gov.br).
+          </p>
           <ol className="space-y-2">
             {ctos.map((c) => (
-              <ContratoRow key={c.contrato_id} c={c} />
+              <ContratoRow key={c.raw_id} c={c} />
             ))}
           </ol>
         </section>
@@ -260,28 +266,32 @@ function Block({
 
 function ContratoRow({ c }: { c: FornecedorContrato }) {
   return (
-    <li className="border border-line rounded-md p-3 bg-white text-sm space-y-1">
-      <div className="flex items-baseline justify-between gap-2 flex-wrap">
-        <span className="font-medium">
-          {c.municipio ? `${c.municipio} · ` : ""}
-          {c.orgao_nome}
-        </span>
-        <span className="font-mono">{fmtBRL(c.valor_total)}</span>
-      </div>
-      <div className="text-muted text-xs">
-        {c.contract_date && (
-          <span>{fmtDateBR(c.contract_date)} · </span>
-        )}
-        contrato {c.contrato_id}
-        {c.em_quarentena && (
-          <span className="text-attention"> · sem cluster</span>
-        )}
-      </div>
-      <p className="text-muted leading-relaxed">
-        {c.descricao.length > 240
-          ? c.descricao.slice(0, 240) + "…"
-          : c.descricao}
-      </p>
+    <li>
+      <Link
+        href={`/contrato/${c.raw_id}`}
+        className="block border border-line rounded-md p-3 bg-white text-sm space-y-1 no-underline hover:border-ink"
+      >
+        <div className="flex items-baseline justify-between gap-2 flex-wrap">
+          <span className="font-medium">
+            {c.municipio ? `${c.municipio} · ` : ""}
+            {c.orgao_nome}
+          </span>
+          <span className="font-mono">{fmtBRL(c.valor_total)}</span>
+        </div>
+        <div className="text-muted text-xs">
+          {c.contract_date && <span>{fmtDateBR(c.contract_date)} · </span>}
+          contrato {c.contrato_id}
+          {c.em_quarentena && (
+            <span className="text-attention"> · sem cluster</span>
+          )}
+          <span className="ml-2 text-attention">→ ver detalhe</span>
+        </div>
+        <p className="text-muted leading-relaxed">
+          {c.descricao.length > 240
+            ? c.descricao.slice(0, 240) + "…"
+            : c.descricao}
+        </p>
+      </Link>
     </li>
   );
 }

@@ -180,6 +180,44 @@ class MunicipioInfoOut(BaseModel):
     )
 
 
+class ContratoDetalheOut(BaseModel):
+    raw_id: int
+    source: str
+    source_id: str | None
+    source_url: str | None
+    contract_date: str | None
+    orgao_codigo: str | None
+    orgao_nome: str | None
+    fornecedor_cnpj: str | None
+    fornecedor_nome: str | None
+    descricao: str
+    valor_total: Decimal | None
+    valor_unitario: Decimal | None
+    quantidade: Decimal | None
+    unidade: str | None
+    modalidade: str | None
+    catmat_id: str | None
+    catser_id: str | None
+    raw_payload: dict[str, Any]
+    # canonicalizacao
+    cluster_id: str | None
+    cluster_version: str | None
+    cluster_descricao: str | None
+    metodo_resolucao: str | None
+    confianca_resolucao: float | None
+    em_quarentena: bool
+    motivo_quarentena: str | None
+    # snapshot (camada de durabilidade)
+    snapshot_id: str
+    snapshot_period_start: str | None
+    snapshot_period_end: str | None
+    snapshot_hash_sha256: str | None
+    snapshot_ingested_at: str
+    # municipio (so para TCE-PR)
+    cd_ibge: str | None
+    municipio_nome: str | None
+
+
 class FornecedorPerfilOut(BaseModel):
     fornecedor_cnpj: str
     fornecedor_nome: str | None
@@ -195,6 +233,7 @@ class FornecedorPerfilOut(BaseModel):
 
 
 class FornecedorContratoOut(BaseModel):
+    raw_id: int
     contrato_id: str
     municipio: str | None
     orgao_nome: str
@@ -443,6 +482,112 @@ def get_item(conn: ConnDep, raw_id: int) -> ItemOut:
         em_quarentena=row["em_quarentena"],
         motivo_quarentena=row["motivo_quarentena"],
         pares=pares,
+    )
+
+
+# ----------------------------- Contrato (detalhe) ---------------------
+
+
+@app.get(
+    "/contrato/{raw_id}",
+    response_model=ContratoDetalheOut,
+    tags=["contrato"],
+)
+def contrato_detalhe(conn: ConnDep, raw_id: int) -> ContratoDetalheOut:
+    """Detalhe de um contrato pela chave interna `raw_id` (raw.compras.id).
+
+    Agrega: raw.compras + item_canonical + cluster_registry + snapshot +
+    municipio_pr (so se source = tce_pr/contrato). raw_payload exposto
+    completo para auditoria.
+    """
+    sql = """
+        SELECT
+            rc.id AS raw_id,
+            rc.source,
+            rc.source_id,
+            rc.source_url,
+            rc.contract_date::text AS contract_date,
+            rc.orgao_codigo,
+            rc.orgao_nome,
+            rc.fornecedor_cnpj,
+            rc.fornecedor_nome,
+            rc.descricao,
+            rc.valor_total,
+            rc.valor_unitario,
+            rc.quantidade,
+            rc.unidade,
+            rc.modalidade,
+            rc.catmat_id,
+            rc.catser_id,
+            rc.raw_payload,
+            ic.cluster_id,
+            ic.cluster_version,
+            ic.metodo_resolucao,
+            ic.confianca_resolucao,
+            ic.em_quarentena,
+            ic.motivo_quarentena,
+            cr.descricao_canonica AS cluster_descricao,
+            s.id AS snapshot_id,
+            s.period_start::text AS snapshot_period_start,
+            s.period_end::text AS snapshot_period_end,
+            s.hash_sha256 AS snapshot_hash_sha256,
+            s.ingested_at::text AS snapshot_ingested_at,
+            mp.cd_ibge,
+            COALESCE(mp.nome, rc.raw_payload->>'municipio') AS municipio_nome
+        FROM raw.compras rc
+        LEFT JOIN analytics.item_canonical ic ON ic.raw_id = rc.id
+        LEFT JOIN analytics.cluster_registry cr
+            ON cr.cluster_id = ic.cluster_id AND cr.cluster_version = ic.cluster_version
+        JOIN raw.snapshots s ON s.id = rc.snapshot_id
+        LEFT JOIN analytics.municipio_pr mp
+            ON mp.cd_tce = rc.raw_payload->>'cd_tce'
+        WHERE rc.id = %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (raw_id,))
+        row = cur.fetchone()
+    if row is None:
+        raise HTTPException(404, f"contrato raw_id={raw_id} nao encontrado")
+    # raw_payload pode vir como dict (psycopg) — garante
+    payload = row["raw_payload"]
+    if isinstance(payload, str):
+        import json as _json
+        payload = _json.loads(payload)
+    return ContratoDetalheOut(
+        raw_id=row["raw_id"],
+        source=row["source"],
+        source_id=row["source_id"],
+        source_url=row["source_url"],
+        contract_date=row["contract_date"],
+        orgao_codigo=row["orgao_codigo"],
+        orgao_nome=row["orgao_nome"],
+        fornecedor_cnpj=row["fornecedor_cnpj"],
+        fornecedor_nome=row["fornecedor_nome"],
+        descricao=row["descricao"],
+        valor_total=row["valor_total"],
+        valor_unitario=row["valor_unitario"],
+        quantidade=row["quantidade"],
+        unidade=row["unidade"],
+        modalidade=row["modalidade"],
+        catmat_id=row["catmat_id"],
+        catser_id=row["catser_id"],
+        raw_payload=payload or {},
+        cluster_id=row["cluster_id"],
+        cluster_version=row["cluster_version"],
+        cluster_descricao=row["cluster_descricao"],
+        metodo_resolucao=row["metodo_resolucao"],
+        confianca_resolucao=(
+            float(row["confianca_resolucao"]) if row["confianca_resolucao"] is not None else None
+        ),
+        em_quarentena=row["em_quarentena"] or False,
+        motivo_quarentena=row["motivo_quarentena"],
+        snapshot_id=row["snapshot_id"],
+        snapshot_period_start=row["snapshot_period_start"],
+        snapshot_period_end=row["snapshot_period_end"],
+        snapshot_hash_sha256=row["snapshot_hash_sha256"],
+        snapshot_ingested_at=row["snapshot_ingested_at"],
+        cd_ibge=row["cd_ibge"],
+        municipio_nome=row["municipio_nome"],
     )
 
 
@@ -782,6 +927,7 @@ def fornecedor_contratos(
     """Top contratos do fornecedor por valor (mais recentes desempatam)."""
     sql = """
         SELECT
+            rc.id AS raw_id,
             rc.source_id AS contrato_id,
             COALESCE(mp.nome, rc.raw_payload->>'municipio') AS municipio,
             rc.orgao_nome,

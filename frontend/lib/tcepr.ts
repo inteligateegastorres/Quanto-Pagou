@@ -70,6 +70,7 @@ export type FornecedorAgregado = {
 };
 
 export type FornecedorContrato = {
+  raw_id: number;
   contrato_id: string;
   municipio: string | null;
   orgao_nome: string;
@@ -78,6 +79,46 @@ export type FornecedorContrato = {
   contract_date: string | null;
   cluster_id: string | null;
   em_quarentena: boolean;
+};
+
+export type ContratoDetalhe = {
+  raw_id: number;
+  source: string;
+  source_id: string | null;
+  source_url: string | null;
+  contract_date: string | null;
+  orgao_codigo: string | null;
+  orgao_nome: string | null;
+  fornecedor_cnpj: string | null;
+  fornecedor_nome: string | null;
+  descricao: string;
+  valor_total: string | null;
+  valor_unitario: string | null;
+  quantidade: string | null;
+  unidade: string | null;
+  modalidade: string | null;
+  catmat_id: string | null;
+  catser_id: string | null;
+  raw_payload: Record<string, unknown>;
+  cluster_id: string | null;
+  cluster_version: string | null;
+  cluster_descricao: string | null;
+  metodo_resolucao: string | null;
+  confianca_resolucao: number | null;
+  em_quarentena: boolean;
+  motivo_quarentena: string | null;
+  snapshot_id: string;
+  snapshot_period_start: string | null;
+  snapshot_period_end: string | null;
+  snapshot_hash_sha256: string | null;
+  snapshot_ingested_at: string;
+  cd_ibge: string | null;
+  municipio_nome: string | null;
+};
+
+export const contrato = {
+  detalhe: (rawId: number) =>
+    jget<ContratoDetalhe>(`/contrato/${rawId}`),
 };
 
 export const fornecedor = {
