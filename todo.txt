@@ -3,6 +3,21 @@
 	- x
 	- etc
 
+- /cluster/[cluster_id]: detecção de tipo de cluster (~80 LOC)
+	- Hoje a página consulta só analytics.mart_orgao_cluster, que filtra
+	  confianca_resolucao >= 0.75. Os 19 clusters TCE-PR têm confiança
+	  fixa em 0.6 (Tier 1.5 keyword) — ficam vazios na UI atual ("Sem
+	  ranking disponível para este cluster").
+	- Comportamento desejado: detectar se o cluster tem dados em
+	  mart_contratos_municipio (TCE-PR) e mostrar ranking de municípios
+	  PR (top por volume) em vez de ranking de órgãos federais.
+	- Resultado: a página /cluster vira útil pros 19 clusters TCE-PR
+	  além dos 5 federais (CATMAT direto).
+	- Decisão de produto: dois ranks distintos na mesma URL, ou rotas
+	  separadas tipo /cluster/[id]/orgaos vs /cluster/[id]/municipios?
+	  Provavelmente dois blocos na mesma página, com legendas claras
+	  da diferença de granularidade (item federal vs contrato municipal).
+
 - Alterar o nome do projeto: "Quanto Pagou" -> "Radar Público"
 	- Tagline: "Transparência comparativa de compras públicas"
 	- Onde mexer (lista preliminar — confirmar antes de executar):
