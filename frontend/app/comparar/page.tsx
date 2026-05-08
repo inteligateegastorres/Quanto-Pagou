@@ -38,6 +38,23 @@ const CLUSTERS_TCE: { id: string; nome: string }[] = [
 const DEFAULT_CLUSTER = "merenda_escolar";
 const DEFAULT_MUNICIPIOS = "410690,412770"; // Curitiba + Toledo
 
+function buildDrillHref(
+  cd_tce: string,
+  municipio: string,
+  cluster_id: string,
+  cluster_nome: string,
+  modalidade: string,
+): string {
+  const qs = new URLSearchParams({
+    cluster_id,
+    cd_tce,
+    municipio_nome: municipio,
+    cluster_nome,
+  });
+  if (modalidade) qs.set("modalidade", modalidade);
+  return `/contratos?${qs.toString()}`;
+}
+
 type SearchParams = {
   cluster?: string;
   municipios?: string;
@@ -314,10 +331,26 @@ export default async function CompararPage({
                       {r.porte.replace("municipio_pr_", "")}
                     </td>
                     <td className="py-2 px-3 text-right font-mono">
-                      {r.encontrado ? r.n_contratos.toLocaleString("pt-BR") : "—"}
+                      {r.encontrado ? (
+                        <Link
+                          href={buildDrillHref(r.cd_tce, r.municipio, clusterId, clusterNome, modalidade)}
+                          className="no-underline hover:underline"
+                          title={`Ver ${r.n_contratos} contratos`}
+                        >
+                          {r.n_contratos.toLocaleString("pt-BR")}
+                        </Link>
+                      ) : "—"}
                     </td>
                     <td className="py-2 px-3 text-right font-mono">
-                      {r.encontrado ? fmtBRL(r.valor_total_periodo) : "—"}
+                      {r.encontrado ? (
+                        <Link
+                          href={buildDrillHref(r.cd_tce, r.municipio, clusterId, clusterNome, modalidade)}
+                          className="no-underline hover:underline"
+                          title="Ver contratos que somam este valor"
+                        >
+                          {fmtBRL(r.valor_total_periodo)}
+                        </Link>
+                      ) : "—"}
                     </td>
                     <td className="py-2 px-3 text-right font-mono font-medium">
                       {r.encontrado ? fmtBRL(m) : (

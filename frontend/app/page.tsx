@@ -167,9 +167,13 @@ export default async function HomePage() {
                   <span className="text-xs text-muted whitespace-nowrap">
                     {m.n_contratos.toLocaleString("pt-BR")} c.
                   </span>
-                  <span className="font-mono text-xs text-right whitespace-nowrap">
+                  <Link
+                    href={`/contratos?cd_tce=${m.cd_tce}&municipio_nome=${encodeURIComponent(m.nome)}`}
+                    className="font-mono text-xs text-right whitespace-nowrap no-underline hover:underline"
+                    title={`Ver ${m.n_contratos} contratos`}
+                  >
                     {fmtBRL(m.valor_total)}
-                  </span>
+                  </Link>
                 </li>
               ))}
             </ol>
@@ -198,9 +202,13 @@ export default async function HomePage() {
                   <span className="text-xs text-muted whitespace-nowrap">
                     {f.n_contratos} c.
                   </span>
-                  <span className="font-mono text-xs text-right whitespace-nowrap">
+                  <Link
+                    href={`/contratos?fornecedor_cnpj=${encodeURIComponent(f.fornecedor_cnpj)}&fornecedor_nome=${encodeURIComponent(f.fornecedor_nome ?? "")}`}
+                    className="font-mono text-xs text-right whitespace-nowrap no-underline hover:underline"
+                    title={`Ver ${f.n_contratos} contratos`}
+                  >
                     {fmtBRL(f.valor_total)}
-                  </span>
+                  </Link>
                 </li>
               ))}
             </ol>

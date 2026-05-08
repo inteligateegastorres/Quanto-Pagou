@@ -237,7 +237,13 @@ export default async function MunicipioPage({
         <section className="space-y-4">
           <h2 className="text-xl font-semibold">Contratos por categoria-piloto</h2>
           {Array.from(porCluster.entries()).map(([clusterId, rows]) => (
-            <ClusterCard key={clusterId} clusterId={clusterId} rows={rows} />
+            <ClusterCard
+              key={clusterId}
+              clusterId={clusterId}
+              rows={rows}
+              cdTce={info.cd_tce}
+              municipioNome={info.nome}
+            />
           ))}
         </section>
       )}
@@ -298,6 +304,12 @@ export default async function MunicipioPage({
 function FornecedorRow({ pos, f }: { pos: number; f: FornecedorMunicipio }) {
   const podeLinkar = f.n_contratos >= 5;
   const cnpjEnc = encodeURIComponent(f.fornecedor_cnpj);
+  // Drill-down do valor: contratos do fornecedor naquele município
+  const drillQs = new URLSearchParams({
+    fornecedor_cnpj: f.fornecedor_cnpj,
+    fornecedor_nome: f.fornecedor_nome ?? "",
+  });
+  if (f.cd_ibge) drillQs.set("cd_ibge", f.cd_ibge);
   return (
     <li className="flex items-baseline gap-3 border-b border-line/60 py-2 text-sm">
       <span className="w-6 text-right text-muted">{pos}.</span>
@@ -315,9 +327,13 @@ function FornecedorRow({ pos, f }: { pos: number; f: FornecedorMunicipio }) {
           CNPJ {f.fornecedor_cnpj} · {f.n_contratos} contrato{f.n_contratos === 1 ? "" : "s"}
         </div>
       </div>
-      <span className="font-mono text-right whitespace-nowrap">
+      <Link
+        href={`/contratos?${drillQs.toString()}`}
+        className="font-mono text-right whitespace-nowrap no-underline hover:underline"
+        title={`Ver ${f.n_contratos} contratos`}
+      >
         {fmtBRL(f.valor_total_periodo)}
-      </span>
+      </Link>
     </li>
   );
 }
@@ -325,38 +341,68 @@ function FornecedorRow({ pos, f }: { pos: number; f: FornecedorMunicipio }) {
 function ClusterCard({
   clusterId,
   rows,
+  cdTce,
+  municipioNome,
 }: {
   clusterId: string;
   rows: ContratoMunicipio[];
+  cdTce: string;
+  municipioNome: string;
 }) {
   const sorted = [...rows].sort(
     (a, b) => Number(b.valor_total_periodo) - Number(a.valor_total_periodo),
   );
   const totalContratos = sorted.reduce((s, r) => s + r.n_contratos, 0);
   const totalValor = sorted.reduce((s, r) => s + Number(r.valor_total_periodo), 0);
+  const clusterNome = prettyCluster(clusterId);
+  // Drill-down do agregado do cluster (todos órgãos)
+  const drillTotal = `/contratos?${new URLSearchParams({
+    cluster_id: clusterId,
+    cluster_nome: clusterNome,
+    cd_tce: cdTce,
+    municipio_nome: municipioNome,
+  }).toString()}`;
   return (
     <article className="border border-line rounded-md p-4 bg-white">
       <header className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
-        <h3 className="text-base font-semibold">{prettyCluster(clusterId)}</h3>
-        <span className="text-xs text-muted">
+        <h3 className="text-base font-semibold">{clusterNome}</h3>
+        <Link
+          href={drillTotal}
+          className="text-xs text-muted no-underline hover:underline"
+          title={`Ver ${totalContratos} contratos`}
+        >
           {totalContratos} contratos · {fmtBRL(totalValor.toFixed(2))}
-        </span>
+        </Link>
       </header>
       <ol className="text-sm space-y-1">
-        {sorted.map((r) => (
-          <li
-            key={r.orgao_codigo}
-            className="flex items-baseline gap-3 border-b border-line/60 py-1"
-          >
-            <span className="flex-1 min-w-0 truncate">{r.orgao_nome}</span>
-            <span className="text-xs text-muted w-20 text-right">
-              {r.n_contratos} c.
-            </span>
-            <span className="font-mono w-28 text-right">
-              {fmtBRL(r.valor_total_periodo)}
-            </span>
-          </li>
-        ))}
+        {sorted.map((r) => {
+          const drillOrgao = `/contratos?${new URLSearchParams({
+            cluster_id: clusterId,
+            cluster_nome: clusterNome,
+            cd_tce: cdTce,
+            municipio_nome: municipioNome,
+            orgao_codigo: r.orgao_codigo,
+            orgao_nome: r.orgao_nome,
+          }).toString()}`;
+          return (
+            <li
+              key={r.orgao_codigo}
+              className="flex items-baseline gap-3 border-b border-line/60 py-1"
+            >
+              <span className="flex-1 min-w-0 truncate">{r.orgao_nome}</span>
+              <span className="text-xs text-muted w-20 text-right">
+                {r.n_contratos} c.
+              </span>
+              <Link
+                href={drillOrgao}
+                className="font-mono w-28 text-right no-underline hover:underline"
+                title={`Ver ${r.n_contratos} contratos`}
+              >
+                {fmtBRL(r.valor_total_periodo)}
+              </Link>
+            </li>
+          );
+        })}
       </ol>
     </article>
   );

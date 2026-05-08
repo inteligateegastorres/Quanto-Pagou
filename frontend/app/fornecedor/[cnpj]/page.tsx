@@ -144,6 +144,8 @@ export default async function FornecedorPage({
           legenda="Volume agregado por órgão. Concentração alta no maior órgão pode ser legítima (especialização) ou ponto de atenção — interpretação depende do contexto."
           linhas={orgaos}
           totalRef={Number(perfil.valor_total)}
+          cnpj={cnpj}
+          tipo="orgao"
         />
       )}
 
@@ -153,6 +155,8 @@ export default async function FornecedorPage({
           legenda={`${perfil.n_municipios_distintos} municípios distintos no total; lista exibe os 10 maiores por volume.`}
           linhas={municipios}
           totalRef={Number(perfil.valor_total)}
+          cnpj={cnpj}
+          tipo="municipio"
         />
       )}
 
@@ -162,6 +166,8 @@ export default async function FornecedorPage({
           legenda='Categorias mapeadas pelos clusters keyword (config/cluster_keywords.yaml). "Sem categoria mapeada" = contratos cujo objeto não casa com nenhum cluster atual; ainda visíveis no detalhe.'
           linhas={categorias}
           totalRef={Number(perfil.valor_total)}
+          cnpj={cnpj}
+          tipo="categoria"
         />
       )}
 
@@ -171,6 +177,8 @@ export default async function FornecedorPage({
           legenda='Modalidade resolvida via Licitacao.xml + LicitacaoXContrato.xml (TCE-PR). "Sem modalidade resolvida" agrupa contratos onde a ligação licitação-contrato não foi recuperável; presença alta de dispensa/inexigibilidade pode ser legítima ou ponto de atenção, depende do contexto.'
           linhas={modalidades}
           totalRef={Number(perfil.valor_total)}
+          cnpj={cnpj}
+          tipo="modalidade"
         />
       )}
 
@@ -212,11 +220,15 @@ function Block({
   legenda,
   linhas,
   totalRef,
+  cnpj,
+  tipo,
 }: {
   titulo: string;
   legenda: string;
   linhas: FornecedorAgregado[];
   totalRef: number;
+  cnpj: string;
+  tipo: "orgao" | "municipio" | "categoria" | "modalidade";
 }) {
   return (
     <section className="space-y-3">
@@ -225,6 +237,7 @@ function Block({
       <ol className="text-sm space-y-1 border border-line rounded-md p-4 bg-white">
         {linhas.map((l, i) => {
           const pct = totalRef > 0 ? Number(l.valor_total) / totalRef : 0;
+          const drillHref = buildBlockDrillHref(tipo, cnpj, l);
           return (
             <li
               key={l.chave}
@@ -237,9 +250,19 @@ function Block({
               <span className="text-xs text-muted w-16 text-right">
                 {l.n_contratos} c.
               </span>
-              <span className="font-mono w-28 text-right">
-                {fmtBRL(l.valor_total)}
-              </span>
+              {drillHref ? (
+                <Link
+                  href={drillHref}
+                  className="font-mono w-28 text-right no-underline hover:underline"
+                  title={`Ver ${l.n_contratos} contratos`}
+                >
+                  {fmtBRL(l.valor_total)}
+                </Link>
+              ) : (
+                <span className="font-mono w-28 text-right">
+                  {fmtBRL(l.valor_total)}
+                </span>
+              )}
               <span className="text-xs text-muted w-12 text-right">
                 {(pct * 100).toFixed(0)}%
               </span>
@@ -249,6 +272,43 @@ function Block({
       </ol>
     </section>
   );
+}
+
+function buildBlockDrillHref(
+  tipo: "orgao" | "municipio" | "categoria" | "modalidade",
+  cnpj: string,
+  l: FornecedorAgregado,
+): string | null {
+  const base = new URLSearchParams({
+    fornecedor_cnpj: cnpj,
+    fornecedor_nome: "", // será preenchido pelo perfil
+  });
+  if (tipo === "orgao") {
+    base.set("orgao_codigo", l.chave);
+    base.set("orgao_nome", l.nome ?? "");
+    return `/contratos?${base.toString()}`;
+  }
+  if (tipo === "municipio") {
+    // chave pode ser cd_ibge ou cd_tce; endpoint resolve ambos
+    if (l.chave.length === 7) base.set("cd_ibge", l.chave);
+    else base.set("cd_tce", l.chave);
+    base.set("municipio_nome", l.nome ?? "");
+    return `/contratos?${base.toString()}`;
+  }
+  if (tipo === "categoria") {
+    if (l.chave === "_quarentena") {
+      base.set("em_quarentena", "true");
+    } else {
+      base.set("cluster_id", l.chave);
+      base.set("cluster_nome", l.nome ?? "");
+    }
+    return `/contratos?${base.toString()}`;
+  }
+  if (tipo === "modalidade") {
+    base.set("modalidade", l.chave === "sem_modalidade" ? "sem_modalidade" : l.chave);
+    return `/contratos?${base.toString()}`;
+  }
+  return null;
 }
 
 function ContratoRow({ c }: { c: FornecedorContrato }) {

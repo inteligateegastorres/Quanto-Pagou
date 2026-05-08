@@ -121,6 +121,59 @@ export const contrato = {
     jget<ContratoDetalhe>(`/contrato/${rawId}`),
 };
 
+export type ContratoSearchItem = {
+  raw_id: number;
+  source_id: string | null;
+  municipio: string | null;
+  cd_tce: string | null;
+  orgao_nome: string | null;
+  fornecedor_cnpj: string | null;
+  fornecedor_nome: string | null;
+  descricao: string;
+  valor_total: string | null;
+  contract_date: string | null;
+  cluster_id: string | null;
+  cluster_descricao: string | null;
+  modalidade: string | null;
+  em_quarentena: boolean;
+};
+
+export type ContratoSearchPage = {
+  page: number;
+  limit: number;
+  total: number;
+  valor_total_filtrado: string;
+  contratos: ContratoSearchItem[];
+};
+
+export type ContratoSearchFilters = {
+  cluster_id?: string;
+  cd_tce?: string;
+  cd_ibge?: string;
+  modalidade?: string;
+  fornecedor_cnpj?: string;
+  orgao_codigo?: string;
+  escola_slug?: string;
+  source?: string;
+  em_quarentena?: boolean;
+  page?: number;
+  limit?: number;
+  order?: string;
+};
+
+export const contratos = {
+  search: (filters: ContratoSearchFilters = {}) => {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(filters)) {
+      if (v !== undefined && v !== null && v !== "") {
+        qs.set(k, String(v));
+      }
+    }
+    const q = qs.toString();
+    return jget<ContratoSearchPage>(`/contratos/search${q ? "?" + q : ""}`);
+  },
+};
+
 export type EscolaListItem = {
   escola_slug: string;
   escola_nome: string;

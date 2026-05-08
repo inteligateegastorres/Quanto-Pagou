@@ -197,6 +197,31 @@ class FornecedorListItemOut(BaseModel):
     n_municipios_distintos: int
 
 
+class ContratoSearchItemOut(BaseModel):
+    raw_id: int
+    source_id: str | None
+    municipio: str | None
+    cd_tce: str | None
+    orgao_nome: str | None
+    fornecedor_cnpj: str | None
+    fornecedor_nome: str | None
+    descricao: str
+    valor_total: Decimal | None
+    contract_date: str | None
+    cluster_id: str | None
+    cluster_descricao: str | None
+    modalidade: str | None
+    em_quarentena: bool
+
+
+class ContratoSearchPageOut(BaseModel):
+    page: int
+    limit: int
+    total: int
+    valor_total_filtrado: Decimal
+    contratos: list[ContratoSearchItemOut]
+
+
 class DispensaTopFornecedorOut(BaseModel):
     fornecedor_cnpj: str
     fornecedor_nome: str | None
@@ -647,6 +672,145 @@ def contrato_detalhe(conn: ConnDep, raw_id: int) -> ContratoDetalheOut:
         snapshot_ingested_at=row["snapshot_ingested_at"],
         cd_ibge=row["cd_ibge"],
         municipio_nome=row["municipio_nome"],
+    )
+
+
+# ----------------------------- Contratos search (drill-down) ----------
+
+
+@app.get(
+    "/contratos/search",
+    response_model=ContratoSearchPageOut,
+    tags=["contrato"],
+)
+def contratos_search(
+    conn: ConnDep,
+    cluster_id: str | None = Query(default=None),
+    cd_tce: str | None = Query(default=None, description="Codigo TCE-PR (6 dig.)"),
+    cd_ibge: str | None = Query(default=None, description="Codigo IBGE (7 dig.)"),
+    modalidade: str | None = Query(default=None, description="'sem_modalidade' = nao resolvida"),
+    fornecedor_cnpj: str | None = Query(default=None),
+    orgao_codigo: str | None = Query(default=None),
+    escola_slug: str | None = Query(default=None),
+    source: str | None = Query(default=None, description="ex: tce_pr/contrato"),
+    em_quarentena: bool | None = Query(
+        default=None, description="None=ambos; True/False filtra"
+    ),
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=50, ge=1, le=200),
+    order: str = Query(
+        default="valor_desc",
+        description="valor_desc | valor_asc | data_desc | data_asc",
+    ),
+) -> ContratoSearchPageOut:
+    """Busca paginada e filtrada de contratos. Drill-down universal —
+    cada filtro corresponde a um agregado em outras paginas.
+
+    Implementacao: monta WHERE dinamicamente com AND. Conta total e
+    soma valor_total na mesma query (CTE).
+    """
+    # Resolve cd_ibge para cd_tce se necessario
+    if cd_ibge and not cd_tce:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT cd_tce FROM analytics.municipio_pr WHERE cd_ibge = %s",
+                (cd_ibge,),
+            )
+            row = cur.fetchone()
+            if row:
+                cd_tce = row["cd_tce"]
+
+    where = ["1 = 1"]
+    args: list[Any] = []
+    if source:
+        where.append("rc.source = %s")
+        args.append(source)
+    if cluster_id:
+        where.append("ic.cluster_id = %s")
+        args.append(cluster_id)
+    if cd_tce:
+        where.append("rc.raw_payload->>'cd_tce' = %s")
+        args.append(cd_tce)
+    if modalidade:
+        if modalidade == "sem_modalidade":
+            where.append("rc.modalidade IS NULL")
+        else:
+            where.append("rc.modalidade = %s")
+            args.append(modalidade)
+    if fornecedor_cnpj:
+        where.append("rc.fornecedor_cnpj = %s")
+        args.append(fornecedor_cnpj)
+    if orgao_codigo:
+        where.append("rc.orgao_codigo = %s")
+        args.append(orgao_codigo)
+    if escola_slug:
+        where.append(
+            "rc.id IN (SELECT raw_id FROM analytics.escola_mencao WHERE escola_slug = %s)"
+        )
+        args.append(escola_slug)
+    if em_quarentena is not None:
+        where.append("ic.em_quarentena = %s")
+        args.append(em_quarentena)
+
+    where_sql = " AND ".join(where)
+
+    order_sql = {
+        "valor_desc": "rc.valor_total DESC NULLS LAST",
+        "valor_asc": "rc.valor_total ASC NULLS LAST",
+        "data_desc": "rc.contract_date DESC NULLS LAST",
+        "data_asc": "rc.contract_date ASC NULLS LAST",
+    }.get(order)
+    if order_sql is None:
+        raise HTTPException(400, f"order invalido: {order}")
+
+    # Conta total + soma — uma query so
+    sql_total = f"""
+        SELECT COUNT(*) AS total,
+               COALESCE(SUM(rc.valor_total), 0) AS valor_total
+        FROM raw.compras rc
+        LEFT JOIN analytics.item_canonical ic ON ic.raw_id = rc.id
+        WHERE {where_sql}
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql_total, args)
+        agg = cur.fetchone()
+
+    offset = (page - 1) * limit
+    sql_items = f"""
+        SELECT
+            rc.id AS raw_id,
+            rc.source_id,
+            COALESCE(mp.nome, rc.raw_payload->>'municipio') AS municipio,
+            rc.raw_payload->>'cd_tce' AS cd_tce,
+            rc.orgao_nome,
+            rc.fornecedor_cnpj,
+            rc.fornecedor_nome,
+            rc.descricao,
+            rc.valor_total,
+            rc.contract_date::text AS contract_date,
+            ic.cluster_id,
+            cr.descricao_canonica AS cluster_descricao,
+            rc.modalidade,
+            COALESCE(ic.em_quarentena, FALSE) AS em_quarentena
+        FROM raw.compras rc
+        LEFT JOIN analytics.item_canonical ic ON ic.raw_id = rc.id
+        LEFT JOIN analytics.cluster_registry cr
+            ON cr.cluster_id = ic.cluster_id AND cr.cluster_version = ic.cluster_version
+        LEFT JOIN analytics.municipio_pr mp ON mp.cd_tce = rc.raw_payload->>'cd_tce'
+        WHERE {where_sql}
+        ORDER BY {order_sql}
+        LIMIT %s OFFSET %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql_items, [*args, limit, offset])
+        rows = cur.fetchall()
+
+    return ContratoSearchPageOut(
+        page=page,
+        limit=limit,
+        total=agg["total"] or 0,
+        valor_total_filtrado=agg["valor_total"] or Decimal(0),
+        contratos=[ContratoSearchItemOut(**r) for r in rows],
     )
 
 

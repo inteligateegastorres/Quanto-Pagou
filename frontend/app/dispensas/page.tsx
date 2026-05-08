@@ -206,9 +206,13 @@ function Linha({ pos, f }: { pos: number; f: DispensaTopFornecedor }) {
           {f.n_orgaos} órgão{f.n_orgaos === 1 ? "" : "s"}
         </div>
       </div>
-      <span className="font-mono text-right whitespace-nowrap">
+      <Link
+        href={`/contratos?fornecedor_cnpj=${encodeURIComponent(f.fornecedor_cnpj)}&fornecedor_nome=${encodeURIComponent(f.fornecedor_nome ?? "")}&modalidade=dispensa`}
+        className="font-mono text-right whitespace-nowrap no-underline hover:underline"
+        title={`Ver ${f.n_dispensas} dispensas`}
+      >
         {fmtBRLCompact(f.valor_total_dispensas)}
-      </span>
+      </Link>
     </li>
   );
 }
