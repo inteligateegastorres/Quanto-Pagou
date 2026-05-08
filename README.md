@@ -2,12 +2,12 @@
 
 Plataforma cívica para monitorar gastos públicos brasileiros e identificar possíveis desvios.
 
-> **Status:** sprint local — **Day 7 de 7 entregue** (ver [PLANO.md](./PLANO.md) §12).
-> Pipeline completo (ingestão → resolução → marts → API → frontend) rodando em
-> `localhost`, com manifesto, landing pública, formulário de boletim
-> (placeholder mailto), e [DEPLOY.md](./DEPLOY.md) descrevendo a ordem
-> de operações para o go-live público. Próximo passo é do usuário humano:
-> domínio, contas Vercel/Supabase/R2, revisão jurídica preliminar.
+> **Status:** sprint local concluído + Fase 1 PR já no ar (~25 commits desde
+> o bootstrap). Pipeline TCE-PR estadual completo (156k contratos reais de
+> 397 municípios), 19 clusters keyword (33,6% cobertura), 506 escolas
+> extraídas, ~25 endpoints API e 14 páginas frontend. Pendente: domínio,
+> contas Vercel/Supabase/R2, revisão jurídica (ver [DEPLOY.md](./DEPLOY.md)).
+> Banner global diferencia Paraná real (verde) × Federal fixture (laranja).
 
 ---
 
@@ -43,16 +43,29 @@ Pronto:
   + build em 50s; 121.526 fornecedores únicos; cobertura keyword
   33,6% (52.669 / 156.679). UI de comparação entre cidades-pares
   ativa via endpoint `/tce-pr/cluster/{id}/ranking-municipios`.
+- **Catálogo de obras escolares** — `analytics.escola_mencao` extraída via
+  regex em `src/analytics/escolas.py` (4 padrões: escola_municipal,
+  sigla_cmei, centro_municipal, creche). 506 escolas únicas em 997 menções,
+  cobertura geral 0,17% (concentrada em obras_edificacao 29%). UI em
+  `/escolas` e `/escolas/[slug]`. Catálogo de transparência (lista de
+  obras pontuais com nome próprio identificável); **não substitui
+  comparação por escola** — ver `todo.txt` para fontes alternativas.
+- **Modalidade do contrato** (pregão, dispensa, concorrência…) — vem de
+  `Licitacao.xml` + `LicitacaoXContrato.xml` via JOIN em memória por
+  município. Cobertura 65% no estado completo (82k pregão, 16k dispensa,
+  2k concorrência). Aparece em `/fornecedor/[cnpj]` e `/contrato/[id]`.
 - **OG images dinâmicas** (`/opengraph-image` na home, `/insight/.../opengraph-image`)
-  via `next/og` — dados puxados do mart em tempo de geração; share preview
-  em Twitter/Bluesky/WhatsApp pronto.
-- **Banner global "modo demonstração"** com link para metodologia — deixa
-  claro que números são fixture sintética enquanto API real está caída.
-- **Window-splitting recursivo** na ingestão (`ingest_with_split` +
-  `sql/002_resilience.sql` com `status` em `raw.snapshots`): janelas que
-  falham com erro transitório são divididas até `min_window_days`, e o
-  que não vingar fica como `failed` em `raw.snapshots` com
-  `error_message` legível. `scripts/sync_compras.{ps1,sh}` orquestra.
+  via `next/og` — dados puxados do mart em tempo de geração.
+- **Banner global** diferencia visualmente Paraná real (verde) × Federal
+  fixture (laranja); link para `/metodologia`.
+- **Window-splitting recursivo** na ingestão Compras.gov.br
+  (`ingest_with_split` + `sql/002_resilience.sql`): janelas que falham
+  com erro transitório são divididas até `min_window_days`, e o que não
+  vingar fica como `failed` em `raw.snapshots` com `error_message`
+  legível. `scripts/sync_compras.{ps1,sh}` orquestra.
+- **Componente `Stat` compartilhado** (`frontend/lib/Stat.tsx`) com
+  overflow-protection nos cards (números grandes não transbordam mais
+  para cards adjacentes); helper `fmtBRLCompact` para "R$ 5,12 bi".
 - 28 testes unitários travando regressões do parser de unidade.
 
 Não pronto (depende do usuário humano para destravar):
@@ -255,15 +268,22 @@ Base: `http://127.0.0.1:8001` · Docs: `/docs` · Sem auth (dados públicos).
 
 | Rota                       | Conteúdo                                                                                        |
 |----------------------------|-------------------------------------------------------------------------------------------------|
-| `/`                        | Landing pública (Day 7): pitch + 3 CTAs + insight + ranking + categorias + boletim + status.    |
+| `/`                        | Landing reestruturada em 3 zonas: Paraná real (top municípios + top fornecedores) / Federal fixture (insight diesel + ranking) / Categorias separadas. CTAs Buscar/Comparar/Manifesto. |
+| `/buscar`                  | Busca de municípios PR (top 30 ou filtro por nome) e fornecedores (top 30 por volume, filtro nome ou CNPJ). |
+| `/comparar`                | Município × município por cluster (lado a lado, até 6 cidades, default Curitiba × Toledo em merenda escolar). |
+| `/escolas`                 | Catálogo de obras escolares (506 escolas extraídas via regex no objeto). Auditoria de transparência — não ranking. |
+| `/escolas/[slug]`          | Drill-down para uma escola: stats + lista de contratos vinculados. |
+| `/municipio/[cd_tce]`      | Página genérica para qualquer município PR: top fornecedores, contratos por categoria, comparação contra cidades-pares (cards clicáveis), atalhos por cluster. |
+| `/curitiba`                | Atalho hardcoded para 4106902 + seção secundária de busca em diários oficiais via Querido Diário. |
+| `/fornecedor/[cnpj]`       | Perfil do fornecedor com guardrails §6.5 (threshold ≥ 5 contratos, modal "como interpretar", `noindex,nofollow`, sem ranking implícito). Distribuição por órgão/município/categoria/modalidade + top 30 contratos clicáveis. |
+| `/contrato/[id]`           | Detalhe completo do contrato + link para fonte primária (ZIP TCE-PR ou PNCP) + raw_payload para auditoria. |
+| `/insight/diesel-ministerios` | Análise editorial sobre o spread entre ministérios federais comprando o mesmo diesel S10 (fixture). |
+| `/cluster/[cluster_id]`    | Distribuição p25-p75 entre pares + ranking de órgãos (federal CATMAT; vazio para clusters TCE-PR — pendência registrada em `todo.txt`). |
+| `/item/[raw_id]`           | Card narrativo §6.1 do plano: barras "você vs mediana", badge de confiabilidade, sinais decompostos. |
 | `/manifesto`               | Por que existe a plataforma — gap do Painel de Preços + tese + princípios + licenças.          |
-| `/curitiba`                | Compras públicas de Curitiba (TCE-PR PIT): top fornecedores, contratos por categoria-piloto, busca textual em diários oficiais. |
-| `/insight/diesel-ministerios` | Análise editorial (Day 6) sobre o spread entre ministérios federais comprando o mesmo diesel S10. |
-| `/cluster/[cluster_id]`    | Distribuição p25-p75 entre pares + ranking completo de órgãos.                                  |
-| `/item/[raw_id]`           | Card narrativo do plano §6.1: barras "você vs mediana", badge de confiabilidade, sinais decompostos, agregado escondido. |
 | `/metodologia`             | Fontes, resolução, normalização de unidade, política de correção.                              |
-| `/correcoes`               | Página viva (vazia por enquanto) — onde aparecem correções pós-relato.                         |
-| `/opengraph-image`, `/insight/.../opengraph-image` | OG images dinâmicas (PNG 1200×630) geradas via `next/og`; números puxados do mart no momento da request. |
+| `/correcoes`               | Página viva — onde aparecem correções pós-relato.                                              |
+| `/opengraph-image`, `/insight/.../opengraph-image` | OG images dinâmicas (PNG 1200×630) via `next/og`. |
 
 ---
 
