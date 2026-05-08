@@ -41,7 +41,21 @@ const DEFAULT_MUNICIPIOS = "410690,412770"; // Curitiba + Toledo
 type SearchParams = {
   cluster?: string;
   municipios?: string;
+  modalidade?: string;
 };
+
+const MODALIDADES: { id: string; nome: string }[] = [
+  { id: "", nome: "todas" },
+  { id: "pregao", nome: "pregão" },
+  { id: "dispensa", nome: "dispensa" },
+  { id: "concorrencia", nome: "concorrência" },
+  { id: "tomada_precos", nome: "tomada de preços" },
+  { id: "convite", nome: "convite" },
+  { id: "inexigibilidade", nome: "inexigibilidade" },
+  { id: "credenciamento", nome: "credenciamento" },
+  { id: "chamamento_publico", nome: "chamamento público" },
+  { id: "sem_modalidade", nome: "sem modalidade resolvida" },
+];
 
 export default async function CompararPage({
   searchParams,
@@ -51,6 +65,7 @@ export default async function CompararPage({
   const params = await searchParams;
   const clusterId = params.cluster?.trim() || DEFAULT_CLUSTER;
   const cdTcesRaw = params.municipios?.trim() || DEFAULT_MUNICIPIOS;
+  const modalidade = params.modalidade?.trim() || "";
   const cdTces = cdTcesRaw
     .split(",")
     .map((s) => s.trim())
@@ -60,7 +75,10 @@ export default async function CompararPage({
   // (2) Ranking do cluster (todos municípios PR com dados, sem filtro porte).
   const [listaMunR, rankingR] = await Promise.allSettled([
     buscar.municipios({ limit: 50 }),
-    tcepr.rankingMunicipios(clusterId, { limit: 200 }),
+    tcepr.rankingMunicipios(clusterId, {
+      limit: 200,
+      ...(modalidade ? { modalidade } : {}),
+    }),
   ]);
   const lista = listaMunR.status === "fulfilled" ? listaMunR.value : [];
   const ranking = rankingR.status === "fulfilled" ? rankingR.value : [];
@@ -122,21 +140,39 @@ export default async function CompararPage({
       </header>
 
       <form action="/comparar" method="get" className="space-y-3 border border-line rounded-md p-4 bg-white">
-        <div className="space-y-1">
-          <label className="text-xs uppercase tracking-wide text-muted block">
-            Categoria
-          </label>
-          <select
-            name="cluster"
-            defaultValue={clusterId}
-            className="w-full border border-line rounded-md px-3 py-2 text-sm bg-paper"
-          >
-            {CLUSTERS_TCE.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nome}
-              </option>
-            ))}
-          </select>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className="text-xs uppercase tracking-wide text-muted block">
+              Categoria
+            </label>
+            <select
+              name="cluster"
+              defaultValue={clusterId}
+              className="w-full border border-line rounded-md px-3 py-2 text-sm bg-paper"
+            >
+              {CLUSTERS_TCE.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs uppercase tracking-wide text-muted block">
+              Modalidade (opcional)
+            </label>
+            <select
+              name="modalidade"
+              defaultValue={modalidade}
+              className="w-full border border-line rounded-md px-3 py-2 text-sm bg-paper"
+            >
+              {MODALIDADES.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.nome}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div className="space-y-1">
@@ -219,7 +255,15 @@ export default async function CompararPage({
 
       <section>
         <h2 className="text-xl font-semibold mb-3">
-          {clusterNome} — comparação entre {selecionados.length} municípios
+          {clusterNome}
+          {modalidade && (
+            <span className="text-base text-muted font-normal">
+              {" "}
+              · só {modalidade.replace(/_/g, " ")}
+            </span>
+          )}
+          {" — "}
+          comparação entre {selecionados.length} municípios
         </h2>
         {selecionados.length < 2 && (
           <p className="text-sm text-attention">

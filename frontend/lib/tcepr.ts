@@ -218,6 +218,29 @@ export const stats = {
   pr: () => jget<StatsPr>("/stats/pr"),
 };
 
+export type DispensaTopFornecedor = {
+  fornecedor_cnpj: string;
+  fornecedor_nome: string | null;
+  n_dispensas: number;
+  valor_total_dispensas: string;
+  n_municipios: number;
+  n_orgaos: number;
+  cnpj_mascarado: boolean;
+};
+
+export const dispensas = {
+  topFornecedores: (opts: { limit?: number; min_contratos?: number; incluir_cpf_mascarado?: boolean } = {}) => {
+    const qs = new URLSearchParams();
+    if (opts.limit != null) qs.set("limit", String(opts.limit));
+    if (opts.min_contratos != null) qs.set("min_contratos", String(opts.min_contratos));
+    if (opts.incluir_cpf_mascarado) qs.set("incluir_cpf_mascarado", "true");
+    const q = qs.toString();
+    return jget<DispensaTopFornecedor[]>(
+      `/tce-pr/dispensas/top-fornecedores${q ? "?" + q : ""}`,
+    );
+  },
+};
+
 export const buscar = {
   municipios: (opts: { search?: string; limit?: number } = {}) => {
     const qs = new URLSearchParams();
@@ -267,10 +290,16 @@ export const tcepr = {
   },
   rankingMunicipios: (
     clusterId: string,
-    opts: { porte?: string; order?: string; limit?: number } = {},
+    opts: {
+      porte?: string;
+      modalidade?: string;
+      order?: string;
+      limit?: number;
+    } = {},
   ) => {
     const qs = new URLSearchParams();
     if (opts.porte) qs.set("porte", opts.porte);
+    if (opts.modalidade) qs.set("modalidade", opts.modalidade);
     if (opts.order) qs.set("order", opts.order);
     if (opts.limit != null) qs.set("limit", String(opts.limit));
     const q = qs.toString();

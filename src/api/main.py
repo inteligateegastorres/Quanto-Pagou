@@ -197,6 +197,16 @@ class FornecedorListItemOut(BaseModel):
     n_municipios_distintos: int
 
 
+class DispensaTopFornecedorOut(BaseModel):
+    fornecedor_cnpj: str
+    fornecedor_nome: str | None
+    n_dispensas: int
+    valor_total_dispensas: Decimal
+    n_municipios: int
+    n_orgaos: int
+    cnpj_mascarado: bool
+
+
 class MunicipioInfoOut(BaseModel):
     cd_tce: str
     cd_ibge: str | None
@@ -638,6 +648,69 @@ def contrato_detalhe(conn: ConnDep, raw_id: int) -> ContratoDetalheOut:
         cd_ibge=row["cd_ibge"],
         municipio_nome=row["municipio_nome"],
     )
+
+
+# ----------------------------- Dispensas (gancho viral) ---------------
+
+
+@app.get(
+    "/tce-pr/dispensas/top-fornecedores",
+    response_model=list[DispensaTopFornecedorOut],
+    tags=["tce-pr"],
+)
+def dispensas_top_fornecedores(
+    conn: ConnDep,
+    incluir_cpf_mascarado: bool = Query(
+        default=False,
+        description="Inclui pessoas fisicas (CPFs mascarados pelo TCE-PR; multiplas pessoas colidem no mesmo CNPJ-***).",
+    ),
+    min_contratos: int = Query(default=2, ge=1, description="Threshold minimo"),
+    limit: int = Query(default=50, ge=1, le=500),
+) -> list[DispensaTopFornecedorOut]:
+    """Top fornecedores em contratos de modalidade dispensa no PR.
+
+    Linguagem factual estrita: dispensa NAO implica irregularidade —
+    Lei 14.133/2021 prevê dispensa para emergencia, valor baixo,
+    fornecedor exclusivo, etc. Presenca alta aqui e ponto de partida
+    para investigacao, nao prova de nada.
+
+    Threshold default = 2 (vs 5 da pagina /fornecedor) — listagem,
+    nao perfil; aceita visibilidade maior porque a UI ja traz disclaimer
+    forte e nao linka pra perfil quando < 5.
+    """
+    sql = """
+        SELECT
+            rc.fornecedor_cnpj,
+            MAX(rc.fornecedor_nome) AS fornecedor_nome,
+            COUNT(*) AS n_dispensas,
+            ROUND(SUM(rc.valor_total)::numeric, 2) AS valor_total_dispensas,
+            COUNT(DISTINCT rc.raw_payload->>'cd_tce') AS n_municipios,
+            COUNT(DISTINCT rc.orgao_codigo) AS n_orgaos
+        FROM raw.compras rc
+        WHERE rc.source = 'tce_pr/contrato'
+          AND rc.modalidade = 'dispensa'
+          AND rc.fornecedor_cnpj IS NOT NULL
+          AND (%s::boolean OR rc.fornecedor_cnpj NOT LIKE '%%*%%')
+        GROUP BY rc.fornecedor_cnpj
+        HAVING COUNT(*) >= %s
+        ORDER BY valor_total_dispensas DESC NULLS LAST
+        LIMIT %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (incluir_cpf_mascarado, min_contratos, limit))
+        rows = cur.fetchall()
+    return [
+        DispensaTopFornecedorOut(
+            fornecedor_cnpj=r["fornecedor_cnpj"],
+            fornecedor_nome=r["fornecedor_nome"],
+            n_dispensas=r["n_dispensas"],
+            valor_total_dispensas=r["valor_total_dispensas"],
+            n_municipios=r["n_municipios"],
+            n_orgaos=r["n_orgaos"],
+            cnpj_mascarado="*" in r["fornecedor_cnpj"],
+        )
+        for r in rows
+    ]
 
 
 # ----------------------------- Stats PR (home) ------------------------
@@ -1315,13 +1388,17 @@ def tce_pr_ranking_municipios(
     conn: ConnDep,
     cluster_id: str,
     porte: str | None = None,
+    modalidade: str | None = Query(
+        default=None,
+        description="Filtra por modalidade (pregao, dispensa, concorrencia, etc). 'sem_modalidade' = nao resolvida.",
+    ),
     order: str = Query(default="mediana_desc"),
     limit: int = Query(default=20, ge=1, le=200),
 ) -> list[RankingMunicipioOut]:
     """Ranking de municipios PR para um cluster (soma todos os orgaos do
     municipio). Permite filtro por porte para garantir comparacao entre pares
-    de mesmo tamanho. Vai direto na raw.compras + item_canonical para nao
-    depender da granularidade do mart_contratos_municipio (que e por orgao).
+    de mesmo tamanho, e filtro por modalidade para isolar (ex.) so dispensas.
+    Vai direto na raw.compras + item_canonical (nao depende do mart).
     """
     order_sql = {
         "mediana_desc": "mediana_valor_contrato DESC",
@@ -1349,13 +1426,20 @@ def tce_pr_ranking_municipios(
           AND ic.em_quarentena = FALSE
           AND ic.cluster_id = %s
           AND (%s::text IS NULL OR COALESCE(mp.porte, 'municipio_pr_pequeno') = %s)
+          AND (
+              %s::text IS NULL
+              OR (%s = 'sem_modalidade' AND rc.modalidade IS NULL)
+              OR rc.modalidade = %s
+          )
           AND mp.cd_ibge IS NOT NULL
         GROUP BY 1, 2, 3, 4, 5
         ORDER BY {order_sql}
         LIMIT %s
     """
     with conn.cursor() as cur:
-        cur.execute(sql, (cluster_id, porte, porte, limit))
+        cur.execute(
+            sql, (cluster_id, porte, porte, modalidade, modalidade, modalidade, limit)
+        )
         return [RankingMunicipioOut(**r) for r in cur.fetchall()]
 
 

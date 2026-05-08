@@ -209,10 +209,16 @@ export default async function HomePage() {
 
         <div className="flex flex-wrap gap-2 text-sm pt-2">
           <Link
-            href="/comparar?cluster=merenda_escolar&municipios=410690,412770"
-            className="border border-line rounded-md px-3 py-1.5 no-underline hover:border-ink"
+            href="/insight/merenda-escolar-pr"
+            className="border border-attention/40 bg-attention/5 rounded-md px-3 py-1.5 no-underline hover:bg-attention/10"
           >
-            Comparar Curitiba × Toledo em merenda escolar
+            🧑‍🎓 Insight: spread 10× em merenda escolar (Maringá × Cascavel)
+          </Link>
+          <Link
+            href="/dispensas"
+            className="border border-attention/40 bg-attention/5 rounded-md px-3 py-1.5 no-underline hover:bg-attention/10"
+          >
+            📋 Top fornecedores em dispensas no PR
           </Link>
           <Link
             href="/comparar?cluster=medicamentos&municipios=410690,411520,410940"
