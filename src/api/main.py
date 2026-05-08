@@ -696,6 +696,8 @@ def contratos_search(
     em_quarentena: bool | None = Query(
         default=None, description="None=ambos; True/False filtra"
     ),
+    since: str | None = Query(default=None, description="contract_date >= YYYY-MM-DD"),
+    until: str | None = Query(default=None, description="contract_date <= YYYY-MM-DD"),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=50, ge=1, le=200),
     order: str = Query(
@@ -751,6 +753,12 @@ def contratos_search(
     if em_quarentena is not None:
         where.append("ic.em_quarentena = %s")
         args.append(em_quarentena)
+    if since:
+        where.append("rc.contract_date >= %s::date")
+        args.append(since)
+    if until:
+        where.append("rc.contract_date <= %s::date")
+        args.append(until)
 
     where_sql = " AND ".join(where)
 
@@ -1556,6 +1564,14 @@ def tce_pr_ranking_municipios(
         default=None,
         description="Filtra por modalidade (pregao, dispensa, concorrencia, etc). 'sem_modalidade' = nao resolvida.",
     ),
+    since: str | None = Query(
+        default=None,
+        description="Data assinatura mínima (YYYY-MM-DD). Filtra rc.contract_date.",
+    ),
+    until: str | None = Query(
+        default=None,
+        description="Data assinatura máxima (YYYY-MM-DD inclusive).",
+    ),
     order: str = Query(default="mediana_desc"),
     limit: int = Query(default=20, ge=1, le=200),
 ) -> list[RankingMunicipioOut]:
@@ -1595,6 +1611,8 @@ def tce_pr_ranking_municipios(
               OR (%s = 'sem_modalidade' AND rc.modalidade IS NULL)
               OR rc.modalidade = %s
           )
+          AND (%s::date IS NULL OR rc.contract_date >= %s::date)
+          AND (%s::date IS NULL OR rc.contract_date <= %s::date)
           AND mp.cd_ibge IS NOT NULL
         GROUP BY 1, 2, 3, 4, 5
         ORDER BY {order_sql}
@@ -1602,7 +1620,15 @@ def tce_pr_ranking_municipios(
     """
     with conn.cursor() as cur:
         cur.execute(
-            sql, (cluster_id, porte, porte, modalidade, modalidade, modalidade, limit)
+            sql,
+            (
+                cluster_id,
+                porte, porte,
+                modalidade, modalidade, modalidade,
+                since, since,
+                until, until,
+                limit,
+            ),
         )
         return [RankingMunicipioOut(**r) for r in cur.fetchall()]
 

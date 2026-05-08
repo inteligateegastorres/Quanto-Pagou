@@ -156,6 +156,8 @@ export type ContratoSearchFilters = {
   escola_slug?: string;
   source?: string;
   em_quarentena?: boolean;
+  since?: string;
+  until?: string;
   page?: number;
   limit?: number;
   order?: string;
@@ -346,6 +348,8 @@ export const tcepr = {
     opts: {
       porte?: string;
       modalidade?: string;
+      since?: string;
+      until?: string;
       order?: string;
       limit?: number;
     } = {},
@@ -353,6 +357,8 @@ export const tcepr = {
     const qs = new URLSearchParams();
     if (opts.porte) qs.set("porte", opts.porte);
     if (opts.modalidade) qs.set("modalidade", opts.modalidade);
+    if (opts.since) qs.set("since", opts.since);
+    if (opts.until) qs.set("until", opts.until);
     if (opts.order) qs.set("order", opts.order);
     if (opts.limit != null) qs.set("limit", String(opts.limit));
     const q = qs.toString();

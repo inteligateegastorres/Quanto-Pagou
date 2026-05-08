@@ -30,6 +30,9 @@ type SearchParams = {
   fornecedor_nome?: string; // só para label
   municipio_nome?: string; // só para label
   cluster_nome?: string;   // só para label
+  since?: string;
+  until?: string;
+  em_quarentena?: string;
   page?: string;
   order?: string;
 };
@@ -73,6 +76,9 @@ export default async function ContratosPage({
     fornecedor_cnpj: params.fornecedor_cnpj,
     orgao_codigo: params.orgao_codigo,
     escola_slug: params.escola_slug,
+    since: params.since,
+    until: params.until,
+    em_quarentena: params.em_quarentena === "true" ? true : undefined,
     page,
     limit: 50,
     order,
@@ -127,6 +133,11 @@ export default async function ContratosPage({
       valor: params.escola_slug.replace(/-/g, " "),
       href: `/escolas/${params.escola_slug}`,
     });
+  }
+  if (params.since || params.until) {
+    const inicio = params.since ? fmtDateBR(params.since) : "—";
+    const fim = params.until ? fmtDateBR(params.until) : "—";
+    labels.push({ tipo: "período", valor: `${inicio} a ${fim}` });
   }
 
   const totalPages = result ? Math.ceil(result.total / result.limit) : 0;

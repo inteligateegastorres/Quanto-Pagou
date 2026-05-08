@@ -44,12 +44,16 @@ function buildDrillHref(
   cluster_id: string,
   cluster_nome: string,
   modalidade: string,
+  since: string,
+  until: string,
 ): string {
   const qs = new URLSearchParams({
     cluster_id,
     cd_tce,
     municipio_nome: municipio,
     cluster_nome,
+    since,
+    until,
   });
   if (modalidade) qs.set("modalidade", modalidade);
   return `/contratos?${qs.toString()}`;
@@ -59,7 +63,23 @@ type SearchParams = {
   cluster?: string;
   municipios?: string;
   modalidade?: string;
+  since?: string;
+  until?: string;
 };
+
+// Janela default: ano completo mais recente do banco. Quando virar 2026
+// completo, atualizar.
+const DEFAULT_SINCE = "2025-01-01";
+const DEFAULT_UNTIL = "2025-12-31";
+
+function isIsoDate(s: string | undefined): boolean {
+  return !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
+}
+
+function fmtDateBR(iso: string): string {
+  const [y, m, d] = iso.slice(0, 10).split("-");
+  return `${d}/${m}/${y}`;
+}
 
 const MODALIDADES: { id: string; nome: string }[] = [
   { id: "", nome: "todas" },
@@ -83,6 +103,8 @@ export default async function CompararPage({
   const clusterId = params.cluster?.trim() || DEFAULT_CLUSTER;
   const cdTcesRaw = params.municipios?.trim() || DEFAULT_MUNICIPIOS;
   const modalidade = params.modalidade?.trim() || "";
+  const since = isIsoDate(params.since) ? params.since! : DEFAULT_SINCE;
+  const until = isIsoDate(params.until) ? params.until! : DEFAULT_UNTIL;
   const cdTces = cdTcesRaw
     .split(",")
     .map((s) => s.trim())
@@ -94,6 +116,8 @@ export default async function CompararPage({
     buscar.municipios({ limit: 50 }),
     tcepr.rankingMunicipios(clusterId, {
       limit: 200,
+      since,
+      until,
       ...(modalidade ? { modalidade } : {}),
     }),
   ]);
@@ -192,6 +216,37 @@ export default async function CompararPage({
           </div>
         </div>
 
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className="text-xs uppercase tracking-wide text-muted block">
+              Data inicial (assinatura) <span className="text-attention">*</span>
+            </label>
+            <input
+              type="date"
+              name="since"
+              defaultValue={since}
+              required
+              className="w-full border border-line rounded-md px-3 py-2 text-sm bg-paper"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs uppercase tracking-wide text-muted block">
+              Data final (assinatura) <span className="text-attention">*</span>
+            </label>
+            <input
+              type="date"
+              name="until"
+              defaultValue={until}
+              required
+              className="w-full border border-line rounded-md px-3 py-2 text-sm bg-paper"
+            />
+          </div>
+        </div>
+        <p className="text-xs text-muted">
+          Período obrigatório — comparação só faz sentido sobre janela
+          definida (default: ano de 2025 inteiro).
+        </p>
+
         <div className="space-y-1">
           <label className="text-xs uppercase tracking-wide text-muted block">
             Municípios (até 6) — escolha pelo menos 2
@@ -271,7 +326,7 @@ export default async function CompararPage({
       </form>
 
       <section>
-        <h2 className="text-xl font-semibold mb-3">
+        <h2 className="text-xl font-semibold mb-1">
           {clusterNome}
           {modalidade && (
             <span className="text-base text-muted font-normal">
@@ -282,6 +337,10 @@ export default async function CompararPage({
           {" — "}
           comparação entre {selecionados.length} municípios
         </h2>
+        <p className="text-xs text-muted mb-3">
+          Período: <strong>{fmtDateBR(since)}</strong> a{" "}
+          <strong>{fmtDateBR(until)}</strong> (data de assinatura do contrato)
+        </p>
         {selecionados.length < 2 && (
           <p className="text-sm text-attention">
             Selecione ao menos 2 municípios para comparar.
@@ -333,7 +392,7 @@ export default async function CompararPage({
                     <td className="py-2 px-3 text-right font-mono">
                       {r.encontrado ? (
                         <Link
-                          href={buildDrillHref(r.cd_tce, r.municipio, clusterId, clusterNome, modalidade)}
+                          href={buildDrillHref(r.cd_tce, r.municipio, clusterId, clusterNome, modalidade, since, until)}
                           className="no-underline hover:underline"
                           title={`Ver ${r.n_contratos} contratos`}
                         >
@@ -344,7 +403,7 @@ export default async function CompararPage({
                     <td className="py-2 px-3 text-right font-mono">
                       {r.encontrado ? (
                         <Link
-                          href={buildDrillHref(r.cd_tce, r.municipio, clusterId, clusterNome, modalidade)}
+                          href={buildDrillHref(r.cd_tce, r.municipio, clusterId, clusterNome, modalidade, since, until)}
                           className="no-underline hover:underline"
                           title="Ver contratos que somam este valor"
                         >
