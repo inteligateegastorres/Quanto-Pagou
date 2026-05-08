@@ -37,6 +37,13 @@ type SearchParams = {
   order?: string;
 };
 
+const ORDER_LABEL: Record<string, string> = {
+  valor_desc: "maior valor primeiro",
+  valor_asc: "menor valor primeiro",
+  data_desc: "mais recente primeiro",
+  data_asc: "mais antigo primeiro",
+};
+
 const CLUSTER_LABEL: Record<string, string> = {
   merenda_escolar: "Merenda escolar",
   combustivel_servicos: "Combustíveis",
@@ -184,6 +191,129 @@ export default async function ContratosPage({
         )}
       </header>
 
+      {/* Form de ordenacao + filtros editaveis. Preserva os IDs imutaveis
+          (cluster_id, fornecedor_cnpj, etc) via hidden inputs. */}
+      <form
+        action="/contratos"
+        method="get"
+        className="border border-line rounded-md p-4 bg-white space-y-3"
+      >
+        {/* Hidden: identificadores que nao queremos editar via form */}
+        {params.cluster_id && (
+          <input type="hidden" name="cluster_id" value={params.cluster_id} />
+        )}
+        {params.cluster_nome && (
+          <input type="hidden" name="cluster_nome" value={params.cluster_nome} />
+        )}
+        {params.cd_tce && <input type="hidden" name="cd_tce" value={params.cd_tce} />}
+        {params.cd_ibge && <input type="hidden" name="cd_ibge" value={params.cd_ibge} />}
+        {params.municipio_nome && (
+          <input type="hidden" name="municipio_nome" value={params.municipio_nome} />
+        )}
+        {params.fornecedor_cnpj && (
+          <input
+            type="hidden"
+            name="fornecedor_cnpj"
+            value={params.fornecedor_cnpj}
+          />
+        )}
+        {params.fornecedor_nome && (
+          <input
+            type="hidden"
+            name="fornecedor_nome"
+            value={params.fornecedor_nome}
+          />
+        )}
+        {params.orgao_codigo && (
+          <input type="hidden" name="orgao_codigo" value={params.orgao_codigo} />
+        )}
+        {params.orgao_nome && (
+          <input type="hidden" name="orgao_nome" value={params.orgao_nome} />
+        )}
+        {params.escola_slug && (
+          <input type="hidden" name="escola_slug" value={params.escola_slug} />
+        )}
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="space-y-1">
+            <label className="text-xs uppercase tracking-wide text-muted block">
+              Ordenação
+            </label>
+            <select
+              name="order"
+              defaultValue={order}
+              className="w-full border border-line rounded-md px-2 py-1.5 text-sm bg-paper"
+            >
+              <option value="valor_desc">Maior valor primeiro</option>
+              <option value="valor_asc">Menor valor primeiro</option>
+              <option value="data_desc">Mais recente primeiro</option>
+              <option value="data_asc">Mais antigo primeiro</option>
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs uppercase tracking-wide text-muted block">
+              Modalidade
+            </label>
+            <select
+              name="modalidade"
+              defaultValue={params.modalidade ?? ""}
+              className="w-full border border-line rounded-md px-2 py-1.5 text-sm bg-paper"
+            >
+              <option value="">todas</option>
+              <option value="pregao">pregão</option>
+              <option value="dispensa">dispensa</option>
+              <option value="concorrencia">concorrência</option>
+              <option value="tomada_precos">tomada de preços</option>
+              <option value="convite">convite</option>
+              <option value="inexigibilidade">inexigibilidade</option>
+              <option value="credenciamento">credenciamento</option>
+              <option value="chamamento_publico">chamamento público</option>
+              <option value="sem_modalidade">sem modalidade resolvida</option>
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs uppercase tracking-wide text-muted block">
+              Data inicial
+            </label>
+            <input
+              type="date"
+              name="since"
+              defaultValue={params.since ?? ""}
+              className="w-full border border-line rounded-md px-2 py-1.5 text-sm bg-paper"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs uppercase tracking-wide text-muted block">
+              Data final
+            </label>
+            <input
+              type="date"
+              name="until"
+              defaultValue={params.until ?? ""}
+              className="w-full border border-line rounded-md px-2 py-1.5 text-sm bg-paper"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-baseline justify-between flex-wrap gap-3">
+          <label className="text-xs text-muted flex items-baseline gap-2">
+            <input
+              type="checkbox"
+              name="em_quarentena"
+              value="true"
+              defaultChecked={params.em_quarentena === "true"}
+            />
+            Apenas contratos em quarentena (sem cluster identificado)
+          </label>
+          <button
+            type="submit"
+            className="border border-ink rounded-md px-4 py-1.5 text-sm no-underline hover:bg-ink hover:text-paper"
+          >
+            Aplicar
+          </button>
+        </div>
+      </form>
+
       {result && (
         <section className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
           <Stat
@@ -198,7 +328,7 @@ export default async function ContratosPage({
           <Stat
             label="Página"
             value={`${result.page} / ${totalPages || 1}`}
-            hint={`${result.limit} por página`}
+            hint={`${result.limit} por página · ${ORDER_LABEL[order] ?? order}`}
           />
         </section>
       )}
