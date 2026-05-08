@@ -194,6 +194,30 @@ export type FornecedorListItem = {
   n_municipios_distintos: number;
 };
 
+export type StatsPrModalidade = { modalidade: string; n_contratos: number };
+export type StatsPrTopCluster = {
+  cluster_id: string;
+  descricao_canonica: string | null;
+  n_contratos: number;
+};
+export type StatsPr = {
+  total_contratos: number;
+  total_municipios: number;
+  total_fornecedores: number;
+  n_em_cluster: number;
+  n_em_quarentena: number;
+  cobertura_cluster_pct: number;
+  valor_total_pr: string | null;
+  modalidades: StatsPrModalidade[];
+  top_clusters: StatsPrTopCluster[];
+  last_snapshot_at: string | null;
+  n_escolas_catalogadas: number;
+};
+
+export const stats = {
+  pr: () => jget<StatsPr>("/stats/pr"),
+};
+
 export const buscar = {
   municipios: (opts: { search?: string; limit?: number } = {}) => {
     const qs = new URLSearchParams();

@@ -152,6 +152,33 @@ class FornecedorMunicipioOut(BaseModel):
     n_orgaos_distintos: int
 
 
+class StatsPrModalidadeOut(BaseModel):
+    modalidade: str
+    n_contratos: int
+
+
+class StatsPrTopClusterOut(BaseModel):
+    cluster_id: str
+    descricao_canonica: str | None
+    n_contratos: int
+
+
+class StatsPrOut(BaseModel):
+    total_contratos: int
+    total_municipios: int
+    total_fornecedores: int
+    n_em_cluster: int
+    n_em_quarentena: int
+    cobertura_cluster_pct: float = Field(
+        description="Pct de contratos categorizados por keyword (vs quarentena)"
+    )
+    valor_total_pr: Decimal | None
+    modalidades: list[StatsPrModalidadeOut]
+    top_clusters: list[StatsPrTopClusterOut]
+    last_snapshot_at: str | None
+    n_escolas_catalogadas: int
+
+
 class MunicipioListItemOut(BaseModel):
     cd_tce: str
     cd_ibge: str | None
@@ -610,6 +637,128 @@ def contrato_detalhe(conn: ConnDep, raw_id: int) -> ContratoDetalheOut:
         snapshot_ingested_at=row["snapshot_ingested_at"],
         cd_ibge=row["cd_ibge"],
         municipio_nome=row["municipio_nome"],
+    )
+
+
+# ----------------------------- Stats PR (home) ------------------------
+
+
+@app.get("/stats/pr", response_model=StatsPrOut, tags=["meta"])
+def stats_pr(conn: ConnDep) -> StatsPrOut:
+    """Agregados em vivo do pipeline TCE-PR — alimenta a home sem
+    hardcode. Usa um único conn pra evitar N round-trips.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                COUNT(*) AS total_contratos,
+                COUNT(DISTINCT raw_payload->>'cd_tce') AS total_municipios,
+                ROUND(SUM(valor_total)::numeric, 2) AS valor_total
+            FROM raw.compras
+            WHERE source = 'tce_pr/contrato'
+            """
+        )
+        agg = cur.fetchone()
+        # Fornecedores: contagem (cnpj, nome) distinta — alinha com a mart
+        # mart_fornecedores_municipio (CPFs mascarados pelo TCE-PR colidem
+        # no mesmo cnpj entre pessoas fisicas distintas; nome desambigua).
+        cur.execute(
+            """
+            SELECT COUNT(*) AS n
+            FROM (
+                SELECT DISTINCT fornecedor_cnpj, fornecedor_nome
+                FROM raw.compras
+                WHERE source = 'tce_pr/contrato' AND fornecedor_cnpj IS NOT NULL
+            ) sub
+            """
+        )
+        n_fornecedores = cur.fetchone()["n"]
+
+        cur.execute(
+            """
+            SELECT
+                COUNT(*) FILTER (WHERE em_quarentena = FALSE) AS n_cluster,
+                COUNT(*) FILTER (WHERE em_quarentena = TRUE)  AS n_quarentena
+            FROM analytics.item_canonical ic
+            JOIN raw.compras rc ON rc.id = ic.raw_id
+            WHERE rc.source = 'tce_pr/contrato'
+            """
+        )
+        cobertura = cur.fetchone()
+
+        cur.execute(
+            """
+            SELECT COALESCE(modalidade, 'sem_modalidade') AS modalidade,
+                   COUNT(*) AS n
+            FROM raw.compras
+            WHERE source = 'tce_pr/contrato'
+            GROUP BY 1
+            ORDER BY n DESC
+            """
+        )
+        modalidades = [
+            StatsPrModalidadeOut(modalidade=r["modalidade"], n_contratos=r["n"])
+            for r in cur.fetchall()
+        ]
+
+        cur.execute(
+            """
+            SELECT ic.cluster_id,
+                   cr.descricao_canonica,
+                   COUNT(*) AS n
+            FROM analytics.item_canonical ic
+            JOIN raw.compras rc ON rc.id = ic.raw_id
+            LEFT JOIN analytics.cluster_registry cr
+                ON cr.cluster_id = ic.cluster_id
+               AND cr.cluster_version = ic.cluster_version
+            WHERE rc.source = 'tce_pr/contrato'
+              AND ic.em_quarentena = FALSE
+            GROUP BY 1, 2
+            ORDER BY n DESC
+            LIMIT 5
+            """
+        )
+        top_clusters = [
+            StatsPrTopClusterOut(
+                cluster_id=r["cluster_id"],
+                descricao_canonica=r["descricao_canonica"],
+                n_contratos=r["n"],
+            )
+            for r in cur.fetchall()
+        ]
+
+        cur.execute(
+            """
+            SELECT MAX(ingested_at)::text AS last
+            FROM raw.snapshots
+            WHERE source = 'tce_pr/contrato' AND status = 'completed'
+            """
+        )
+        last = cur.fetchone()["last"]
+
+        cur.execute(
+            "SELECT COUNT(DISTINCT escola_slug) AS n FROM analytics.escola_mencao"
+        )
+        n_escolas = cur.fetchone()["n"]
+
+    n_cluster = cobertura["n_cluster"] or 0
+    n_quarentena = cobertura["n_quarentena"] or 0
+    total_canon = n_cluster + n_quarentena
+    cobertura_pct = round(n_cluster / total_canon, 4) if total_canon else 0.0
+
+    return StatsPrOut(
+        total_contratos=agg["total_contratos"] or 0,
+        total_municipios=agg["total_municipios"] or 0,
+        total_fornecedores=n_fornecedores or 0,
+        n_em_cluster=n_cluster,
+        n_em_quarentena=n_quarentena,
+        cobertura_cluster_pct=cobertura_pct,
+        valor_total_pr=agg["valor_total"],
+        modalidades=modalidades,
+        top_clusters=top_clusters,
+        last_snapshot_at=last,
+        n_escolas_catalogadas=n_escolas or 0,
     )
 
 

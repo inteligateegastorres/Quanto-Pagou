@@ -8,6 +8,7 @@ import {
   type MunicipioInfo,
   type RankingMunicipio,
 } from "@/lib/tcepr";
+import { qd, fmtDate, type Gazette } from "@/lib/qd";
 import { fmtBRL, fmtBRLCompact } from "@/lib/api";
 import { Stat } from "@/lib/Stat";
 
@@ -53,13 +54,18 @@ export default async function MunicipioPage({
   // mostramos so info basica.
   const cdIbge = info.cd_ibge;
 
-  const [resumoR, fornecedoresR, contratosClusterR] = cdIbge
+  // Tenta tambem buscar diarios oficiais (Querido Diario). Cobertura
+  // depende do municipio: para alguns o QD nao tem dados, para outros
+  // (Curitiba: 8.942 diarios desde 1993) tem volume bom.
+  // Fetch best-effort — se falhar, secao some.
+  const [resumoR, fornecedoresR, contratosClusterR, gazettesR] = cdIbge
     ? await Promise.allSettled([
         tcepr.resumo(cdIbge),
         tcepr.fornecedores(cdIbge, 10),
         tcepr.contratosPorCluster(cdIbge, { limit: 50 }),
+        qd.gazettes(cdIbge, { size: 5 }),
       ])
-    : [null, null, null];
+    : [null, null, null, null];
 
   const resumo =
     resumoR && resumoR.status === "fulfilled" ? resumoR.value : null;
@@ -69,6 +75,10 @@ export default async function MunicipioPage({
     contratosClusterR && contratosClusterR.status === "fulfilled"
       ? contratosClusterR.value
       : [];
+  const gazettes =
+    gazettesR && gazettesR.status === "fulfilled" ? gazettesR.value.gazettes : [];
+  const totalGazettes =
+    gazettesR && gazettesR.status === "fulfilled" ? gazettesR.value.total_gazettes : 0;
 
   const porCluster = new Map<string, ContratoMunicipio[]>();
   for (const row of contratosCluster) {
@@ -252,6 +262,31 @@ export default async function MunicipioPage({
         </section>
       )}
 
+      {gazettes.length > 0 && (
+        <section className="border-t border-line pt-8 space-y-4">
+          <header className="space-y-1">
+            <h2 className="text-xl font-semibold">Diários oficiais</h2>
+            <p className="text-sm text-muted">
+              Últimos atos publicados pelo município via{" "}
+              <a
+                href="https://queridodiario.ok.org.br/"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Querido Diário
+              </a>{" "}
+              (OKBR). Cobertura total: {totalGazettes.toLocaleString("pt-BR")}{" "}
+              diários indexados.
+            </p>
+          </header>
+          <ol className="space-y-3">
+            {gazettes.map((g) => (
+              <GazetteRow key={`${g.date}-${g.edition}-${g.url}`} gazette={g} />
+            ))}
+          </ol>
+        </section>
+      )}
+
       <section className="text-sm text-muted border-t border-line pt-6">
         Fonte: TCE-PR PIT (ZIP semanal com 399 municípios). Imprecisões em{" "}
         <Link href="/correcoes">/correcoes</Link>.
@@ -423,4 +458,34 @@ function prettyCluster(clusterId: string): string {
     obras_edificacao: "Obras de edificação",
   };
   return map[clusterId] ?? clusterId;
+}
+
+function GazetteRow({ gazette }: { gazette: Gazette }) {
+  return (
+    <li className="border border-line rounded-md p-4 bg-white space-y-2">
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <div className="text-sm">
+          <strong>{fmtDate(gazette.date)}</strong>
+          {gazette.edition && (
+            <span className="text-muted"> · edição {gazette.edition}</span>
+          )}
+          {gazette.is_extra_edition && (
+            <span className="text-attention"> · extra</span>
+          )}
+        </div>
+        <a href={gazette.url} target="_blank" rel="noreferrer" className="text-xs">
+          PDF original →
+        </a>
+      </div>
+      {gazette.excerpts && gazette.excerpts.length > 0 && (
+        <div className="text-sm leading-relaxed text-muted space-y-1">
+          {gazette.excerpts.slice(0, 2).map((excerpt, i) => (
+            <p key={i} className="border-l-2 border-attention/30 pl-3">
+              {excerpt.length > 320 ? excerpt.slice(0, 320) + "…" : excerpt}
+            </p>
+          ))}
+        </div>
+      )}
+    </li>
+  );
 }

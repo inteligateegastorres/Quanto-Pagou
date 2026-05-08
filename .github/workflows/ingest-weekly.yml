@@ -1,0 +1,163 @@
+# Ingestão semanal — Quanto Pagou
+#
+# Roda toda quarta às 06:00 UTC (03:00 BRT).
+# Pipeline:
+#   1. Aplica migrations idempotentes (000-004)
+#   2. Ingere TCE-PR ZIP do ano corrente (399 municípios, ~55s)
+#   3. Tenta ingerir Compras.gov.br últimos 7 dias (best-effort: API
+#      é instável; se cair tudo, não falha o job)
+#   4. Roda analytics.build_marts (canonicalização + refresh MVs +
+#      escola_mencao)
+#   5. Faz upload dos snapshots brutos para Cloudflare R2 (best-effort)
+#   6. Imprime sumário no Job Summary do GH Actions
+#
+# Pode rodar manual via:
+#   gh workflow run ingest-weekly.yml
+#   gh workflow run ingest-weekly.yml -f ano=2025
+#
+# Secrets necessários (Settings > Secrets and variables > Actions):
+#   - DATABASE_URL              (Supabase pooler URL, transaction mode)
+#   - R2_BUCKET                 (ex: quantopagou-snapshots)
+#   - R2_ENDPOINT               (https://<conta>.r2.cloudflarestorage.com)
+#   - R2_ACCESS_KEY_ID
+#   - R2_SECRET_ACCESS_KEY
+#
+# Variáveis (não-secret):
+#   - COMPRAS_API_BASE          default: https://dadosabertos.compras.gov.br
+
+name: ingest-weekly
+
+on:
+  schedule:
+    # Quartas às 06:00 UTC. Cron do GH usa timezone UTC.
+    - cron: "0 6 * * 3"
+  workflow_dispatch:
+    inputs:
+      ano:
+        description: "Ano do ZIP TCE-PR (default: ano corrente)"
+        required: false
+        type: string
+      skip_compras:
+        description: "Pula ingest Compras.gov.br federal"
+        required: false
+        type: boolean
+        default: false
+      skip_r2:
+        description: "Pula upload de snapshots para R2"
+        required: false
+        type: boolean
+        default: false
+
+# Concorrência: garante uma rodada por vez (evita corrida com workflow_dispatch
+# durante o cron, ou builds paralelos sobrepondo o mesmo banco).
+concurrency:
+  group: ingest-weekly
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      COMPRAS_API_BASE: ${{ vars.COMPRAS_API_BASE || 'https://dadosabertos.compras.gov.br' }}
+      SNAPSHOTS_DIR: ./snapshots
+      LOG_LEVEL: INFO
+      ANO: ${{ inputs.ano || '' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: pip install --quiet uv
+
+      - name: uv sync (dependencies)
+        run: python -m uv sync
+
+      - name: Resolver ano TCE-PR
+        id: ano
+        run: |
+          if [ -z "$ANO" ]; then
+            echo "ano=$(date -u +%Y)" >> "$GITHUB_OUTPUT"
+          else
+            echo "ano=$ANO" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Aplicar migrations (idempotentes)
+        run: |
+          for f in sql/000_init.sql sql/001_analytics.sql sql/002_resilience.sql sql/003_tce_pr.sql sql/004_escolas.sql; do
+            echo "→ $f"
+            python -m uv run python -c "
+          import psycopg, os, sys
+          with open('$f', encoding='utf-8') as fh:
+              sql = fh.read()
+          with psycopg.connect(os.environ['DATABASE_URL'], autocommit=True) as conn:
+              conn.execute(sql)
+          print('OK')
+          "
+          done
+
+      - name: Ingest TCE-PR (ano ${{ steps.ano.outputs.ano }})
+        run: |
+          python -m uv run python scripts/run_tce_pr.py \
+            --ano ${{ steps.ano.outputs.ano }} --quiet \
+            | tee /tmp/tce_pr.log
+
+      - name: Ingest Compras.gov.br (últimos 7 dias, best-effort)
+        if: ${{ !inputs.skip_compras }}
+        continue-on-error: true
+        run: |
+          # Window-splitting já lida com instabilidade do backend deles.
+          # Exit code 2 = todas as janelas falharam; nesse caso, segue.
+          bash scripts/sync_compras.sh || true
+
+      - name: Build marts (canonicalização + refresh MVs + escolas)
+        run: |
+          python -m uv run python -m analytics.build_marts | tee /tmp/build_marts.log
+
+      - name: Upload snapshots para R2 (best-effort)
+        if: ${{ !inputs.skip_r2 && env.R2_BUCKET != '' }}
+        continue-on-error: true
+        env:
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          # Cloudflare R2 é S3-compatible; usa aws-cli com --endpoint-url.
+          if [ -z "$R2_BUCKET" ] || [ -z "$R2_ENDPOINT" ]; then
+            echo "R2 secrets ausentes — pulando upload"
+            exit 0
+          fi
+          if [ -d "./snapshots" ]; then
+            aws s3 sync ./snapshots "s3://${R2_BUCKET}/snapshots/" \
+              --endpoint-url "${R2_ENDPOINT}" \
+              --no-progress
+          else
+            echo "Diretório ./snapshots vazio — nada a subir"
+          fi
+
+      - name: Sumário no GH Actions
+        if: always()
+        run: |
+          {
+            echo "## Ingest Weekly — ${{ steps.ano.outputs.ano }}"
+            echo ""
+            echo "**Status:** ${{ job.status }}"
+            echo ""
+            echo "### TCE-PR"
+            tail -10 /tmp/tce_pr.log 2>/dev/null || echo "(sem log)"
+            echo ""
+            echo "### Build marts"
+            tail -15 /tmp/build_marts.log 2>/dev/null || echo "(sem log)"
+            echo ""
+            echo "Próxima execução automática: quarta 06:00 UTC"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { api, fmtBRL, fmtBRLCompact } from "@/lib/api";
 import { Stat } from "@/lib/Stat";
-import { buscar } from "@/lib/tcepr";
+import { buscar, stats as statsApi } from "@/lib/tcepr";
 
 export const dynamic = "force-dynamic";
 
@@ -19,13 +19,14 @@ const CLUSTERS_FEDERAIS = new Set([
 export default async function HomePage() {
   // Federal: insight + ranking de diesel mantidos.
   // Estadual: stats agregadas + top 5 municipios + top 5 fornecedores.
-  const [clustersR, paresDieselR, rankingDieselR, topMunR, topFornR] =
+  const [clustersR, paresDieselR, rankingDieselR, topMunR, topFornR, statsR] =
     await Promise.allSettled([
       api.clusters(),
       api.paresFor("oleo_diesel_s10"),
       api.rankingOrgaos("oleo_diesel_s10", "mediana_desc", 50),
       buscar.municipios({ limit: 5 }),
       buscar.fornecedores({ limit: 5 }),
+      statsApi.pr(),
     ]);
 
   const clusters = clustersR.status === "fulfilled" ? clustersR.value : [];
@@ -34,6 +35,7 @@ export default async function HomePage() {
     rankingDieselR.status === "fulfilled" ? rankingDieselR.value : [];
   const topMun = topMunR.status === "fulfilled" ? topMunR.value : [];
   const topForn = topFornR.status === "fulfilled" ? topFornR.value : [];
+  const stats = statsR.status === "fulfilled" ? statsR.value : null;
 
   const rankingDiesel = rankingDieselFull.slice(0, 5);
   const medianaPares = paresDiesel[0]?.mediana ? Number(paresDiesel[0].mediana) : null;
@@ -106,12 +108,39 @@ export default async function HomePage() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
           <Stat
             label="Contratos no banco"
-            value={(156679).toLocaleString("pt-BR")}
-            hint="ano 2025-2026"
+            value={
+              stats?.total_contratos.toLocaleString("pt-BR") ?? "—"
+            }
+            hint={
+              stats?.last_snapshot_at
+                ? `atualizado ${fmtDateBR(stats.last_snapshot_at)}`
+                : "ano 2025-2026"
+            }
           />
-          <Stat label="Municípios cobertos" value="397 / 399" hint="2 com XML inválido" />
-          <Stat label="Fornecedores únicos" value={(121526).toLocaleString("pt-BR")} />
-          <Stat label="Categorias-piloto" value="19" hint="cluster por keyword" />
+          <Stat
+            label="Municípios cobertos"
+            value={stats ? `${stats.total_municipios} / 399` : "—"}
+            hint={stats && stats.total_municipios < 399 ? `${399 - stats.total_municipios} com XML inválido` : undefined}
+          />
+          <Stat
+            label="Fornecedores únicos"
+            value={
+              stats?.total_fornecedores.toLocaleString("pt-BR") ?? "—"
+            }
+          />
+          <Stat
+            label="Cobertura cluster"
+            value={
+              stats
+                ? `${(stats.cobertura_cluster_pct * 100).toFixed(0)}%`
+                : "—"
+            }
+            hint={
+              stats
+                ? `${stats.top_clusters.length} top categorias · ${stats.n_escolas_catalogadas} escolas no catálogo`
+                : "cluster por keyword"
+            }
+          />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -387,5 +416,10 @@ export default async function HomePage() {
       </section>
     </div>
   );
+}
+
+function fmtDateBR(iso: string): string {
+  const [y, m, d] = iso.slice(0, 10).split("-");
+  return `${d}/${m}/${y}`;
 }
 
