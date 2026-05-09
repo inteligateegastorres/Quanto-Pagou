@@ -257,12 +257,13 @@ def run(dry_run: bool = False) -> dict[str, Any]:
                 len(rows_para_inserir),
             )
 
-            # Refresh marts (federal + tce_pr).
+            # Refresh marts (federal + tce_pr + manchetes Camada 1).
             for mv in (
                 "analytics.mart_pares",
                 "analytics.mart_orgao_cluster",
                 "analytics.mart_contratos_municipio",
                 "analytics.mart_fornecedores_municipio",
+                "analytics.cluster_discrepancias",  # Camada 1 das manchetes
             ):
                 console.print(f"[dim]REFRESH MATERIALIZED VIEW {mv}...[/]")
                 try:

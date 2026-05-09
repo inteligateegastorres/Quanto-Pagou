@@ -585,6 +585,59 @@ def quarentena_resumo(conn: ConnDep) -> list[QuarentenaResumoOut]:
         return [QuarentenaResumoOut(**r) for r in cur.fetchall()]
 
 
+# ----------------------------- Manchetes ------------------------------------
+
+
+class ManchteOut(BaseModel):
+    """Uma manchete algoritmica selecionada pelo YAML versionado."""
+
+    rank_no_dia: int
+    cluster_id: str
+    cluster_version: str
+    cd_tce: str
+    cd_ibge: str | None
+    municipio_nome: str | None
+    porte: str | None
+    populacao: int | None
+    n_sujeito: int
+    valor_total_sujeito: Decimal
+    med_sujeito: Decimal
+    med_cluster: Decimal
+    spread: Decimal
+    iqr_sujeito: Decimal
+    iqr_cluster: Decimal
+    comparab_proxy: Decimal
+    rank_score: Decimal
+    parametros_hash: str
+    refresh_em: str
+
+
+@app.get("/manchetes", response_model=list[ManchteOut], tags=["meta"])
+def get_manchetes(conn: ConnDep) -> list[ManchteOut]:
+    """Top N manchetes ativas (algoritmo, nao curadoria). Ordenadas por rank.
+
+    Selecao definida em config/manchete_v*.yaml. Cada linha carrega
+    parametros_hash pra auditoria — permite reconstruir contra qual config
+    a manchete foi gerada.
+
+    Para tunar: editar YAML e rodar
+      python -m uv run python -m analytics.manchetes refresh
+    """
+    sql = """
+        SELECT
+            rank_no_dia, cluster_id, cluster_version, cd_tce, cd_ibge,
+            municipio_nome, porte, populacao, n_sujeito, valor_total_sujeito,
+            med_sujeito, med_cluster, spread, iqr_sujeito, iqr_cluster,
+            comparab_proxy, rank_score, parametros_hash,
+            refresh_em::text AS refresh_em
+        FROM analytics.manchete
+        ORDER BY rank_no_dia
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql)
+        return [ManchteOut(**r) for r in cur.fetchall()]
+
+
 @app.get("/item/{raw_id}", response_model=ItemOut, tags=["dados"])
 def get_item(conn: ConnDep, raw_id: int) -> ItemOut:
     sql = """

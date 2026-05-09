@@ -1,0 +1,59 @@
+# Parametros de selecao de manchetes (PLANO §13.5/14.X).
+#
+# Hash deste YAML acompanha cada manchete em analytics.manchete_publicada,
+# permitindo "reconstruir o que estava no ar em DD/MM/YYYY com qual config".
+#
+# Calibrado em 2026-05-09 via dry-run (perfil C: 8 manchetes).
+# Ver discussao completa no PLANO §13.5 e ablation no FINDINGS.
+#
+# Para re-tunar: editar este arquivo, rodar
+#   python -m uv run python -m analytics.manchetes refresh
+# (NAO precisa recomputar Camada 1).
+
+versao: v1
+descricao: "v1 conservador. Mira ~8 manchetes excelentes, nao 200 discutiveis."
+
+# ---- Filtros estatisticos basicos (compatibilidade com mart_pares) -------
+confianca_min: 0.6
+excluir_quarentena: true
+
+# Trap descoberto na exploracao 2.c medicamentos: municipios que hospedam
+# consorcios regionais (CONSUD, CONIMS) aparecem desproporcionalmente grandes
+# nos rankings per capita. Filtro aplicado na propria Camada 1 (SQL).
+# Mantido aqui apenas como documentacao da decisao.
+exclui_consorcios_regex_doc: 'cons[óo]rcio|consud|conims'
+
+# ---- Filtros do CLUSTER --------------------------------------------------
+# Cluster precisa ter massa estatistica minima e nao ser categoria muito
+# heterogenea (proxy de comparabilidade ainda fraco no v1; ver findings).
+cluster_n_min: 1000
+# Proxy v1 satura entre 0.66 e 0.99 (HHI fornecedor ~0, spread temporal ~1).
+# 0.75 derruba clusters com modalidade muito misturada (transporte, obras
+# pavimentacao, materiais hidraulicos). 0.65 = piso permissivo.
+# Calibrado com perfil C do dry-run (8 manchetes excelentes).
+comparab_min: 0.75
+
+# ---- Filtros do SUJEITO (municipio) --------------------------------------
+sujeito_n_min: 30          # alto = manchete robusta
+sujeito_valor_total_min: 500000
+# Exige municipio catalogado (com populacao IBGE 2022 carregada).
+# Garantido pelo INNER JOIN com analytics.municipio_pr.
+
+# ---- Metrica de discrepancia ---------------------------------------------
+# spread = mediana_sujeito / mediana_cluster
+spread_min: 5.0
+
+# IQR ratio interno do sujeito (p75/p25). Filtro absoluto:
+iqr_sujeito_min: 2.0
+# Filtro relativo (β): IQR_sujeito nao pode ser maior que k * IQR_cluster.
+# Distingue "sujeito desproporcionalmente heterogeneo" (artefato) de
+# "categoria naturalmente heterogenea" (legitimo).
+iqr_relativo_max_k: 2.0
+
+# ---- Ranking entre candidatos --------------------------------------------
+# Score = ln(volume) * ln(spread) * comparab_proxy
+# Usa logs pra evitar 1 fator dominar; comparab penaliza categorias ruins.
+ranker_formula: "ln(valor_total_sujeito) * ln(spread) * comparab_proxy"
+
+# Top N publicados na pagina /manchetes (resto fica no banco mas nao exibe).
+top_n_publicado: 20
