@@ -156,6 +156,7 @@ export type ContratoSearchFilters = {
   escola_slug?: string;
   source?: string;
   em_quarentena?: boolean;
+  q?: string;
   since?: string;
   until?: string;
   page?: number;

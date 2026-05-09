@@ -696,6 +696,10 @@ def contratos_search(
     em_quarentena: bool | None = Query(
         default=None, description="None=ambos; True/False filtra"
     ),
+    q: str | None = Query(
+        default=None,
+        description="Busca textual livre em descricao (ILIKE %q%). Ex: 'UPA Centro', 'Hospital Municipal', 'Escola Carlos Gomes'. Case-insensitive.",
+    ),
     since: str | None = Query(default=None, description="contract_date >= YYYY-MM-DD"),
     until: str | None = Query(default=None, description="contract_date <= YYYY-MM-DD"),
     page: int = Query(default=1, ge=1),
@@ -759,6 +763,10 @@ def contratos_search(
     if until:
         where.append("rc.contract_date <= %s::date")
         args.append(until)
+    if q:
+        # ILIKE com substring em ambos os lados; case-insensitive nativo.
+        where.append("rc.descricao ILIKE %s")
+        args.append(f"%{q}%")
 
     where_sql = " AND ".join(where)
 

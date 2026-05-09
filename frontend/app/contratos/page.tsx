@@ -33,6 +33,7 @@ type SearchParams = {
   since?: string;
   until?: string;
   em_quarentena?: string;
+  q?: string;
   page?: string;
   order?: string;
 };
@@ -83,6 +84,7 @@ export default async function ContratosPage({
     fornecedor_cnpj: params.fornecedor_cnpj,
     orgao_codigo: params.orgao_codigo,
     escola_slug: params.escola_slug,
+    q: params.q,
     since: params.since,
     until: params.until,
     em_quarentena: params.em_quarentena === "true" ? true : undefined,
@@ -145,6 +147,12 @@ export default async function ContratosPage({
     const inicio = params.since ? fmtDateBR(params.since) : "—";
     const fim = params.until ? fmtDateBR(params.until) : "—";
     labels.push({ tipo: "período", valor: `${inicio} a ${fim}` });
+  }
+  if (params.q) {
+    labels.push({ tipo: "busca", valor: `"${params.q}"` });
+  }
+  if (params.em_quarentena === "true") {
+    labels.push({ tipo: "filtro", valor: "em quarentena" });
   }
 
   const totalPages = result ? Math.ceil(result.total / result.limit) : 0;
@@ -233,6 +241,21 @@ export default async function ContratosPage({
         {params.escola_slug && (
           <input type="hidden" name="escola_slug" value={params.escola_slug} />
         )}
+
+        <div className="space-y-1">
+          <label className="text-xs uppercase tracking-wide text-muted block">
+            Busca textual no objeto do contrato
+          </label>
+          <input
+            name="q"
+            defaultValue={params.q ?? ""}
+            placeholder='ex: "UPA Centro", "Hospital Municipal", "Escola Carlos Gomes", "creche infantil"'
+            className="w-full border border-line rounded-md px-3 py-2 text-sm bg-paper"
+          />
+          <p className="text-xs text-muted">
+            Substring case-insensitive na descrição. Acentos importam (UPA ≠ upa? — não, é case-insensitive; mas "Sao" ≠ "São").
+          </p>
+        </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="space-y-1">
