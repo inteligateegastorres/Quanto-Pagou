@@ -189,6 +189,16 @@ function ManchteCard({ m }: { m: Manchete }) {
 
       <div className="flex items-baseline gap-2 flex-wrap text-xs pt-1">
         <Badge
+          label={`persistente em ${m.janelas_passadas}/3 janelas`}
+          tone={m.janelas_passadas === 3 ? "ok" : "muted"}
+          tooltip={
+            `Spread acima do limiar em ${m.janelas_passadas} de 3 janelas (90d, 180d, 365d). ` +
+            `90d=${m.spread_90d ? Number(m.spread_90d).toFixed(1) + "x" : "sem dados"}, ` +
+            `180d=${m.spread_180d ? Number(m.spread_180d).toFixed(1) + "x" : "sem dados"}, ` +
+            `365d=${m.spread_365d ? Number(m.spread_365d).toFixed(1) + "x" : "sem dados"}.`
+          }
+        />
+        <Badge
           label={`IQR sujeito ${Number(m.iqr_sujeito).toFixed(1)} · cluster ${Number(m.iqr_cluster).toFixed(1)}`}
           tone="muted"
           tooltip="Variacao interna (p75/p25). Filtro relativo: IQR sujeito <= 2x IQR cluster."

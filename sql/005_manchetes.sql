@@ -20,12 +20,22 @@ CREATE SCHEMA IF NOT EXISTS analytics;
 DROP MATERIALIZED VIEW IF EXISTS analytics.cluster_discrepancias CASCADE;
 
 CREATE MATERIALIZED VIEW analytics.cluster_discrepancias AS
-WITH base AS (
+WITH ref AS (
+    -- Data de referencia para janelas temporais = MAX(contract_date) do
+    -- snapshot atual. NAO usa NOW() porque o snapshot pode estar atrasado
+    -- (ex: ultima ingestao foi ha 10 dias; janela de 90d com NOW() teria
+    -- buraco). Vide PLANO §13.5 ponto #3 (estabilidade temporal).
+    SELECT MAX(contract_date) AS max_date
+    FROM raw.compras
+    WHERE source = 'tce_pr/contrato' AND contract_date IS NOT NULL
+),
+base AS (
     SELECT
         ic.cluster_id,
         ic.cluster_version,
         rc.raw_payload->>'cd_tce'                AS cd_tce,
         rc.valor_total::numeric                  AS valor,
+        rc.contract_date,
         rc.modalidade,
         rc.fornecedor_cnpj,
         EXTRACT(MONTH FROM rc.contract_date)     AS mes
@@ -55,6 +65,16 @@ cluster_stats AS (
         percentile_cont(0.5)  WITHIN GROUP (ORDER BY valor)::numeric      AS med_cluster,
         percentile_cont(0.25) WITHIN GROUP (ORDER BY valor)::numeric      AS p25_cluster,
         percentile_cont(0.75) WITHIN GROUP (ORDER BY valor)::numeric      AS p75_cluster,
+        -- Medianas por janela temporal (estabilidade)
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY valor)
+            FILTER (WHERE contract_date >= (SELECT max_date FROM ref) - INTERVAL '90 days')
+            ::numeric AS med_cluster_90d,
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY valor)
+            FILTER (WHERE contract_date >= (SELECT max_date FROM ref) - INTERVAL '180 days')
+            ::numeric AS med_cluster_180d,
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY valor)
+            FILTER (WHERE contract_date >= (SELECT max_date FROM ref) - INTERVAL '365 days')
+            ::numeric AS med_cluster_365d,
         (
             SELECT SUM(s*s) FROM (
                 SELECT COUNT(*)::numeric / NULLIF(SUM(COUNT(*)) OVER (), 0) AS s
@@ -84,7 +104,20 @@ sujeito_stats AS (
         percentile_cont(0.5)  WITHIN GROUP (ORDER BY valor)::numeric      AS med_sujeito,
         percentile_cont(0.25) WITHIN GROUP (ORDER BY valor)::numeric      AS p25_sujeito,
         percentile_cont(0.75) WITHIN GROUP (ORDER BY valor)::numeric      AS p75_sujeito,
-        MAX(valor)                                                        AS max_sujeito
+        MAX(valor)                                                        AS max_sujeito,
+        -- Medianas por janela temporal (NULL se janela nao tem contratos)
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY valor)
+            FILTER (WHERE contract_date >= (SELECT max_date FROM ref) - INTERVAL '90 days')
+            ::numeric AS med_sujeito_90d,
+        COUNT(*) FILTER (WHERE contract_date >= (SELECT max_date FROM ref) - INTERVAL '90 days') AS n_sujeito_90d,
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY valor)
+            FILTER (WHERE contract_date >= (SELECT max_date FROM ref) - INTERVAL '180 days')
+            ::numeric AS med_sujeito_180d,
+        COUNT(*) FILTER (WHERE contract_date >= (SELECT max_date FROM ref) - INTERVAL '180 days') AS n_sujeito_180d,
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY valor)
+            FILTER (WHERE contract_date >= (SELECT max_date FROM ref) - INTERVAL '365 days')
+            ::numeric AS med_sujeito_365d,
+        COUNT(*) FILTER (WHERE contract_date >= (SELECT max_date FROM ref) - INTERVAL '365 days') AS n_sujeito_365d
     FROM base
     GROUP BY cluster_id, cluster_version, cd_tce
 )
@@ -118,6 +151,22 @@ SELECT
         * c.spread_temporal,
         1.0/3.0
     )                                                        AS comparab_proxy,
+    -- Medianas por janela temporal (para teste de estabilidade)
+    s.med_sujeito_90d,
+    s.med_sujeito_180d,
+    s.med_sujeito_365d,
+    s.n_sujeito_90d,
+    s.n_sujeito_180d,
+    s.n_sujeito_365d,
+    c.med_cluster_90d,
+    c.med_cluster_180d,
+    c.med_cluster_365d,
+    -- Spreads por janela (NULL se janela nao tem dados suficientes).
+    -- Filtro de estabilidade (>=N janelas com spread acima do limiar) acontece
+    -- em manchetes.py; aqui e so disponibilizar os 3 valores.
+    (s.med_sujeito_90d  / NULLIF(c.med_cluster_90d, 0))      AS spread_90d,
+    (s.med_sujeito_180d / NULLIF(c.med_cluster_180d, 0))     AS spread_180d,
+    (s.med_sujeito_365d / NULLIF(c.med_cluster_365d, 0))     AS spread_365d,
     NOW()                                                    AS calculado_em
 FROM sujeito_stats s
 JOIN cluster_stats c
@@ -158,6 +207,12 @@ CREATE TABLE IF NOT EXISTS analytics.manchete (
     iqr_cluster          NUMERIC NOT NULL,
     comparab_proxy       NUMERIC NOT NULL,
 
+    -- Estabilidade temporal (spreads em 3 janelas; NULL se janela vazia)
+    spread_90d           NUMERIC,
+    spread_180d          NUMERIC,
+    spread_365d          NUMERIC,
+    janelas_passadas     INT NOT NULL DEFAULT 0,    -- quantas das 3 janelas passaram spread_min
+
     -- Score do ranker (ln(volume) * ln(spread) * comparab)
     rank_score           NUMERIC NOT NULL,
     rank_no_dia          INT NOT NULL,
@@ -166,6 +221,12 @@ CREATE TABLE IF NOT EXISTS analytics.manchete (
     parametros_hash      TEXT NOT NULL,
     refresh_em           TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Adicionar colunas se tabela ja existia (migration idempotente).
+ALTER TABLE analytics.manchete ADD COLUMN IF NOT EXISTS spread_90d        NUMERIC;
+ALTER TABLE analytics.manchete ADD COLUMN IF NOT EXISTS spread_180d       NUMERIC;
+ALTER TABLE analytics.manchete ADD COLUMN IF NOT EXISTS spread_365d       NUMERIC;
+ALTER TABLE analytics.manchete ADD COLUMN IF NOT EXISTS janelas_passadas  INT NOT NULL DEFAULT 0;
 
 CREATE INDEX IF NOT EXISTS idx_manchete_rank
     ON analytics.manchete (rank_no_dia);

@@ -50,6 +50,17 @@ iqr_sujeito_min: 2.0
 # "categoria naturalmente heterogenea" (legitimo).
 iqr_relativo_max_k: 2.0
 
+# ---- Estabilidade temporal (PLANO §13.5 ponto #3) ------------------------
+# Manchete so publica se spread_min for atingido em pelo menos N das 3
+# janelas (90d, 180d, 365d) anteriores ao MAX(contract_date) do snapshot.
+# Reduz manchete que existe so por um mes estranho.
+estabilidade_min_janelas: 2  # de 3 janelas
+
+# Janela com n_sujeito muito baixo (<min_n) e ignorada (conta como NULL,
+# nao falha). Cluster novo cujo n=20 esta espalhado em 365d nao deve ser
+# punido por nao ter dados em 90d.
+estabilidade_min_n_janela: 5
+
 # ---- Ranking entre candidatos --------------------------------------------
 # Score = ln(volume) * ln(spread) * comparab_proxy
 # Usa logs pra evitar 1 fator dominar; comparab penaliza categorias ruins.

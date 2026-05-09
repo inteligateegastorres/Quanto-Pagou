@@ -11,6 +11,7 @@ import {
 import { qd, fmtDate, type Gazette } from "@/lib/qd";
 import { fmtBRL, fmtBRLCompact } from "@/lib/api";
 import { Stat } from "@/lib/Stat";
+import { ManchteContextBox } from "@/lib/ManchteContext";
 
 export const dynamic = "force-dynamic";
 
@@ -151,6 +152,8 @@ export default async function MunicipioPage({
           <Link href="/metodologia">metodologia</Link>.
         </p>
       </header>
+
+      <ManchteContextBox cd_tce={info.cd_tce} />
 
       {!resumo && (
         <section className="border border-line rounded-md p-4 text-sm text-muted">

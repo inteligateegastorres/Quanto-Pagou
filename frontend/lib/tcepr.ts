@@ -444,6 +444,10 @@ export type Manchete = {
   iqr_sujeito: string;
   iqr_cluster: string;
   comparab_proxy: string;
+  spread_90d: string | null;
+  spread_180d: string | null;
+  spread_365d: string | null;
+  janelas_passadas: number;
   rank_score: string;
   parametros_hash: string;
   refresh_em: string;

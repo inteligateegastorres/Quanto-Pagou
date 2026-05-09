@@ -607,6 +607,12 @@ class ManchteOut(BaseModel):
     iqr_sujeito: Decimal
     iqr_cluster: Decimal
     comparab_proxy: Decimal
+    # Estabilidade temporal: spreads em 3 janelas (NULL se janela vazia)
+    # + count de quantas passaram o spread_min do YAML.
+    spread_90d: Decimal | None
+    spread_180d: Decimal | None
+    spread_365d: Decimal | None
+    janelas_passadas: int
     rank_score: Decimal
     parametros_hash: str
     refresh_em: str
@@ -628,7 +634,8 @@ def get_manchetes(conn: ConnDep) -> list[ManchteOut]:
             rank_no_dia, cluster_id, cluster_version, cd_tce, cd_ibge,
             municipio_nome, porte, populacao, n_sujeito, valor_total_sujeito,
             med_sujeito, med_cluster, spread, iqr_sujeito, iqr_cluster,
-            comparab_proxy, rank_score, parametros_hash,
+            comparab_proxy, spread_90d, spread_180d, spread_365d,
+            janelas_passadas, rank_score, parametros_hash,
             refresh_em::text AS refresh_em
         FROM analytics.manchete
         ORDER BY rank_no_dia

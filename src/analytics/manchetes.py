@@ -50,35 +50,49 @@ def carregar_config(path: str) -> dict[str, Any]:
 
 # SQL que aplica thresholds do YAML sobre a Camada 1.
 # Os parametros chegam como dict via psycopg %(nome)s placeholders.
+#
+# Estabilidade temporal: a clausula janelas_passadas conta para quantas das
+# 3 janelas (90d, 180d, 365d) o spread_Nd >= spread_min (ignorando janelas
+# com amostra menor que estabilidade_min_n_janela). Filtra >= min_janelas.
 _SELECT_CANDIDATOS = """
+WITH base AS (
+    SELECT
+        cd.*,
+        m.cd_ibge,
+        m.nome AS municipio_nome,
+        m.porte,
+        m.populacao,
+        -- Conta janelas que passam: spread_Nd >= spread_min E n_sujeito_Nd >= min_n_janela.
+        -- NULL spread_Nd (janela vazia) nao conta como passou nem como falhou.
+        (
+            (CASE WHEN cd.n_sujeito_90d  >= %(estabilidade_min_n_janela)s
+                  AND cd.spread_90d  >= %(spread_min)s THEN 1 ELSE 0 END) +
+            (CASE WHEN cd.n_sujeito_180d >= %(estabilidade_min_n_janela)s
+                  AND cd.spread_180d >= %(spread_min)s THEN 1 ELSE 0 END) +
+            (CASE WHEN cd.n_sujeito_365d >= %(estabilidade_min_n_janela)s
+                  AND cd.spread_365d >= %(spread_min)s THEN 1 ELSE 0 END)
+        ) AS janelas_passadas
+    FROM analytics.cluster_discrepancias cd
+    JOIN analytics.municipio_pr m ON m.cd_tce = cd.cd_tce
+)
 SELECT
-    cd.cluster_id,
-    cd.cluster_version,
-    cd.cd_tce,
-    m.cd_ibge,
-    m.nome           AS municipio_nome,
-    m.porte,
-    m.populacao,
-    cd.n_sujeito,
-    cd.valor_total_sujeito,
-    cd.med_sujeito,
-    cd.med_cluster,
-    cd.spread,
-    cd.iqr_sujeito,
-    cd.iqr_cluster,
-    cd.comparab_proxy,
+    cluster_id, cluster_version, cd_tce, cd_ibge, municipio_nome,
+    porte, populacao,
+    n_sujeito, valor_total_sujeito, med_sujeito, med_cluster,
+    spread, iqr_sujeito, iqr_cluster, comparab_proxy,
+    spread_90d, spread_180d, spread_365d, janelas_passadas,
     -- Score do ranker: ln(volume) * ln(spread) * comparab.
     -- ln para evitar 1 fator dominar; comparab penaliza categoria ruidosa.
-    (LN(cd.valor_total_sujeito) * LN(cd.spread) * cd.comparab_proxy) AS rank_score
-FROM analytics.cluster_discrepancias cd
-JOIN analytics.municipio_pr m ON m.cd_tce = cd.cd_tce
-WHERE cd.n_cluster        >= %(cluster_n_min)s
-  AND cd.n_sujeito        >= %(sujeito_n_min)s
-  AND cd.valor_total_sujeito >= %(sujeito_valor_total_min)s
-  AND cd.spread           >= %(spread_min)s
-  AND cd.iqr_sujeito      >= %(iqr_sujeito_min)s
-  AND cd.iqr_sujeito      <= %(iqr_relativo_max_k)s * cd.iqr_cluster
-  AND cd.comparab_proxy   >= %(comparab_min)s
+    (LN(valor_total_sujeito) * LN(spread) * comparab_proxy) AS rank_score
+FROM base
+WHERE n_cluster        >= %(cluster_n_min)s
+  AND n_sujeito        >= %(sujeito_n_min)s
+  AND valor_total_sujeito >= %(sujeito_valor_total_min)s
+  AND spread           >= %(spread_min)s
+  AND iqr_sujeito      >= %(iqr_sujeito_min)s
+  AND iqr_sujeito      <= %(iqr_relativo_max_k)s * iqr_cluster
+  AND comparab_proxy   >= %(comparab_min)s
+  AND janelas_passadas >= %(estabilidade_min_janelas)s
 ORDER BY rank_score DESC
 """
 
@@ -119,6 +133,7 @@ def refresh(config: dict[str, Any], dry_run: bool = False) -> dict[str, Any]:
                         municipio_nome, porte, populacao,
                         n_sujeito, valor_total_sujeito, med_sujeito, med_cluster,
                         spread, iqr_sujeito, iqr_cluster, comparab_proxy,
+                        spread_90d, spread_180d, spread_365d, janelas_passadas,
                         rank_score, rank_no_dia, parametros_hash
                     ) VALUES (
                         %(manchete_id)s, %(cluster_id)s, %(cluster_version)s,
@@ -126,6 +141,8 @@ def refresh(config: dict[str, Any], dry_run: bool = False) -> dict[str, Any]:
                         %(populacao)s, %(n_sujeito)s, %(valor_total_sujeito)s,
                         %(med_sujeito)s, %(med_cluster)s, %(spread)s,
                         %(iqr_sujeito)s, %(iqr_cluster)s, %(comparab_proxy)s,
+                        %(spread_90d)s, %(spread_180d)s, %(spread_365d)s,
+                        %(janelas_passadas)s,
                         %(rank_score)s, %(rank_no_dia)s, %(parametros_hash)s
                     )
                     """,

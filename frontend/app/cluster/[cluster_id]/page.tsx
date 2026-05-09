@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { api, fmtBRL } from "@/lib/api";
+import { ManchteContextBox } from "@/lib/ManchteContext";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,8 @@ export default async function ClusterPage({
           categoria {cluster.categoria} · {cluster.n_itens} itens analisados
         </p>
       </header>
+
+      <ManchteContextBox cluster_id={cluster_id} />
 
       {pares && (
         <section className="border border-line rounded-md p-6 bg-white">
