@@ -40,6 +40,7 @@ export default function RootLayout({
               Quanto Pagou
             </Link>
             <nav className="text-sm text-muted flex gap-5 flex-wrap justify-end">
+              <Link href="/instituicoes">Instituições</Link>
               <Link href="/buscar">Buscar</Link>
               <Link href="/comparar">Comparar</Link>
               <Link href="/dispensas">Dispensas</Link>

@@ -164,6 +164,52 @@ export type ContratoSearchFilters = {
   order?: string;
 };
 
+export type InstituicaoFornecedor = {
+  fornecedor_cnpj: string;
+  fornecedor_nome: string | null;
+  n_contratos: number;
+  valor_total: string;
+  n_municipios: number;
+};
+
+export type InstituicaoOrgao = {
+  orgao_codigo: string;
+  orgao_nome: string;
+  cd_tce: string | null;
+  cd_ibge: string | null;
+  municipio: string | null;
+  n_contratos: number;
+  valor_total: string;
+};
+
+export type InstituicaoObjeto = {
+  cd_tce: string | null;
+  cd_ibge: string | null;
+  municipio: string | null;
+  orgao_codigo: string;
+  orgao_nome: string;
+  n_contratos: number;
+  valor_total: string;
+};
+
+export type InstituicoesSearch = {
+  q: string;
+  fornecedores: InstituicaoFornecedor[];
+  orgaos: InstituicaoOrgao[];
+  objetos: InstituicaoObjeto[];
+  total_fornecedores: number;
+  total_orgaos: number;
+  total_objeto_contratos: number;
+  valor_total_objeto: string;
+};
+
+export const instituicoes = {
+  search: (q: string, limit = 20) =>
+    jget<InstituicoesSearch>(
+      `/instituicoes/search?q=${encodeURIComponent(q)}&limit=${limit}`,
+    ),
+};
+
 export const contratos = {
   search: (filters: ContratoSearchFilters = {}) => {
     const qs = new URLSearchParams();

@@ -197,6 +197,46 @@ class FornecedorListItemOut(BaseModel):
     n_municipios_distintos: int
 
 
+class InstituicaoFornecedorOut(BaseModel):
+    fornecedor_cnpj: str
+    fornecedor_nome: str | None
+    n_contratos: int
+    valor_total: Decimal
+    n_municipios: int
+
+
+class InstituicaoOrgaoOut(BaseModel):
+    orgao_codigo: str
+    orgao_nome: str
+    cd_tce: str | None
+    cd_ibge: str | None
+    municipio: str | None
+    n_contratos: int
+    valor_total: Decimal
+
+
+class InstituicaoObjetoOut(BaseModel):
+    """Contratos cujo objeto menciona o termo, agrupados por (municipio, orgao)."""
+    cd_tce: str | None
+    cd_ibge: str | None
+    municipio: str | None
+    orgao_codigo: str
+    orgao_nome: str
+    n_contratos: int
+    valor_total: Decimal
+
+
+class InstituicoesSearchOut(BaseModel):
+    q: str
+    fornecedores: list[InstituicaoFornecedorOut]
+    orgaos: list[InstituicaoOrgaoOut]
+    objetos: list[InstituicaoObjetoOut]
+    total_fornecedores: int
+    total_orgaos: int
+    total_objeto_contratos: int
+    valor_total_objeto: Decimal
+
+
 class ContratoSearchItemOut(BaseModel):
     raw_id: int
     source_id: str | None
@@ -672,6 +712,126 @@ def contrato_detalhe(conn: ConnDep, raw_id: int) -> ContratoDetalheOut:
         snapshot_ingested_at=row["snapshot_ingested_at"],
         cd_ibge=row["cd_ibge"],
         municipio_nome=row["municipio_nome"],
+    )
+
+
+# ----------------------------- Instituicoes (busca unica) -------------
+
+
+@app.get(
+    "/instituicoes/search",
+    response_model=InstituicoesSearchOut,
+    tags=["meta"],
+)
+def instituicoes_search(
+    conn: ConnDep,
+    q: str = Query(..., min_length=2, description="Termo de busca (>= 2 chars)"),
+    limit: int = Query(default=20, ge=1, le=50, description="Por seção"),
+) -> InstituicoesSearchOut:
+    """Busca instituicoes em 3 contextos simultaneos:
+      1. Fornecedores (quem recebeu) — agrupa por (cnpj, nome)
+      2. Orgaos contratantes (quem comprou) — agrupa por orgao + municipio
+      3. Termos no objeto (ex: UPA, escola, hospital) — agrupa por
+         (municipio, orgao) os contratos cujo dsObjeto menciona o termo.
+
+    Retorna top N de cada um + contagens totais. Cada item linka pra
+    pagina canonica (/fornecedor, /municipio, /contratos).
+    """
+    like = f"%{q}%"
+
+    # 1. FORNECEDORES — busca em fornecedor_nome
+    sql_forn = """
+        SELECT
+            rc.fornecedor_cnpj,
+            MAX(rc.fornecedor_nome) AS fornecedor_nome,
+            COUNT(*) AS n_contratos,
+            ROUND(SUM(rc.valor_total)::numeric, 2) AS valor_total,
+            COUNT(DISTINCT rc.raw_payload->>'cd_tce') AS n_municipios
+        FROM raw.compras rc
+        WHERE rc.fornecedor_cnpj IS NOT NULL
+          AND rc.fornecedor_nome ILIKE %s
+        GROUP BY rc.fornecedor_cnpj
+        ORDER BY valor_total DESC NULLS LAST
+        LIMIT %s
+    """
+    sql_forn_count = """
+        SELECT COUNT(DISTINCT rc.fornecedor_cnpj) AS n
+        FROM raw.compras rc
+        WHERE rc.fornecedor_cnpj IS NOT NULL AND rc.fornecedor_nome ILIKE %s
+    """
+
+    # 2. ORGAOS — busca em orgao_nome
+    sql_orgao = """
+        SELECT
+            rc.orgao_codigo,
+            MAX(rc.orgao_nome) AS orgao_nome,
+            rc.raw_payload->>'cd_tce' AS cd_tce,
+            mp.cd_ibge,
+            COALESCE(mp.nome, rc.raw_payload->>'municipio') AS municipio,
+            COUNT(*) AS n_contratos,
+            ROUND(SUM(rc.valor_total)::numeric, 2) AS valor_total
+        FROM raw.compras rc
+        LEFT JOIN analytics.municipio_pr mp ON mp.cd_tce = rc.raw_payload->>'cd_tce'
+        WHERE rc.orgao_nome ILIKE %s
+        GROUP BY rc.orgao_codigo, rc.raw_payload->>'cd_tce', mp.cd_ibge, mp.nome,
+                 rc.raw_payload->>'municipio'
+        ORDER BY valor_total DESC NULLS LAST
+        LIMIT %s
+    """
+    sql_orgao_count = """
+        SELECT COUNT(DISTINCT rc.orgao_codigo) AS n
+        FROM raw.compras rc WHERE rc.orgao_nome ILIKE %s
+    """
+
+    # 3. OBJETO — agrupa por (municipio, orgao)
+    sql_obj = """
+        SELECT
+            rc.raw_payload->>'cd_tce' AS cd_tce,
+            mp.cd_ibge,
+            COALESCE(mp.nome, rc.raw_payload->>'municipio') AS municipio,
+            rc.orgao_codigo,
+            MAX(rc.orgao_nome) AS orgao_nome,
+            COUNT(*) AS n_contratos,
+            ROUND(SUM(rc.valor_total)::numeric, 2) AS valor_total
+        FROM raw.compras rc
+        LEFT JOIN analytics.municipio_pr mp ON mp.cd_tce = rc.raw_payload->>'cd_tce'
+        WHERE rc.descricao ILIKE %s
+        GROUP BY rc.raw_payload->>'cd_tce', mp.cd_ibge, mp.nome,
+                 rc.raw_payload->>'municipio', rc.orgao_codigo
+        ORDER BY valor_total DESC NULLS LAST
+        LIMIT %s
+    """
+    sql_obj_count = """
+        SELECT COUNT(*) AS n_contratos,
+               COALESCE(SUM(valor_total), 0) AS valor
+        FROM raw.compras WHERE descricao ILIKE %s
+    """
+
+    with conn.cursor() as cur:
+        cur.execute(sql_forn, (like, limit))
+        fornecedores = [InstituicaoFornecedorOut(**r) for r in cur.fetchall()]
+        cur.execute(sql_forn_count, (like,))
+        n_forn = cur.fetchone()["n"]
+
+        cur.execute(sql_orgao, (like, limit))
+        orgaos = [InstituicaoOrgaoOut(**r) for r in cur.fetchall()]
+        cur.execute(sql_orgao_count, (like,))
+        n_orgao = cur.fetchone()["n"]
+
+        cur.execute(sql_obj, (like, limit))
+        objetos = [InstituicaoObjetoOut(**r) for r in cur.fetchall()]
+        cur.execute(sql_obj_count, (like,))
+        obj_count = cur.fetchone()
+
+    return InstituicoesSearchOut(
+        q=q,
+        fornecedores=fornecedores,
+        orgaos=orgaos,
+        objetos=objetos,
+        total_fornecedores=n_forn or 0,
+        total_orgaos=n_orgao or 0,
+        total_objeto_contratos=obj_count["n_contratos"] or 0,
+        valor_total_objeto=obj_count["valor"] or Decimal(0),
     )
 
 
