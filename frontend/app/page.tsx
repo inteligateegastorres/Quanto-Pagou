@@ -58,11 +58,61 @@ export default async function HomePage() {
 
   return (
     <div className="space-y-16">
-      {/* HERO */}
-      <section className="space-y-5">
-        <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight leading-tight">
-          Quanto o governo pagou pela mesma coisa?
+      {/* ZONA A — MANCHETE (PLANO §13.3, Zona A) — manchete editorial
+          atualiza junto com /insight/merenda-escolar-pr. Hardcoded por
+          design: editorial e esteira separada (memoria feedback_editorial_decoupling). */}
+      <section className="space-y-4 border border-attention/30 bg-attention/5 rounded-md p-6">
+        <p className="text-xs uppercase tracking-wide text-attention font-medium">
+          Manchete da semana · 08 de maio de 2026 · TCE-PR
+        </p>
+        <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight leading-tight">
+          Em Maringá, a mediana de contrato de merenda escolar foi <span className="text-attention">10× maior</span> que em Cascavel em 2025.
         </h1>
+        <p className="text-muted max-w-2xl text-base leading-relaxed">
+          Mesma categoria, mesmo período, fonte primária TCE-PR. Mesmo porte
+          de cidade (ambas grandes, &gt; 300 mil habitantes). Os números,
+          sem adjetivos.
+        </p>
+        <div className="grid grid-cols-3 gap-3 max-w-md text-sm bg-paper border border-line rounded p-3">
+          <div>
+            <p className="text-xs text-muted">Maringá (mediana)</p>
+            <p className="font-mono font-semibold">R$ 321,7 mil</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted">Cascavel (mediana)</p>
+            <p className="font-mono font-semibold">R$ 32,3 mil</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted">Spread</p>
+            <p className="font-mono font-semibold text-attention">~10×</p>
+          </div>
+        </div>
+        <div className="flex gap-3 flex-wrap pt-1">
+          <Link
+            href="/insight/merenda-escolar-pr"
+            className="border border-ink rounded-md px-4 py-2 text-sm no-underline hover:bg-ink hover:text-paper"
+          >
+            Ler análise completa →
+          </Link>
+          <Link
+            href="/contratos?cluster_id=merenda_escolar&cluster_nome=Merenda%20escolar&since=2025-01-01&until=2025-12-31"
+            className="border border-line rounded-md px-4 py-2 text-sm no-underline hover:border-ink"
+          >
+            Ver os contratos →
+          </Link>
+        </div>
+        <p className="text-xs text-muted pt-1">
+          {stats?.total_contratos.toLocaleString("pt-BR") ?? "156k"} contratos
+          · {stats?.total_municipios ?? 397} municípios PR
+          {stats?.last_snapshot_at && ` · atualizado ${fmtDateBR(stats.last_snapshot_at)}`}
+        </p>
+      </section>
+
+      {/* HERO — pitch breve. Era h1 antes da Zona A; agora h2 sub-narrativa. */}
+      <section className="space-y-5">
+        <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight leading-tight">
+          Quanto o governo pagou pela mesma coisa?
+        </h2>
         <p className="text-muted max-w-2xl text-lg leading-relaxed">
           Plataforma cívica que compara preços de contratos públicos
           brasileiros. Mostra os números com fonte primária — sem adjetivos.

@@ -46,6 +46,14 @@ export default async function EscolaSlugPage({
   const municipios = new Set(contratos.map((c) => c.municipio).filter(Boolean));
   const orgaos = new Set(contratos.map((c) => c.orgao_nome).filter(Boolean));
 
+  // PLANO §13.8 Abordagem 1: ordenar contratos por valor desc para
+  // dar visibilidade ao maior investimento. Catalogo de transparencia,
+  // nao ranking de eficiencia (nao sabemos m2, n_alunos, escopo).
+  const contratosOrdenados = [...contratos].sort(
+    (a, b) => Number(b.valor_total ?? 0) - Number(a.valor_total ?? 0),
+  );
+  const maiorValor = Number(contratosOrdenados[0]?.valor_total ?? 0);
+
   return (
     <article className="space-y-10 max-w-3xl">
       <header className="space-y-2">
@@ -67,19 +75,27 @@ export default async function EscolaSlugPage({
 
       <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
         <Stat label="Contratos" value={String(contratos.length)} />
-        <Stat label="Volume total" value={fmtBRL(totalValor.toFixed(2))} />
+        <Stat
+          label="Investimento total"
+          value={fmtBRL(totalValor.toFixed(2))}
+          hint={maiorValor > 0 ? `maior contrato: ${fmtBRL(maiorValor)}` : undefined}
+        />
         <Stat label="Municípios" value={String(municipios.size)} />
         <Stat label="Órgãos contratantes" value={String(orgaos.size)} />
       </section>
 
       <section className="space-y-2">
-        <h2 className="text-base font-semibold">Contratos vinculados</h2>
+        <h2 className="text-base font-semibold">
+          Contratos vinculados <span className="text-xs text-muted font-normal">(maior valor primeiro)</span>
+        </h2>
         <p className="text-xs text-muted">
           Cada linha leva ao detalhe completo + link para a fonte primária
-          (ZIP do TCE-PR). Padrão = qual regex casou (auditoria).
+          (ZIP do TCE-PR). Padrão = qual regex casou (auditoria). Volume
+          total não indica eficiência — não temos m², n.º de alunos ou
+          escopo de cada obra para comparar.
         </p>
         <ol className="space-y-2">
-          {contratos.map((c) => (
+          {contratosOrdenados.map((c) => (
             <li key={c.raw_id}>
               <Link
                 href={`/contrato/${c.raw_id}`}
