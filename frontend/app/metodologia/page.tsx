@@ -23,6 +23,37 @@ export default function MetodologiaPage() {
         pública.
       </p>
 
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-4 not-prose">
+        <div className="border border-ok/40 bg-ok/5 rounded-md p-4 space-y-2">
+          <h2 className="text-sm font-semibold text-ok uppercase tracking-wide">
+            Por que confiar
+          </h2>
+          <ul className="list-disc pl-4 space-y-1 text-sm text-ink">
+            <li>Fonte primária pública (link direto em todo contrato).</li>
+            <li>Snapshot bruto imutável (SHA-256), reprocessável sem nova coleta.</li>
+            <li>Comparação só com confiança ≥ 0.75; resto fica fora de ranking.</li>
+            <li>Mediana + IQR, nunca σ ingênuo (caudas longas).</li>
+            <li>Quarentena visível com motivo, nunca esconde dado.</li>
+            <li>
+              <Link href="/correcoes">/correcoes</Link> lista o que já corrigimos
+              com data e delta — auditável.
+            </li>
+          </ul>
+        </div>
+        <div className="border border-attention/40 bg-attention/5 rounded-md p-4 space-y-2">
+          <h2 className="text-sm font-semibold text-attention uppercase tracking-wide">
+            Por que duvidar
+          </h2>
+          <ul className="list-disc pl-4 space-y-1 text-sm text-ink">
+            <li>Cobertura keyword: ~34% no PR. O resto fica visível mas sem cluster — não compare entre os 34% e o resto.</li>
+            <li>Granularidade só por contrato (TCE não publica item-a-item) — não dá pra dizer &quot;preço unitário do feijão&quot;.</li>
+            <li>Modalidade resolve em ~65% via JOIN; 35% sem modalidade conhecida.</li>
+            <li>Federal hoje é fixture sintética — API real está instável. PR é real.</li>
+            <li>Cluster por palavra-chave é Tier 1.5; embeddings (Tier 2) entram em fase futura.</li>
+          </ul>
+        </div>
+      </section>
+
       <Section title="Fontes">
         <p>
           Duas esteiras coexistem hoje:
@@ -117,6 +148,62 @@ export default function MetodologiaPage() {
           com confiança ≥ 0.75. O badge <code>cluster_version=v1</code>{" "}
           aparece em toda comparação.
         </p>
+
+        <details className="border border-line rounded-md p-4 bg-paper not-prose">
+          <summary className="cursor-pointer font-medium text-ink">
+            Como ler um número (4 minutos)
+          </summary>
+          <div className="mt-3 space-y-3 text-sm">
+            <div>
+              <h3 className="font-semibold">1. O que você está vendo</h3>
+              <p className="text-muted">
+                O preço pago num contrato e o intervalo onde caem 50% dos
+                contratos parecidos. Comparação por <strong>preço por unidade-base</strong>{" "}
+                depois de normalizar embalagem e quantidade (federal) ou{" "}
+                <strong>valor por contrato</strong> entre municípios pares (TCE-PR).
+              </p>
+            </div>
+            <div>
+              <h3 className="font-semibold">2. Por que faixa, não número único</h3>
+              <p className="text-muted">
+                Preço público varia legitimamente: distância do fornecedor,
+                urgência, escala. Em vez de fingir um &quot;preço justo&quot;,
+                mostramos onde a maioria caiu (p25 a p75). Estar fora da faixa{" "}
+                <strong>não é prova de irregularidade</strong> — é convite para
+                olhar a fonte primária.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-semibold">3. As 3 cores que você verá</h3>
+              <ul className="list-disc pl-5 text-muted space-y-1">
+                <li>
+                  <strong className="text-ok">Dentro da faixa (p25-p75):</strong>{" "}
+                  preço pago compatível com pares.
+                </li>
+                <li>
+                  <strong className="text-attention">Acima de p75:</strong>{" "}
+                  acima de 75% dos pares. Vale entender por quê (urgência?
+                  exclusividade? volume baixo?).
+                </li>
+                <li>
+                  <strong className="text-attention">Acima de 2× a mediana:</strong>{" "}
+                  outlier. Convite mais forte para investigar. Mesmo aqui{" "}
+                  <strong>não chamamos de irregular</strong> — chamamos de
+                  &quot;vale checar&quot;.
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="font-semibold">4. O que pode estar errado neste número</h3>
+              <p className="text-muted">
+                Cluster errado, unidade mal parseada, contrato com escopo
+                atípico. Se você acha que erramos,{" "}
+                <Link href="/correcoes">conte em /correcoes</Link> — é como
+                melhoramos. SLA 48h.
+              </p>
+            </div>
+          </div>
+        </details>
       </Section>
 
       <Section title="Guardrail §6.5 — perfis de fornecedor">
@@ -191,6 +278,11 @@ export default function MetodologiaPage() {
           Esteira <strong>editorial</strong> (irregular, dispara
           correção rápida) e esteira <strong>automática</strong>{" "}
           (semanal, agregados refeitos) são separadas.
+        </p>
+        <p className="text-muted">
+          Esta metodologia é versionada. Mudanças com impacto em comparações
+          públicas geram entrada em <Link href="/correcoes">/correcoes</Link>{" "}
+          — abrir essa página antes de confiar no resto é boa prática.
         </p>
       </Section>
     </article>
