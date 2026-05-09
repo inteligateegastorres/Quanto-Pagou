@@ -2,8 +2,56 @@
 
 > Plataforma cívica para monitorar gastos públicos brasileiros e identificar possíveis desvios.
 
-**Versão:** v4 (2026-05-02)
+**Versão:** v5 (2026-05-09)
 **Status:** Decisões confirmadas. Foco agora é **executar, não planejar mais**.
+
+---
+
+## v5 (2026-05-09) — propostas na mesa
+
+Sessão de planejamento focada em narrativa pública, badges de confiança e
+roadmap editorial. **Propostas, não decisões** — implementação pendente
+de aprovação caso a caso. Ver §14 para detalhamento.
+
+**Frente narrativa (refina §6 sem invalidar):**
+
+- **1.a Modal "Como interpretar"** — 4 quadros pedagógicos (o que vê /
+  por que faixa / 3 cores / o que pode estar errado) plugado em
+  `/metodologia` e ao lado de toda barra p25-p75.
+- **1.b Seção "Por que confiar / Por que duvidar"** — duas colunas
+  simétricas no topo de `/metodologia`. Vacina anti-objeção.
+- **1.c Reescrita da home** — invertida para "manchete → evidência →
+  navegue". Manchete acima do fold (puxa do insight da semana). Stats
+  viram footer da manchete; categorias monitoradas saem da home.
+- **1.d `/correcoes` como vitrine** — reformular a página explicando o
+  processo + formulário inline + promoção em `/metodologia` + badge
+  "corrigido em X" nas páginas afetadas. Schema `analytics.correcoes`
+  novo (id, item/cluster, data, delta, fonte).
+
+**Frente roadmap (executável):**
+
+- **2.a 5 templates de insight + cron weekly de candidatos automáticos**
+  (T1 spread extremo, T2 fornecedor concentrado, T3 dispensa repetida,
+  T4 categoria subindo, T5 contrato mais caro). Espalha gatilhos de
+  descoberta em cluster/município/fornecedor/contratos.
+- **2.b Família de 6 badges de confiança** — confiança alta/média/sem
+  cluster + fonte primária + atualizado em + cluster_version. Mapeamento
+  página-a-página. Refina §6.2.
+- **2.c Próxima manchete editorial = medicamentos por habitante** (plano
+  A). Plano B (combustível com âncora ANP) **inviável**: TCE-PR não
+  publica volume em litros, só valor por contrato.
+- **2.d Comparação por escola revisitada:** Abordagem 1 (transparência de
+  volume por escola, em `/escolas/[slug]`) implementar. Abordagem 3
+  (comparar tipo de intervenção entre escolas) mantida adiada com
+  critérios de reabertura listados em §14.
+
+**Decisões pendentes (precisam você):**
+
+1. 1.c: aplicar a home toda ou só Zona A primeiro?
+2. 1.d: implementar schema `analytics.correcoes` agora ou esperar 1º relato?
+3. 2.a: publicar candidatos automáticos sem revisão ou só curados?
+4. 2.c: confirma plano A (medicamentos)? Próximo passo é query exploratória.
+5. 2.d: confirma Abordagem 1 + adiar Abordagem 3?
 
 ---
 
@@ -670,7 +718,188 @@ Página por CNPJ (`/fornecedor/{cnpj}/{slug}`):
 
 ---
 
-## 13. Changelog
+## 13. Propostas v5 — detalhamento (2026-05-09)
+
+Detalha as 8 propostas resumidas no topo. Conservar até a implementação
+fechar — depois, o que vingou vira parágrafo nas seções §6.X
+correspondentes e este §13 pode ser removido.
+
+### 13.1 Modal "Como interpretar" (refina §6.3)
+
+**Onde:** `<details>` em `/metodologia` + CTA "Como ler?" ao lado de
+toda barra p25-p75 (cards `/item/[raw_id]`, `/cluster/[id]`, `/comparar`).
+
+**Quatro quadros, ordem fixa:**
+
+1. **O que você está vendo** — preço pago + intervalo onde caem 50% dos
+   pares. Comparação por unidade-base normalizada.
+2. **Por que faixa, não número único** — preço público varia
+   legitimamente; estar fora da faixa não é prova de irregularidade.
+3. **As 3 cores que você verá** — verde (dentro p25-p75) / amarelo
+   (acima p75, vale entender por quê) / vermelho (≥ 2× mediana, vale
+   checar — nunca "irregular").
+4. **O que pode estar errado neste número** — fontes de erro (cluster
+   errado, unidade mal parseada, escopo atípico) + link `/correcoes`
+   + formulário de relato.
+
+### 13.2 "Por que confiar / Por que duvidar" (refina §6.3)
+
+**Onde:** após `<h1>` em `/metodologia`, antes de "Fontes". Duas colunas
+simétricas (mesma quantidade de bullets, mesmo peso visual).
+
+**Confiar:** fonte primária pública · snapshot SHA-256 · confiança ≥
+0.75 · mediana+IQR não σ · quarentena visível · `/correcoes` datada.
+
+**Duvidar:** cobertura keyword 34% no PR · granularidade só por contrato
+(não item-a-item) · modalidade ~65% · federal hoje fixture · cluster
+Tier 1.5 (embeddings adiados).
+
+### 13.3 Home reescrita (refina §6.4)
+
+**3 zonas (vs 4 atuais), inversão de ordem:**
+
+- **A · Manchete (above fold):** insight da semana com número de
+  impacto (ex: "Maringá pagou 10× mais por kg de merenda que Cascavel").
+  CTAs "Ler análise" + "Ver os contratos". Stats descem para footer
+  da manchete ("156k contratos · 397 municípios").
+- **B · Evidência (a régua):** 4 bullets explicando como sabemos.
+  Vacina anti-objeção complementar a 14.2.
+- **C · Navegue:** 4 entradas (município/fornecedor/categoria/escola)
+  + busca rápida + lista de destaques. Categorias monitoradas SAEM da
+  home (vão pra footer ou `/categorias`).
+- **D · Boletim + rodapé:** mantém atual.
+
+**Risco:** manchete fica datada. Mitigação: cron weekly de 13.5 alimenta
+o slot da manchete com hierarquia (curado vivo > T1 da semana > último
+curado).
+
+### 13.4 `/correcoes` como vitrine (refina §6.6)
+
+**3 movimentos:**
+
+- **Reformular página:** texto sobre o processo (4 passos) +
+  formulário inline + linha "sem correções = ninguém pegou erro grande
+  ainda, não é vazio". Hoje é só "sem correções até agora".
+- **Promover em `/metodologia`:** linha na coluna "confiar" de 13.2
+  + linha ao final ("metodologia é versionada, mudanças geram entrada
+  em `/correcoes`").
+- **Badge "corrigido em X"** nas páginas afetadas: banner discreto
+  com link pra entrada específica de `/correcoes`. Inverte estigma em
+  prova.
+
+**Schema novo:** `analytics.correcoes(id, item_id|cluster_id, data,
+delta_antes, delta_depois, descricao, fonte)` — ~10 linhas SQL.
+
+### 13.5 Roadmap viral (refina §6.4 e ganchos §4)
+
+**5 templates ranqueados por viralidade × esforço:**
+
+| # | Template | Onde | Risco |
+|---|---|---|---|
+| T1 | Spread extremo da semana | `mart_pares` × município porte similar | Baixo |
+| T2 | Fornecedor concentrado | `/fornecedor/{cnpj}/por-municipio` ≥10 | Médio |
+| T3 | Dispensa repetida | JOIN modalidade+fornecedor+município | Alto |
+| T4 | Categoria subindo | série temporal `contract_date` por cluster | Baixo |
+| T5 | Contrato mais caro do mês | `MAX(valor_total)` semanal | Muito baixo |
+
+**Cadência:** cron weekly gera 3 candidatos automáticos (T1/T4/T5) →
+fila em `analytics.insight_candidato` → publicação em `/destaques/`
+(URL nova, badge "gerado automaticamente"). Curados continuam em
+`/insight/`.
+
+**Gatilhos de descoberta:** banner "spread mais extremo" em
+`/cluster/[id]`; banner "acima/abaixo da mediana em N categorias" em
+`/municipio/[cd]`; banner "aparece em N municípios" em
+`/fornecedor/[cnpj]`; topo da `/contratos` mostra top 3 por valor.
+
+### 13.6 Família de badges (refina §6.2)
+
+**6 badges com gramática consistente** (ícone + label + tooltip 1 frase):
+
+| Badge | Quando | Cor |
+|---|---|---|
+| 🟢 Confiança alta | `confianca ≥ 0.85` | verde |
+| 🟡 Confiança média | `0.6 ≤ confianca < 0.85` | amarelo |
+| 🔴 Sem cluster | `cluster_id IS NULL` ou quarentena | cinza/vermelho claro |
+| 🌐 Fonte primária | sempre que tem `source_url` | azul |
+| ⏱ Atualizado em X | sempre, em listas/cards | cinza |
+| 📐 cluster_version=v1 | toda comparação | neutro |
+
+**Conflito de hierarquia:** se confiança é baixa **E** valor está acima
+de p75, confiança vem primeiro (mais à esquerda) — confiança baixa já
+é por si só o sinal, não chamar atenção pra valor.
+
+**Implementação:** componente `frontend/components/Badge.tsx` + helper
+`lib/badges.ts`. Zero mudança na API (campos já existem em
+`item_canonical`).
+
+### 13.7 Próxima manchete: medicamentos por habitante
+
+**Critério vencedor:** alta diferença + categoria reconhecível + dado
+robusto + ângulo narrativo claro.
+
+**Plano A — vencedor:** "5 municípios PR que mais gastaram com
+medicamentos por habitante em 2025". Cluster maduro, alta cobertura,
+denominador IBGE 2022 disponível.
+
+**Plano B — descartado:** "Combustível com âncora ANP" inviável — TCE
+não publica volume em litros, só valor por contrato. Sem unidade base,
+sem comparação contra preço médio ANP.
+
+**Esqueleto `/insight/medicamentos-por-habitante-pr`:**
+1. Manchete + número de impacto
+2. Gráfico: dispersão R$/habitante por município (eixo x = porte)
+3. Tabela: top 5 acima + top 5 abaixo
+4. "Por que isso pode acontecer legitimamente" (vacina)
+5. "Por que vale olhar mesmo assim"
+6. Como reproduzir: link `/comparar?cluster=medicamentos`
+7. Limites do dado (granularidade, modalidade ~65%)
+8. Reportar → `/correcoes`
+
+**Teste de robustez (nunca pula):** inverter manchete (somar à mão) ·
+sample top-3 e bottom-3 (ler descrição) · validar denominador IBGE ·
+2ª opinião via `/ultrareview` · filtro de adjetivo (sem "suspeito",
+"irregular", "desviado", "exorbitante").
+
+### 13.8 Comparação por escola — revisitada (refina §6 estado atual)
+
+**Estado:** 506 escolas via regex; cobertura 0,17% geral, 29% em
+`obras_edificacao`. Hoje `/escolas` é catálogo de transparência.
+
+**3 abordagens em ordem de honestidade crescente:**
+
+| # | O que faz | Custo | Risco |
+|---|---|---|---|
+| 1 | Maiores investimentos por escola (descritivo) | ~30 LOC | Muito baixo |
+| 2 | Spread interno por escola (min-max-mediana) | ~80 LOC | Baixo |
+| 3 | Comparar tipo de intervenção entre escolas | ~200 LOC + cluster v2 | Médio |
+
+**Recomendação:**
+- **Implementar Abordagem 1 agora** dentro de `/escolas/[slug]`:
+  ordenar contratos por valor desc + stat "investimento total em obras"
+  no header. Sem violar framing de catálogo.
+- **Manter Abordagem 3 adiada para Fase 1+** com pré-requisitos
+  registrados: keyword extraction de tipo de intervenção (~30
+  categorias) · validação manual de 100 contratos · threshold mínimo
+  de 5 contratos por (tipo × município).
+- **Não implementar Abordagem 2** — retorno baixo pra esforço médio
+  (aditivos contratuais são ruído normal).
+
+---
+
+## 14. Changelog
+
+**v5 (2026-05-09)** — sessão de planejamento focada em narrativa e roadmap editorial:
+- **Nova §13** — propostas v5 detalhadas (8 itens divididos entre frente narrativa e frente roadmap)
+- **§13.1 Modal "Como interpretar"** — refina §6.3 com 4 quadros pedagógicos
+- **§13.2 "Por que confiar / Por que duvidar"** — vacina anti-objeção em colunas simétricas
+- **§13.3 Reescrita da home** — manchete acima do fold, evidência como segunda zona, navegue terceira
+- **§13.4 `/correcoes` como vitrine** — schema `analytics.correcoes` + reformulação textual + badge "corrigido em X" nas páginas afetadas
+- **§13.5 Roadmap viral** — 5 templates (T1-T5) + cron weekly de candidatos automáticos em `/destaques/` + gatilhos de descoberta espalhados
+- **§13.6 Família de 6 badges** — confiança alta/média/sem cluster + fonte primária + atualizado + cluster_version
+- **§13.7 Próxima manchete** — plano A (medicamentos por habitante) confirmado; plano B (combustível com âncora ANP) descartado por inviabilidade de unidade no TCE
+- **§13.8 Comparação por escola revisitada** — Abordagem 1 (transparência por escola) implementar; Abordagem 3 (tipo de intervenção) adiada com pré-requisitos
+- **5 decisões pendentes do usuário** listadas no topo
 
 **v4 (2026-05-02)** — terceira revisão crítica + pivô para execução:
 - **Princípio "progressive correctness"** adicionado (seção 1) — Tier 2-4, drift automático e cluster sofisticado deferidos para Fase 2+

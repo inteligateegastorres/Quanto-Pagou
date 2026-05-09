@@ -25,7 +25,7 @@ Deve subir os 3 componentes:
 
 - [ ] **Postgres** — `docker ps` mostra container `pg-quanto-pagou`
 - [ ] **API** — `curl http://127.0.0.1:8001/health` → 200, JSON com
-      `db_ok: true`
+      `status: "ok"` e contagens > 0 em `raw_compras`, `item_canonical`
 - [ ] **Frontend** — `curl http://127.0.0.1:3001/` → 200, HTML com
       `<title>Quanto Pagou`
 
@@ -47,12 +47,16 @@ respeitado**. Cada item é um `curl` com critério de aceite.
 
 ## A.1. Saúde e meta
 
-- [ ] `GET /health` → 200 com `db_ok: true` e contagens > 0 em
-      `raw_compras` e `staging_compras`
+- [ ] `GET /health` → 200 com `status: "ok"` e campos:
+      `snapshots`, `raw_compras` (≥ 150_000), `item_canonical`
+      (≥ 150_000), `em_quarentena`, `mart_pares_rows`,
+      `mart_orgao_rows`. (Não existe campo `db_ok` nem
+      `staging_compras` — checklist anterior estava em drift.)
 - [ ] `GET /stats/pr` →
   - `total_contratos ≥ 150_000`
   - `total_municipios ≥ 390`
-  - `total_fornecedores ≥ 100_000`
+  - `total_fornecedores ≥ 40_000` (~44k esperado; deduplicação por
+    CNPJ; **não** ≥ 100k que era um snapshot antigo contando filiais)
   - `top_clusters` tem ≥ 5 itens
   - `valor_total_pr` não nulo
   - `last_snapshot_at` é timestamp válido
@@ -104,8 +108,11 @@ item tem todos os campos esperados, tipos corretos**.
       → todos com `contract_date` em 2024
 - [ ] `GET /contratos/search?modalidade=dispensa&limit=5` → todos com
       `modalidade` resolvendo pra dispensa
-- [ ] `GET /contratos/search?ordenar_por=data_desc&limit=5` →
-      `contract_date` decrescente
+- [ ] `GET /contratos/search?order=data_desc&limit=5` →
+      `contract_date` decrescente. **Atenção:** parâmetro chama
+      `order` (não `ordenar_por`); valores aceitos via `Literal`:
+      `valor_desc | valor_asc | data_desc | data_asc`. Outros valores
+      retornam 422.
 
 ## A.4. Endpoints de detalhe (URL canônica)
 
@@ -113,7 +120,10 @@ item tem todos os campos esperados, tipos corretos**.
 - [ ] `GET /municipio/410690/info` → mesmo resultado (resolve cd_tce
       também)
 - [ ] `GET /tce-pr/municipio/4106902/resumo` → resumo de Curitiba com
-      `n_contratos`, `valor_total`, `top_clusters`
+      `n_contratos_total` (não `n_contratos`), `valor_total`,
+      `n_em_cluster`, `n_em_quarentena`, `cobertura_pct`. **Não tem
+      `top_clusters`** (drill por cluster vive em
+      `/contratos-por-cluster`)
 - [ ] `GET /tce-pr/municipio/4106902/contratos-por-cluster?limit=10` →
       array
 - [ ] `GET /tce-pr/municipio/4106902/fornecedores?limit=10` → array
@@ -131,12 +141,19 @@ item tem todos os campos esperados, tipos corretos**.
 
 ## A.5. Endpoints de comparação (núcleo do produto)
 
-- [ ] `GET /pares?cluster_id=tce_pr_v1__merenda_escolar&limit=10` →
-      array com `produto_normalizado`, `unit_price_brl`, etc.
-- [ ] `GET /ranking/orgaos?cluster_id=tce_pr_v1__merenda_escolar&limit=10`
-      → array ordenado por volume
-- [ ] `GET /tce-pr/cluster/tce_pr_v1__merenda_escolar/comparacao-municipios?cluster_version=v1&limit=10`
-      → array
+- [ ] `GET /pares?cluster_id=oleo_diesel_s10&limit=10` →
+      array com `cluster_id`, `ente_nivel`, `uf`, `porte`, `n`,
+      `mediana`, `p25`, `p75`, etc. **Use cluster federal** (CATMAT,
+      item-a-item). Para clusters TCE-PR (`merenda_escolar` etc.) o
+      mart está vazio por design — granularidade é por contrato, não
+      por item; chamar `/pares?cluster_id=merenda_escolar` agora
+      retorna 404 com mensagem sugerindo
+      `/tce-pr/cluster/merenda_escolar/comparacao-municipios`.
+- [ ] `GET /ranking/orgaos?cluster_id=oleo_diesel_s10&limit=10`
+      → array ordenado por mediana_orgao desc (cluster federal,
+      mesma razão de `/pares`)
+- [ ] `GET /tce-pr/cluster/merenda_escolar/comparacao-municipios?cluster_version=v1&limit=10`
+      → array (este endpoint cobre clusters TCE-PR contract-level)
 
 ## A.6. Integridade de dados (banco)
 
@@ -184,8 +201,7 @@ docker exec -i pg-quanto-pagou psql -U postgres -d gov -c "<SQL>"
 - [ ] `GET /fornecedor/0000000000000` → 404
 - [ ] `GET /municipio/9999999/info` → 404
 - [ ] `GET /contratos/search?since=2024-13-99` → 422 (data inválida)
-- [ ] `GET /contratos/search?ordenar_por=banana` → 422 (enum
-      inválido)
+- [ ] `GET /contratos/search?order=banana` → 422 (Literal validation)
 - [ ] `GET /docs` → Swagger carrega
 - [ ] `GET /openapi.json` → JSON válido com todos os paths
 
@@ -266,23 +282,31 @@ atualiza com os params **e** o resultado muda.
 - [ ] Buscar `q=merenda` → filtra
 - [ ] Combinar 3 filtros (`?cd_tce=410690&modalidade=dispensa&since=2024-01-01`)
       → todos preservados; resultado bate
-- [ ] Trocar ordenação no select → URL atualiza com `ordenar_por=...`
+- [ ] Trocar ordenação no select → URL atualiza com `order=...`
+      (frontend usa `name="order"`; o cliente Next.js mapeia para o
+      parâmetro `order` da API. Manter um nome só evita drift —
+      ver F-015)
 - [ ] Form de filtros mostra valores atuais preenchidos (não sempre
       vazios)
+- [ ] `?since=2024-13-99` → bloco de erro amigável "Filtro inválido"
+      (validação de data acontece **no frontend** antes de chamar a
+      API, evitando 500)
 
 ### `/dispensas`
 
-- [ ] Filtro de modalidade aparece
 - [ ] CPFs/PFs vêm com `cnpj_mascarado: true` na UI (label "PF
-      mascarado" ou similar)
+      mascarado" ou similar). **Sem filtro de modalidade na UI** —
+      por design, página é dedicada a dispensa (item antigo de
+      "filtro aparece" estava obsoleto)
 
 ### `/comparar`
 
 - [ ] Sem `cluster_id` → empty state explicando como usar
 - [ ] Com `cluster_id` mas sem datas → **deve obrigar filtro de data**
       (formulário aparece, ou aviso, ou redireciona)
-- [ ] Com `cluster_id=tce_pr_v1__merenda_escolar&since=2024-01-01&until=2024-12-31`
+- [ ] Com `cluster_id=merenda_escolar&since=2024-01-01&until=2024-12-31`
       → tabela com municípios comparáveis, badge `cluster_version=v1`
+      visível no header da seção (cluster_id sem prefixo `tce_pr_v1__`)
 
 ### `/escolas`
 
