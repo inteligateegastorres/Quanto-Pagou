@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { fmtBRL } from "@/lib/api";
+import { ClusterVersionBadge } from "@/lib/Badge";
 import { tcepr, buscar, type RankingMunicipio } from "@/lib/tcepr";
 
 export const dynamic = "force-dynamic";
@@ -337,16 +338,12 @@ export default async function CompararPage({
           {" — "}
           comparação entre {selecionados.length} municípios
         </h2>
-        <p className="text-xs text-muted mb-3">
-          Período: <strong>{fmtDateBR(since)}</strong> a{" "}
-          <strong>{fmtDateBR(until)}</strong> (data de assinatura do contrato)
-          {" · "}
-          <span
-            className="inline-block border border-line rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide bg-paper"
-            title="Versão do modelo de cluster usada nesta comparação. Mudanças geram nova versão; histórico nunca é reescrito."
-          >
-            cluster_version=v1
+        <p className="text-xs text-muted mb-3 flex items-baseline gap-2 flex-wrap">
+          <span>
+            Período: <strong>{fmtDateBR(since)}</strong> a{" "}
+            <strong>{fmtDateBR(until)}</strong> (data de assinatura do contrato)
           </span>
+          <ClusterVersionBadge />
         </p>
         {selecionados.length < 2 && (
           <p className="text-sm text-attention">

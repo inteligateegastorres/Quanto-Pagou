@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { fmtBRL, fmtBRLCompact } from "@/lib/api";
 import { Stat } from "@/lib/Stat";
+import { GuardrailFornecedorBadge } from "@/lib/Badge";
 import {
   fornecedor as fornecedorApi,
   type FornecedorPerfil,
@@ -82,6 +83,9 @@ export default async function FornecedorPage({
         <h1 className="text-3xl font-semibold tracking-tight leading-tight">
           {perfil.fornecedor_nome ?? "Fornecedor sem nome registrado"}
         </h1>
+        <div className="flex items-baseline gap-2 flex-wrap pt-1">
+          <GuardrailFornecedorBadge n_contratos={perfil.n_contratos_total} />
+        </div>
       </header>
 
       <section className="border border-attention/40 bg-attention/5 rounded-md p-4 text-sm space-y-2">

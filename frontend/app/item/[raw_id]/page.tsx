@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { api, fmtBRL } from "@/lib/api";
+import { ConfiancaBadge, SemClusterBadge, ClusterVersionBadge } from "@/lib/Badge";
 
 export const dynamic = "force-dynamic";
 
@@ -46,12 +47,6 @@ export default async function ItemPage({
   const fracMed = med != null && barCap > 0 ? Math.min(med / barCap, 1) : 0;
 
   const conf = item.confianca_resolucao;
-  const badge =
-    conf >= 0.95
-      ? { label: "Dados completos", color: "text-ok" }
-      : conf >= 0.75
-        ? { label: "Dados parciais", color: "text-attention" }
-        : { label: "Em verificação", color: "text-muted" };
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -59,13 +54,21 @@ export default async function ItemPage({
         ← início
       </Link>
 
-      <header className="space-y-1">
+      <header className="space-y-2">
         <div className="text-xs text-muted">
           {item.orgao_nome} · {item.contract_date}
         </div>
         <h1 className="text-2xl font-semibold tracking-tight">
           {item.descricao_original}
         </h1>
+        <div className="flex items-baseline gap-2 flex-wrap">
+          {item.em_quarentena ? (
+            <SemClusterBadge motivo={item.motivo_quarentena} />
+          ) : (
+            <ConfiancaBadge confianca={conf} />
+          )}
+          {item.cluster_version && <ClusterVersionBadge version={item.cluster_version} />}
+        </div>
       </header>
 
       {item.em_quarentena ? (
@@ -81,17 +84,14 @@ export default async function ItemPage({
         </section>
       ) : (
         <section className="border border-line rounded-md p-6 bg-white space-y-4">
-          <div className="flex items-baseline justify-between">
-            <div>
-              <div className="text-3xl font-semibold tabular-nums">
-                {fmtBRL(valor)}
-              </div>
-              <div className="text-xs text-muted">
-                por {item.unidade_base ?? "-"} · valor unitário original{" "}
-                {fmtBRL(item.valor_unitario)}
-              </div>
+          <div>
+            <div className="text-3xl font-semibold tabular-nums">
+              {fmtBRL(valor)}
             </div>
-            <span className={`text-xs ${badge.color}`}>● {badge.label}</span>
+            <div className="text-xs text-muted">
+              por {item.unidade_base ?? "-"} · valor unitário original{" "}
+              {fmtBRL(item.valor_unitario)}
+            </div>
           </div>
 
           {item.pares && (

@@ -3,6 +3,12 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { fmtBRL } from "@/lib/api";
 import { Stat } from "@/lib/Stat";
+import {
+  AtualizadoBadge,
+  ConfiancaBadge,
+  FontePrimariaBadge,
+  SemClusterBadge,
+} from "@/lib/Badge";
 import { contrato as contratoApi, type ContratoDetalhe } from "@/lib/tcepr";
 
 export const dynamic = "force-dynamic";
@@ -67,15 +73,21 @@ export default async function ContratoPage({
         </Link>
         <p className="text-xs uppercase tracking-wide text-muted">
           Contrato {c.source_id ?? `#${c.raw_id}`} · fonte: <code>{c.source}</code>
-          {c.em_quarentena && (
-            <span className="text-attention"> · em quarentena</span>
-          )}
         </p>
         <h1 className="text-2xl font-semibold tracking-tight leading-snug">
           {c.descricao.length > 200
             ? c.descricao.slice(0, 200) + "…"
             : c.descricao}
         </h1>
+        <div className="flex items-baseline gap-2 flex-wrap pt-1">
+          {c.em_quarentena ? (
+            <SemClusterBadge motivo={c.motivo_quarentena} />
+          ) : (
+            <ConfiancaBadge confianca={c.confianca_resolucao} />
+          )}
+          <FontePrimariaBadge url={c.source_url} />
+          <AtualizadoBadge iso={c.snapshot_ingested_at} />
+        </div>
       </header>
 
       <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
