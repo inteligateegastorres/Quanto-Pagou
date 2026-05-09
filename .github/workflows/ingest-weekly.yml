@@ -2,14 +2,15 @@
 #
 # Roda toda quarta às 06:00 UTC (03:00 BRT).
 # Pipeline:
-#   1. Aplica migrations idempotentes (000-004)
+#   1. Aplica migrations idempotentes (000-005)
 #   2. Ingere TCE-PR ZIP do ano corrente (399 municípios, ~55s)
 #   3. Tenta ingerir Compras.gov.br últimos 7 dias (best-effort: API
 #      é instável; se cair tudo, não falha o job)
 #   4. Roda analytics.build_marts (canonicalização + refresh MVs +
-#      escola_mencao)
-#   5. Faz upload dos snapshots brutos para Cloudflare R2 (best-effort)
-#   6. Imprime sumário no Job Summary do GH Actions
+#      escola_mencao + cluster_discrepancias [Camada 1 manchetes])
+#   5. Roda analytics.manchetes refresh (Camadas 2 e 3 manchetes)
+#   6. Faz upload dos snapshots brutos para Cloudflare R2 (best-effort)
+#   7. Imprime sumário no Job Summary do GH Actions
 #
 # Pode rodar manual via:
 #   gh workflow run ingest-weekly.yml
@@ -92,7 +93,7 @@ jobs:
 
       - name: Aplicar migrations (idempotentes)
         run: |
-          for f in sql/000_init.sql sql/001_analytics.sql sql/002_resilience.sql sql/003_tce_pr.sql sql/004_escolas.sql; do
+          for f in sql/000_init.sql sql/001_analytics.sql sql/002_resilience.sql sql/003_tce_pr.sql sql/004_escolas.sql sql/005_manchetes.sql; do
             echo "→ $f"
             python -m uv run python -c "
           import psycopg, os, sys
@@ -121,6 +122,14 @@ jobs:
       - name: Build marts (canonicalização + refresh MVs + escolas)
         run: |
           python -m uv run python -m analytics.build_marts | tee /tmp/build_marts.log
+
+      - name: Refresh manchetes (Camadas 2 e 3)
+        # Aplica config/manchete_v1.yaml sobre cluster_discrepancias (Camada 1
+        # ja refrescada acima). Append em manchete_publicada (auditoria).
+        # Falha no refresh nao bloqueia ingestao.
+        continue-on-error: true
+        run: |
+          python -m uv run python -m analytics.manchetes refresh | tee /tmp/manchetes.log
 
       - name: Upload snapshots para R2 (best-effort)
         if: ${{ !inputs.skip_r2 && env.R2_BUCKET != '' }}
@@ -158,6 +167,9 @@ jobs:
             echo ""
             echo "### Build marts"
             tail -15 /tmp/build_marts.log 2>/dev/null || echo "(sem log)"
+            echo ""
+            echo "### Manchetes"
+            tail -8 /tmp/manchetes.log 2>/dev/null || echo "(sem log)"
             echo ""
             echo "Próxima execução automática: quarta 06:00 UTC"
           } >> "$GITHUB_STEP_SUMMARY"

@@ -417,7 +417,17 @@ export default async function CompararPage({
                     </td>
                     <td className="py-2 px-3 text-right font-mono font-medium">
                       {r.encontrado ? fmtBRL(m) : (
-                        <span className="text-xs text-muted">sem contratos no cluster</span>
+                        <span
+                          className="text-xs text-muted"
+                          title={
+                            `Sem contratos de ${r.municipio} em ${clusterNome} ` +
+                            `entre ${fmtDateBR(since)} e ${fmtDateBR(until)}` +
+                            (modalidade ? ` (modalidade=${modalidade})` : "") +
+                            ". Relaxe periodo/modalidade ou tente outro cluster."
+                          }
+                        >
+                          sem dados no período
+                        </span>
                       )}
                     </td>
                     <td className={"py-2 pl-3 text-right text-xs " + cor}>
@@ -451,12 +461,26 @@ export default async function CompararPage({
           contexto, abra o município e veja órgãos contratantes + fornecedores.
         </p>
         <p>
-          <strong>Sem dados no cluster?</strong> O município pode ter 0
-          contratos cuja descrição bate com a categoria-piloto, ou os
-          contratos dele estão em quarentena (cobertura keyword no estado é
-          ~33%). Tente outra categoria ou abra a página do município pra ver
-          contratos disponíveis.
+          <strong>&quot;Sem dados no período&quot;?</strong> 3 leituras
+          possíveis:
         </p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>
+            <strong>Período exclui</strong>: município tem contratos no cluster
+            mas não nesse intervalo de datas. Relaxe o filtro de data e
+            tente de novo.
+          </li>
+          <li>
+            <strong>Modalidade exclui</strong>: contratos existem mas em
+            outra modalidade. Tente <code>modalidade=todas</code>.
+          </li>
+          <li>
+            <strong>Cluster vazio</strong>: município realmente não tem
+            contratos cuja descrição bate com essa categoria, ou estão em
+            quarentena (cobertura keyword no estado é ~34%). Abra a
+            página do município pra ver contratos disponíveis.
+          </li>
+        </ul>
       </section>
     </div>
   );

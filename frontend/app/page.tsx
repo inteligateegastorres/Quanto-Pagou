@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { api, fmtBRL, fmtBRLCompact } from "@/lib/api";
 import { Stat } from "@/lib/Stat";
-import { buscar, stats as statsApi } from "@/lib/tcepr";
+import { buscar, manchetes as manchetesApi, stats as statsApi } from "@/lib/tcepr";
 
 export const dynamic = "force-dynamic";
 
@@ -16,10 +16,34 @@ const CLUSTERS_FEDERAIS = new Set([
   "papel_sulfite_a4_75g",
 ]);
 
+// Mapping curto pra Zona A. Outras paginas usam o proprio mapping.
+const CLUSTER_LABEL_HOME: Record<string, string> = {
+  merenda_escolar: "merenda escolar",
+  combustivel_servicos: "combustíveis",
+  medicamentos: "medicamentos",
+  material_medico_hospitalar: "material médico-hospitalar",
+  servicos_saude_credenciamento: "credenciamento de saúde",
+  papel_escritorio: "papel e expediente",
+  limpeza_higiene: "limpeza e higiene",
+  uniformes_epi: "uniformes e EPI",
+  materiais_construcao_eletrico: "material elétrico",
+  materiais_construcao_hidraulico: "material hidráulico",
+  materiais_construcao_geral: "materiais de construção",
+  eletrodomesticos_mobiliario: "eletrodomésticos e mobiliário",
+  materiais_escolares: "materiais escolares",
+  materiais_agricolas: "ferramentas agrícolas",
+  agricultura_familiar: "agricultura familiar",
+  incentivo_cultura: "incentivo à cultura",
+  transporte_escolar: "transporte escolar",
+  obras_pavimentacao: "obras de pavimentação",
+  obras_edificacao: "obras de edificação",
+};
+
 export default async function HomePage() {
   // Federal: insight + ranking de diesel mantidos.
-  // Estadual: stats agregadas + top 5 municipios + top 5 fornecedores.
-  const [clustersR, paresDieselR, rankingDieselR, topMunR, topFornR, statsR] =
+  // Estadual: stats agregadas + top 5 municipios + top 5 fornecedores +
+  // manchetes (rank=1 alimenta Zona A — sem hardcode, vem do banco).
+  const [clustersR, paresDieselR, rankingDieselR, topMunR, topFornR, statsR, manchetesR] =
     await Promise.allSettled([
       api.clusters(),
       api.paresFor("oleo_diesel_s10"),
@@ -27,6 +51,7 @@ export default async function HomePage() {
       buscar.municipios({ limit: 5 }),
       buscar.fornecedores({ limit: 5 }),
       statsApi.pr(),
+      manchetesApi.lista(),
     ]);
 
   const clusters = clustersR.status === "fulfilled" ? clustersR.value : [];
@@ -36,6 +61,8 @@ export default async function HomePage() {
   const topMun = topMunR.status === "fulfilled" ? topMunR.value : [];
   const topForn = topFornR.status === "fulfilled" ? topFornR.value : [];
   const stats = statsR.status === "fulfilled" ? statsR.value : null;
+  const manchetes = manchetesR.status === "fulfilled" ? manchetesR.value : [];
+  const manchete1 = manchetes[0] ?? null;
 
   const rankingDiesel = rankingDieselFull.slice(0, 5);
   const medianaPares = paresDiesel[0]?.mediana ? Number(paresDiesel[0].mediana) : null;
@@ -58,55 +85,69 @@ export default async function HomePage() {
 
   return (
     <div className="space-y-16">
-      {/* ZONA A — MANCHETE (PLANO §13.3, Zona A) — manchete editorial
-          atualiza junto com /insight/merenda-escolar-pr. Hardcoded por
-          design: editorial e esteira separada (memoria feedback_editorial_decoupling). */}
-      <section className="space-y-4 border border-attention/30 bg-attention/5 rounded-md p-6">
-        <p className="text-xs uppercase tracking-wide text-attention font-medium">
-          Manchete da semana · 08 de maio de 2026 · TCE-PR
-        </p>
-        <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight leading-tight">
-          Em Maringá, a mediana de contrato de merenda escolar foi <span className="text-attention">10× maior</span> que em Cascavel em 2025.
-        </h1>
-        <p className="text-muted max-w-2xl text-base leading-relaxed">
-          Mesma categoria, mesmo período, fonte primária TCE-PR. Mesmo porte
-          de cidade (ambas grandes, &gt; 300 mil habitantes). Os números,
-          sem adjetivos.
-        </p>
-        <div className="grid grid-cols-3 gap-3 max-w-md text-sm bg-paper border border-line rounded p-3">
-          <div>
-            <p className="text-xs text-muted">Maringá (mediana)</p>
-            <p className="font-mono font-semibold">R$ 321,7 mil</p>
+      {/* ZONA A — MANCHETE ALGORITMICA (PLANO §13.3 + §13.5).
+          Puxa rank=1 de /manchetes (Camada 2). Zero hardcode. Mudanca
+          do YAML (config/manchete_v1.yaml) reflete aqui na proxima
+          execucao do refresh. */}
+      {manchete1 && (
+        <section className="space-y-4 border border-attention/30 bg-attention/5 rounded-md p-6">
+          <p className="text-xs uppercase tracking-wide text-attention font-medium">
+            Manchete #1 · selecionada por algoritmo · TCE-PR
+            {manchete1.refresh_em && ` · atualizado ${fmtDateBR(manchete1.refresh_em)}`}
+          </p>
+          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight leading-tight">
+            Em {manchete1.municipio_nome ?? manchete1.cd_tce}, a mediana de
+            contrato em <strong>{CLUSTER_LABEL_HOME[manchete1.cluster_id] ?? manchete1.cluster_id}</strong> foi{" "}
+            <span className="text-attention">
+              {Number(manchete1.spread).toFixed(1)}× superior
+            </span>{" "}
+            à mediana dos pares no Paraná.
+          </h1>
+          <p className="text-muted max-w-2xl text-base leading-relaxed">
+            {manchete1.n_sujeito} contratos no município, comparados com{" "}
+            {fmtBRLCompact(manchete1.med_cluster)} de mediana entre os
+            municípios paranaenses na mesma categoria. Não é prova de
+            irregularidade — é convite a investigar.
+          </p>
+          <div className="grid grid-cols-3 gap-3 max-w-md text-sm bg-paper border border-line rounded p-3">
+            <div>
+              <p className="text-xs text-muted truncate" title={manchete1.municipio_nome ?? ""}>
+                {manchete1.municipio_nome ?? manchete1.cd_tce} (mediana)
+              </p>
+              <p className="font-mono font-semibold">{fmtBRLCompact(manchete1.med_sujeito)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted">Mediana cluster</p>
+              <p className="font-mono font-semibold">{fmtBRLCompact(manchete1.med_cluster)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted">Spread</p>
+              <p className="font-mono font-semibold text-attention">
+                {Number(manchete1.spread).toFixed(1)}×
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-xs text-muted">Cascavel (mediana)</p>
-            <p className="font-mono font-semibold">R$ 32,3 mil</p>
+          <div className="flex gap-3 flex-wrap pt-1">
+            <Link
+              href="/manchetes"
+              className="border border-ink rounded-md px-4 py-2 text-sm no-underline hover:bg-ink hover:text-paper"
+            >
+              Ver as {manchetes.length} manchetes →
+            </Link>
+            <Link
+              href={`/contratos?cluster_id=${manchete1.cluster_id}&cluster_nome=${encodeURIComponent(CLUSTER_LABEL_HOME[manchete1.cluster_id] ?? manchete1.cluster_id)}&cd_tce=${manchete1.cd_tce}&municipio_nome=${encodeURIComponent(manchete1.municipio_nome ?? "")}&order=valor_desc`}
+              className="border border-line rounded-md px-4 py-2 text-sm no-underline hover:border-ink"
+            >
+              Ver os {manchete1.n_sujeito} contratos →
+            </Link>
           </div>
-          <div>
-            <p className="text-xs text-muted">Spread</p>
-            <p className="font-mono font-semibold text-attention">~10×</p>
-          </div>
-        </div>
-        <div className="flex gap-3 flex-wrap pt-1">
-          <Link
-            href="/insight/merenda-escolar-pr"
-            className="border border-ink rounded-md px-4 py-2 text-sm no-underline hover:bg-ink hover:text-paper"
-          >
-            Ler análise completa →
-          </Link>
-          <Link
-            href="/contratos?cluster_id=merenda_escolar&cluster_nome=Merenda%20escolar&since=2025-01-01&until=2025-12-31"
-            className="border border-line rounded-md px-4 py-2 text-sm no-underline hover:border-ink"
-          >
-            Ver os contratos →
-          </Link>
-        </div>
-        <p className="text-xs text-muted pt-1">
-          {stats?.total_contratos.toLocaleString("pt-BR") ?? "156k"} contratos
-          · {stats?.total_municipios ?? 397} municípios PR
-          {stats?.last_snapshot_at && ` · atualizado ${fmtDateBR(stats.last_snapshot_at)}`}
-        </p>
-      </section>
+          <p className="text-xs text-muted pt-1">
+            {stats?.total_contratos.toLocaleString("pt-BR") ?? "156k"} contratos
+            · {stats?.total_municipios ?? 397} municípios PR
+            {stats?.last_snapshot_at && ` · snapshot ${fmtDateBR(stats.last_snapshot_at)}`}
+          </p>
+        </section>
+      )}
 
       {/* HERO — pitch breve. Era h1 antes da Zona A; agora h2 sub-narrativa. */}
       <section className="space-y-5">
