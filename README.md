@@ -2,11 +2,13 @@
 
 Plataforma cívica para monitorar gastos públicos brasileiros e identificar possíveis desvios.
 
-> **Status:** sprint local concluído + Fase 1 PR já no ar (~25 commits desde
-> o bootstrap). Pipeline TCE-PR estadual completo (156k contratos reais de
-> 397 municípios), 19 clusters keyword (33,6% cobertura), 506 escolas
-> extraídas, ~25 endpoints API e 14 páginas frontend. Pendente: domínio,
-> contas Vercel/Supabase/R2, revisão jurídica (ver [DEPLOY.md](./DEPLOY.md)).
+> **Status:** sprint local concluído + Fase 1 PR já no ar. Pipeline TCE-PR
+> estadual completo (156k contratos reais de 397 municípios), 19 clusters
+> keyword (~34% cobertura), 506 escolas extraídas, ~28 endpoints API e
+> 17 páginas frontend incluindo busca tripla (`/buscar`, `/fornecedores`,
+> `/instituicoes`), drill-down universal em `/contratos` e QA checklist
+> versionado em `tests/qa/`. Pendente: domínio, contas
+> Vercel/Supabase/R2, revisão jurídica (ver [DEPLOY.md](./DEPLOY.md)).
 > Banner global diferencia Paraná real (verde) × Federal fixture (laranja).
 
 ---
@@ -244,7 +246,10 @@ python -m uv run pytest tests/ -v
 ├── scripts/                          # dev_up/dev_down (ps1 + sh) + smokes (probe, inspect, fixture gen)
 ├── snapshots/                        # JSONL.gz de cada coleta (gitignored)
 └── tests/
-    └── test_resolution.py            # 28 testes (parametrize cobrindo edge cases reais)
+    ├── test_resolution.py            # 28 testes (parametrize cobrindo edge cases reais)
+    └── qa/
+        ├── CHECKLIST.md              # QA manual: backend + frontend + integracao
+        └── FINDINGS.md               # template para registrar bugs encontrados
 ```
 
 ---
@@ -252,37 +257,77 @@ python -m uv run pytest tests/ -v
 ## API REST (Fase 0.5)
 
 Base: `http://127.0.0.1:8001` · Docs: `/docs` · Sem auth (dados públicos).
+Lista completa em `/openapi.json`; abaixo, agrupada por área.
 
-| Endpoint                                                | Descrição                                                  |
-|---------------------------------------------------------|------------------------------------------------------------|
-| `GET /health`                                           | Sanidade + contagens (snapshots, raw, canonical, marts).   |
-| `GET /clusters?categoria=...`                           | Lista clusters ativos com `n_itens`.                       |
-| `GET /pares?cluster_id=X&cluster_version=v1`            | `mart_pares` filtrada (mediana/p25/p75 por uf+porte+ente). |
-| `GET /ranking/orgaos?cluster_id=X&order=mediana_desc`   | Ranking de órgãos para o cluster (gancho viral).           |
-| `GET /item/{raw_id}`                                    | Item canonicalizado + comparação com pares (ou flag de quarentena). |
-| `GET /quarentena/resumo`                                | Saúde pública do pipeline (% por categoria × motivo).      |
+**Meta / catálogo**
+
+| Endpoint | Descrição |
+|---|---|
+| `GET /health` | Sanidade + contagens (snapshots, raw, canonical, marts). |
+| `GET /stats/pr` | Agregados ao vivo do pipeline TCE-PR (alimenta a home sem hardcode). |
+| `GET /clusters?categoria=...` | Lista clusters ativos com `n_itens`. |
+| `GET /quarentena/resumo` | Saúde pública do pipeline (% por categoria × motivo). |
+
+**Comparação (núcleo do produto)**
+
+| Endpoint | Descrição |
+|---|---|
+| `GET /pares?cluster_id=X&cluster_version=v1` | `mart_pares` filtrada (mediana/p25/p75 por uf+porte+ente). |
+| `GET /ranking/orgaos?cluster_id=X&order=mediana_desc` | Ranking de órgãos para o cluster. |
+| `GET /tce-pr/cluster/{id}/ranking-municipios` | Top municípios PR no cluster (volume). |
+| `GET /tce-pr/cluster/{id}/comparacao-municipios?cluster_version=v1` | Tabela comparativa entre municípios. |
+
+**Busca / drill-down**
+
+| Endpoint | Descrição |
+|---|---|
+| `GET /municipios?search=...&limit=N` | Lista de municípios PR (filtro por nome). |
+| `GET /fornecedores?search=...&min_contratos=5&limit=N` | Lista de fornecedores (default ≥5 contratos = guardrail §6.5). |
+| `GET /instituicoes/search?q=...` | Busca termo em fornecedor + órgão + objeto; agrega quem foi pago em contratos cujo objeto menciona o termo. |
+| `GET /contratos/search?q=&cd_tce=&modalidade=&since=&until=&ordenar_por=&limit=` | Drill-down universal: ILIKE em descrição/fornecedor/órgão + filtros combinados. |
+| `GET /escolas?search=...&cd_tce=...` | Catálogo de escolas extraídas via regex (506 unidades). |
+| `GET /escolas/{slug}/contratos` | Contratos vinculados a uma escola. |
+| `GET /tce-pr/dispensas/top-fornecedores?min_contratos=5` | Top fornecedores em dispensa (com mascaramento de PF). |
+
+**Detalhe**
+
+| Endpoint | Descrição |
+|---|---|
+| `GET /municipio/{key}/info` | Resolve cd_tce↔cd_ibge → info canônica. |
+| `GET /tce-pr/municipio/{cd_ibge}/resumo` | Resumo do município: contratos, valor, top clusters. |
+| `GET /tce-pr/municipio/{cd_ibge}/contratos-por-cluster` | Contratos agrupados por categoria. |
+| `GET /tce-pr/municipio/{cd_ibge}/fornecedores` | Top fornecedores do município. |
+| `GET /fornecedor/{cnpj}` | Perfil agregado (≥5 contratos = guardrail §6.5). |
+| `GET /fornecedor/{cnpj}/{por-orgao,por-municipio,por-categoria,por-modalidade,contratos}` | Distribuições do perfil. |
+| `GET /item/{raw_id}` | Item canonicalizado + comparação com pares (ou flag de quarentena). |
+| `GET /contrato/{raw_id}` | Contrato com link à fonte primária + raw_payload. |
 
 ---
 
 ## Páginas do frontend
 
-| Rota                       | Conteúdo                                                                                        |
-|----------------------------|-------------------------------------------------------------------------------------------------|
-| `/`                        | Landing reestruturada em 3 zonas: Paraná real (top municípios + top fornecedores) / Federal fixture (insight diesel + ranking) / Categorias separadas. CTAs Buscar/Comparar/Manifesto. |
-| `/buscar`                  | Busca de municípios PR (top 30 ou filtro por nome) e fornecedores (top 30 por volume, filtro nome ou CNPJ). |
-| `/comparar`                | Município × município por cluster (lado a lado, até 6 cidades, default Curitiba × Toledo em merenda escolar). |
-| `/escolas`                 | Catálogo de obras escolares (506 escolas extraídas via regex no objeto). Auditoria de transparência — não ranking. |
-| `/escolas/[slug]`          | Drill-down para uma escola: stats + lista de contratos vinculados. |
-| `/municipio/[cd_tce]`      | Página genérica para qualquer município PR: top fornecedores, contratos por categoria, comparação contra cidades-pares (cards clicáveis), atalhos por cluster. |
-| `/curitiba`                | Atalho hardcoded para 4106902 + seção secundária de busca em diários oficiais via Querido Diário. |
-| `/fornecedor/[cnpj]`       | Perfil do fornecedor com guardrails §6.5 (threshold ≥ 5 contratos, modal "como interpretar", `noindex,nofollow`, sem ranking implícito). Distribuição por órgão/município/categoria/modalidade + top 30 contratos clicáveis. |
-| `/contrato/[id]`           | Detalhe completo do contrato + link para fonte primária (ZIP TCE-PR ou PNCP) + raw_payload para auditoria. |
-| `/insight/diesel-ministerios` | Análise editorial sobre o spread entre ministérios federais comprando o mesmo diesel S10 (fixture). |
-| `/cluster/[cluster_id]`    | Distribuição p25-p75 entre pares + ranking de órgãos (federal CATMAT; vazio para clusters TCE-PR — pendência registrada em `todo.txt`). |
-| `/item/[raw_id]`           | Card narrativo §6.1 do plano: barras "você vs mediana", badge de confiabilidade, sinais decompostos. |
-| `/manifesto`               | Por que existe a plataforma — gap do Painel de Preços + tese + princípios + licenças.          |
-| `/metodologia`             | Fontes, resolução, normalização de unidade, política de correção.                              |
-| `/correcoes`               | Página viva — onde aparecem correções pós-relato.                                              |
+| Rota | Conteúdo |
+|---|---|
+| `/` | Landing em 3 zonas: Paraná real (top municípios + top fornecedores) / Federal fixture (insight diesel + ranking) / Categorias. CTAs Buscar/Comparar/Manifesto. |
+| `/buscar` | Busca combinada — municípios PR (top 30 ou filtro por nome) **e** fornecedores (top 30, filtro nome ou CNPJ). |
+| `/fornecedores` | Página dedicada à empresa que recebeu pagamento. Filtro mínimo de contratos editável (default 5 = guardrail §6.5). |
+| `/instituicoes` | Busca por **destinatário no objeto** (UPA, escola, hospital, posto, CRAS). Agrega "quem foi pago" + "por município/órgão". Banner explicita que termo no objeto ≠ verba total da unidade. |
+| `/contratos` | Drill-down universal: lista paginada com filtros editáveis (q, cd_tce, fornecedor, modalidade, datas, ordenação). Toda agregação no site abre aqui filtrada. |
+| `/dispensas` | Top fornecedores em dispensa de licitação + insight editorial (merenda escolar PR). Mascara CPFs por padrão. |
+| `/comparar` | Município × município por cluster (até 6 cidades). **Filtro de data obrigatório** + badge `cluster_version=v1`. |
+| `/escolas` | Catálogo de obras escolares (506 escolas via regex no objeto). Transparência, não ranking — comparação numérica adiada com motivo registrado. |
+| `/escolas/[slug]` | Stats + lista de contratos vinculados à escola. |
+| `/municipio/[cd_tce]` | Página genérica de qualquer município PR: top fornecedores, contratos por categoria, comparação contra pares (cards clicáveis). |
+| `/curitiba` | Redirect → `/municipio/410690` (atalho preservado para SEO/links antigos). |
+| `/fornecedor/[cnpj]` | Perfil agregado com guardrails §6.5 (threshold ≥ 5 contratos, modal "como interpretar", `noindex,nofollow`). Distribuição por órgão/município/categoria/modalidade + top contratos. |
+| `/contrato/[id]` | Detalhe completo + link à fonte primária (ZIP TCE-PR) + raw_payload para auditoria. |
+| `/insight/diesel-ministerios` | Análise editorial sobre spread entre ministérios federais comprando o mesmo diesel S10 (fixture). |
+| `/insight/merenda-escolar-pr` | Análise editorial sobre dispensa em merenda escolar no Paraná. |
+| `/cluster/[cluster_id]` | Distribuição p25-p75 entre pares + ranking de órgãos (federal CATMAT). |
+| `/item/[raw_id]` | Card narrativo §6.1: barras "você vs mediana", badge de confiabilidade, sinais decompostos. |
+| `/manifesto` | Por que existe a plataforma — gap do Painel de Preços + tese + princípios. |
+| `/metodologia` | Fontes, resolução, normalização, guardrails, cluster_version, política de correção. |
+| `/correcoes` | Página viva — correções pós-relato com data, item, delta. |
 | `/opengraph-image`, `/insight/.../opengraph-image` | OG images dinâmicas (PNG 1200×630) via `next/og`. |
 
 ---

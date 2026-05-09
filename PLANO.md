@@ -5,6 +5,37 @@
 **Versão:** v4 (2026-05-02)
 **Status:** Decisões confirmadas. Foco agora é **executar, não planejar mais**.
 
+---
+
+## Changelog desde v4 (2026-05-02 → 2026-05-09)
+
+Mudanças relevantes ao plano original (não invalidam decisões, complementam):
+
+- **Drill-down universal** em `/contratos`: toda agregação no site
+  abre lá filtrada (cluster, fornecedor, município, modalidade, q,
+  datas, ordenação). Implementa o §4 "navegabilidade" do plano de
+  forma sistemática.
+- **Busca tripla decomposta** — três páginas para três perguntas
+  diferentes: `/buscar` (combinada município+fornecedor),
+  `/fornecedores` (empresa que recebeu pagamento), `/instituicoes`
+  (destinatário no objeto: UPA/escola/hospital). Antes estava tudo
+  amarrado em `/buscar`; separação tornou cada pergunta nítida.
+- **Filtro de data obrigatório** em `/comparar` (PLANO §6.2): agora
+  formulário bloqueia comparação sem `since`/`until`.
+- **`/curitiba` virou redirect** para `/municipio/410690` — página
+  genérica de município PR cobre o caso.
+- **Endpoint `/instituicoes/search`** ganhou agregado{" "}
+  `fornecedores_no_objeto` que responde diretamente "qual empresa
+  recebeu por entregar a esta instituição".
+- **QA versionado**: `tests/qa/CHECKLIST.md` (3 partes: backend,
+  frontend, integração) + `tests/qa/FINDINGS.md` (template para
+  registrar bugs). Aplicável local e em produção.
+- **Cron weekly** ativo (GitHub Actions) atualizando `last_snapshot_at`
+  exposto em `/stats/pr`.
+- **Docs sincronizadas**: README (tabelas atualizadas), `/metodologia`
+  (v0.2 com TCE-PR, Tier 1.5, IQR honesto, guardrail §6.5,
+  limites por design), DEPLOY (smoke test expandido).
+
 > **Tese:** este projeto não é "infra de dados" — é **produto de comunicação pública** apoiado em infra de dados. O sucesso mora em **clareza + confiança + compartilhabilidade**. Toda feature é avaliada por: *"isso vira algo que alguém manda no WhatsApp da família?"*
 
 ---

@@ -145,24 +145,47 @@ com exit 2 (parcial) ou exit 0 (total) — ver `scripts/sync_compras.sh`.
 
 ## Checklist do smoke test pós-deploy
 
-Bater nas 7 rotas e validar cada uma:
+Smoke rápido (rotas críticas):
 
 ```bash
 SITE=https://quantopagou.org
 API=https://api.quantopagou.org
 
+# API
 curl -fsSI $API/health | head -1                    # 200
-curl -fs $API/health | jq .                         # status:ok + counts > 0
+curl -fs $API/health | jq .                         # db_ok:true + counts > 0
+curl -fs $API/stats/pr | jq '.total_contratos'      # >= 150_000
+curl -fsSI "$API/instituicoes/search?q=UPA"         # 200
+curl -fsSI "$API/contratos/search?limit=5"          # 200
+curl -fsSI "$API/fornecedores?limit=5"              # 200
+
+# Frontend - estaticas
 curl -fsSI $SITE/                                   # 200
 curl -fsSI $SITE/manifesto                          # 200
-curl -fsSI $SITE/insight/diesel-ministerios         # 200
 curl -fsSI $SITE/metodologia                        # 200
 curl -fsSI $SITE/correcoes                          # 200
+
+# Frontend - busca / drill-down
+curl -fsSI $SITE/buscar                             # 200
+curl -fsSI $SITE/fornecedores                       # 200
+curl -fsSI $SITE/instituicoes                       # 200
+curl -fsSI $SITE/contratos                          # 200
+curl -fsSI $SITE/comparar                           # 200
+curl -fsSI $SITE/dispensas                          # 200
+curl -fsSI $SITE/escolas                            # 200
+
+# Frontend - insights + OG
+curl -fsSI $SITE/insight/diesel-ministerios         # 200
+curl -fsSI $SITE/insight/merenda-escolar-pr         # 200
 curl -fsSI $SITE/opengraph-image                    # 200, Content-Type: image/png
 curl -fsSI $SITE/insight/diesel-ministerios/opengraph-image  # 200 PNG
 ```
 
-E validar visualmente no Twitter Card Validator (cards.dev.twitter.com)
+Smoke profundo (recomendado antes de anúncio público): rodar
+[`tests/qa/CHECKLIST.md`](./tests/qa/CHECKLIST.md) inteiro contra
+o ambiente de produção e registrar findings em `tests/qa/FINDINGS.md`.
+
+Validar visualmente no Twitter Card Validator (cards.dev.twitter.com)
 e no Facebook Sharing Debugger que as OGs renderizam.
 
 ## Rollback
@@ -182,6 +205,6 @@ GH Actions cron: pausar via `gh workflow disable ingest-weekly.yml`.
 - **Não prometer cadência editorial.** A esteira automática é semanal,
   irregular. Manifesto e formulário do boletim já refletem isso.
 - **Não esconder o status de demonstração** enquanto a fixture sintética
-  estiver em uso. O banner de "Modo demonstração" no layout precisa
-  ficar até a primeira ingestão real do Compras.gov.br consolidar marts
-  com volume mínimo (~50 itens/cluster).
+  estiver em uso. O banner global do layout (PR real verde × Federal
+  fixture laranja) precisa ficar até a primeira ingestão real do
+  Compras.gov.br consolidar marts com volume mínimo (~50 itens/cluster).
