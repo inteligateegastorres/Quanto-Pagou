@@ -192,14 +192,24 @@ export type InstituicaoObjeto = {
   valor_total: string;
 };
 
+export type InstituicaoFornecedorObjeto = {
+  fornecedor_cnpj: string;
+  fornecedor_nome: string | null;
+  n_contratos: number;
+  valor_total: string;
+  n_municipios: number;
+};
+
 export type InstituicoesSearch = {
   q: string;
   fornecedores: InstituicaoFornecedor[];
   orgaos: InstituicaoOrgao[];
   objetos: InstituicaoObjeto[];
+  fornecedores_no_objeto: InstituicaoFornecedorObjeto[];
   total_fornecedores: number;
   total_orgaos: number;
   total_objeto_contratos: number;
+  total_fornecedores_no_objeto: number;
   valor_total_objeto: string;
 };
 

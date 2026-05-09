@@ -226,14 +226,26 @@ class InstituicaoObjetoOut(BaseModel):
     valor_total: Decimal
 
 
+class InstituicaoFornecedorObjetoOut(BaseModel):
+    """Top fornecedores PAGOS em contratos cujo objeto menciona o termo.
+    Ex: "quem mais recebeu por contratos que mencionam UPA Centro?"."""
+    fornecedor_cnpj: str
+    fornecedor_nome: str | None
+    n_contratos: int
+    valor_total: Decimal
+    n_municipios: int
+
+
 class InstituicoesSearchOut(BaseModel):
     q: str
     fornecedores: list[InstituicaoFornecedorOut]
     orgaos: list[InstituicaoOrgaoOut]
     objetos: list[InstituicaoObjetoOut]
+    fornecedores_no_objeto: list[InstituicaoFornecedorObjetoOut]
     total_fornecedores: int
     total_orgaos: int
     total_objeto_contratos: int
+    total_fornecedores_no_objeto: int
     valor_total_objeto: Decimal
 
 
@@ -807,6 +819,29 @@ def instituicoes_search(
         FROM raw.compras WHERE descricao ILIKE %s
     """
 
+    # 4. FORNECEDORES NO OBJETO — agrega por (fornecedor) os contratos
+    # cujo objeto menciona o termo. Resposta a "quem foi pago por
+    # entregar à UPA Centro?".
+    sql_forn_obj = """
+        SELECT
+            rc.fornecedor_cnpj,
+            MAX(rc.fornecedor_nome) AS fornecedor_nome,
+            COUNT(*) AS n_contratos,
+            ROUND(SUM(rc.valor_total)::numeric, 2) AS valor_total,
+            COUNT(DISTINCT rc.raw_payload->>'cd_tce') AS n_municipios
+        FROM raw.compras rc
+        WHERE rc.descricao ILIKE %s
+          AND rc.fornecedor_cnpj IS NOT NULL
+        GROUP BY rc.fornecedor_cnpj
+        ORDER BY valor_total DESC NULLS LAST
+        LIMIT %s
+    """
+    sql_forn_obj_count = """
+        SELECT COUNT(DISTINCT rc.fornecedor_cnpj) AS n
+        FROM raw.compras rc
+        WHERE rc.descricao ILIKE %s AND rc.fornecedor_cnpj IS NOT NULL
+    """
+
     with conn.cursor() as cur:
         cur.execute(sql_forn, (like, limit))
         fornecedores = [InstituicaoFornecedorOut(**r) for r in cur.fetchall()]
@@ -823,14 +858,21 @@ def instituicoes_search(
         cur.execute(sql_obj_count, (like,))
         obj_count = cur.fetchone()
 
+        cur.execute(sql_forn_obj, (like, limit))
+        forn_obj = [InstituicaoFornecedorObjetoOut(**r) for r in cur.fetchall()]
+        cur.execute(sql_forn_obj_count, (like,))
+        n_forn_obj = cur.fetchone()["n"]
+
     return InstituicoesSearchOut(
         q=q,
         fornecedores=fornecedores,
         orgaos=orgaos,
         objetos=objetos,
+        fornecedores_no_objeto=forn_obj,
         total_fornecedores=n_forn or 0,
         total_orgaos=n_orgao or 0,
         total_objeto_contratos=obj_count["n_contratos"] or 0,
+        total_fornecedores_no_objeto=n_forn_obj or 0,
         valor_total_objeto=obj_count["valor"] or Decimal(0),
     )
 

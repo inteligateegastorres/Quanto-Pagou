@@ -45,11 +45,13 @@ export default async function InstituicoesPage({
           Buscar instituição
         </h1>
         <p className="text-muted leading-relaxed">
-          Pesquise por nome em <strong>três contextos</strong> ao mesmo
-          tempo: <strong>fornecedor</strong> (quem recebeu o pagamento),{" "}
-          <strong>órgão público</strong> (quem contratou) e{" "}
-          <strong>objeto do contrato</strong> (UPA, escola, hospital, posto
-          de saúde, biblioteca, etc.). O mesmo termo cobre os três.
+          Pesquise por nome em <strong>quatro contextos</strong> ao mesmo
+          tempo: <strong>fornecedor</strong> (nome bate o termo),{" "}
+          <strong>órgão</strong> (nome bate o termo),{" "}
+          <strong>menções no objeto</strong> (UPA, escola, hospital
+          aparecem na descrição) e{" "}
+          <strong>quem foi pago em contratos que mencionam o termo</strong>
+          {" "}(útil para "qual empresa recebeu por atender à UPA Centro").
         </p>
       </header>
 
@@ -115,14 +117,14 @@ export default async function InstituicoesPage({
 
       {result && (
         <>
-          <section className="grid grid-cols-3 gap-3 text-sm">
+          <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
             <Stat
-              label="Fornecedores"
+              label="Fornecedores (nome)"
               value={result.total_fornecedores.toLocaleString("pt-BR")}
               hint={`top ${result.fornecedores.length} abaixo`}
             />
             <Stat
-              label="Órgãos"
+              label="Órgãos contratantes"
               value={result.total_orgaos.toLocaleString("pt-BR")}
               hint={`top ${result.orgaos.length} abaixo`}
             />
@@ -130,6 +132,12 @@ export default async function InstituicoesPage({
               label="Contratos no objeto"
               value={result.total_objeto_contratos.toLocaleString("pt-BR")}
               hint={fmtBRLCompact(result.valor_total_objeto)}
+            />
+            <Stat
+              label="Quem foi pago"
+              value={result.total_fornecedores_no_objeto.toLocaleString("pt-BR")}
+              hint="fornecedores únicos"
+              tone="attention"
             />
           </section>
 
@@ -283,11 +291,67 @@ export default async function InstituicoesPage({
             </section>
           )}
 
+          {result.fornecedores_no_objeto.length > 0 && (
+            <section>
+              <h2 className="text-xl font-semibold mb-2">
+                Quem foi pago em contratos com "{q}" no objeto ({result.total_fornecedores_no_objeto.toLocaleString("pt-BR")})
+              </h2>
+              <p className="text-xs text-muted mb-3">
+                Para cada fornecedor, soma de contratos cuja descrição menciona
+                "{q}". Resposta direta a "qual empresa recebeu pagamento por
+                entregar serviço/produto a esta instituição". Inclui fornecedor
+                de N municípios distintos quando ele atende em mais de uma
+                cidade. Clique no valor para ver os contratos.
+              </p>
+              <ol className="space-y-1">
+                {result.fornecedores_no_objeto.map((f, i) => {
+                  const drill = `/contratos?q=${encodeURIComponent(q)}&fornecedor_cnpj=${encodeURIComponent(f.fornecedor_cnpj)}&fornecedor_nome=${encodeURIComponent(f.fornecedor_nome ?? "")}`;
+                  return (
+                    <li
+                      key={f.fornecedor_cnpj}
+                      className="flex items-baseline gap-3 border-b border-line/60 py-1.5 text-sm"
+                    >
+                      <span className="w-6 text-right text-muted">{i + 1}.</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate">
+                          {f.n_contratos >= 5 ? (
+                            <Link
+                              href={`/fornecedor/${encodeURIComponent(f.fornecedor_cnpj)}`}
+                              className="no-underline hover:underline"
+                            >
+                              {f.fornecedor_nome ?? "—"}
+                            </Link>
+                          ) : (
+                            (f.fornecedor_nome ?? "—")
+                          )}
+                        </div>
+                        <div className="text-xs text-muted">
+                          CNPJ {f.fornecedor_cnpj}
+                          {f.n_municipios > 1 && ` · ${f.n_municipios} municípios`}
+                        </div>
+                      </div>
+                      <span className="text-xs text-muted whitespace-nowrap">
+                        {f.n_contratos} c.
+                      </span>
+                      <Link
+                        href={drill}
+                        className="font-mono text-right whitespace-nowrap no-underline hover:underline"
+                      >
+                        {fmtBRL(f.valor_total)}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ol>
+            </section>
+          )}
+
           {result.fornecedores.length === 0 &&
             result.orgaos.length === 0 &&
-            result.objetos.length === 0 && (
+            result.objetos.length === 0 &&
+            result.fornecedores_no_objeto.length === 0 && (
               <p className="text-sm text-muted py-6">
-                Sem resultados para "{q}" em nenhum dos 3 contextos. Tente
+                Sem resultados para "{q}" em nenhum dos 4 contextos. Tente
                 outro termo, ou variantes (ex: com/sem acento).
               </p>
             )}
