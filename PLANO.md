@@ -842,6 +842,30 @@ robusto + ângulo narrativo claro.
 medicamentos por habitante em 2025". Cluster maduro, alta cobertura,
 denominador IBGE 2022 disponível.
 
+**Exploração realizada (2026-05-09)** confirmou viabilidade com
+**2 caveats encontrados na query**:
+
+1. **Trap de consórcios regionais.** FRANCISCO BELTRÃO aparecia em
+   primeiro com R$ 12.658/cap — 24× o segundo — porque hospeda o
+   CONSUD (Consórcio Intermunicipal de Saúde do Sudoeste). PATO
+   BRANCO aparecia em segundo com R$ 518/cap pelo mesmo motivo
+   (CONIMS). Filtro `orgao_nome !~* 'cons[óo]rcio|consud|conims'` +
+   mesma regex em `descricao` removeu o ruído.
+2. **Cobertura de população**: só 35 dos 397 municípios PR têm
+   `populacao` em `analytics.municipio_pr` (8.8%). Antes de publicar
+   é preciso carregar IBGE 2022 completo para o catálogo.
+
+**Top legítimo após filtros** (preview, sujeito a refino):
+ITAIPULÂNDIA (R$ 224/cap, 12k hab) → MAMBORÉ (R$ 152/cap, 14k hab) →
+FRANCISCO BELTRÃO (R$ 126/cap, 94k hab — só contratos do município).
+Curitiba e Londrina ficam em ~R$ 55/cap (baseline cidades grandes).
+
+**Pivot narrativo descoberto pela query:** "por que cidades pequenas
+têm gasto per capita 3-4× maior que grandes em medicamentos?" — ângulo
+mais interessante que "ranking absoluto", e tem explicação plausível
+(economia de escala em compras grandes vs alta variabilidade em
+compras pequenas).
+
 **Plano B — descartado:** "Combustível com âncora ANP" inviável — TCE
 não publica volume em litros, só valor por contrato. Sem unidade base,
 sem comparação contra preço médio ANP.
