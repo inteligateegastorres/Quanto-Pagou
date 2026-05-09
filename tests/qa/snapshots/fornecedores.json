@@ -1,0 +1,14 @@
+{
+  "endpoint": "/fornecedores?limit=1",
+  "method": "GET",
+  "shape": {
+    "type": "list[object]",
+    "keys": [
+      "fornecedor_cnpj",
+      "fornecedor_nome",
+      "n_contratos",
+      "n_municipios_distintos",
+      "valor_total"
+    ]
+  }
+}

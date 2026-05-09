@@ -1,0 +1,32 @@
+{
+  "endpoint": "/manchetes",
+  "method": "GET",
+  "shape": {
+    "type": "list[object]",
+    "keys": [
+      "cd_ibge",
+      "cd_tce",
+      "cluster_id",
+      "cluster_version",
+      "comparab_proxy",
+      "iqr_cluster",
+      "iqr_sujeito",
+      "janelas_passadas",
+      "med_cluster",
+      "med_sujeito",
+      "municipio_nome",
+      "n_sujeito",
+      "parametros_hash",
+      "populacao",
+      "porte",
+      "rank_no_dia",
+      "rank_score",
+      "refresh_em",
+      "spread",
+      "spread_180d",
+      "spread_365d",
+      "spread_90d",
+      "valor_total_sujeito"
+    ]
+  }
+}

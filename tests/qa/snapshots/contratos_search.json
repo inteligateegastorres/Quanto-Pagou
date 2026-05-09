@@ -1,0 +1,14 @@
+{
+  "endpoint": "/contratos/search?limit=1",
+  "method": "GET",
+  "shape": {
+    "type": "object",
+    "keys": [
+      "contratos",
+      "limit",
+      "page",
+      "total",
+      "valor_total_filtrado"
+    ]
+  }
+}

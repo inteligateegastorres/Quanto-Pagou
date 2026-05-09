@@ -1,0 +1,12 @@
+{
+  "endpoint": "/quarentena/resumo",
+  "method": "GET",
+  "shape": {
+    "type": "list[object]",
+    "keys": [
+      "categoria",
+      "motivo_quarentena",
+      "n"
+    ]
+  }
+}

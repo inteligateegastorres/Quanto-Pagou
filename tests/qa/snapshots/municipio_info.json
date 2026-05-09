@@ -1,0 +1,14 @@
+{
+  "endpoint": "/municipio/4106902/info",
+  "method": "GET",
+  "shape": {
+    "type": "object",
+    "keys": [
+      "catalogado",
+      "cd_ibge",
+      "cd_tce",
+      "nome",
+      "porte"
+    ]
+  }
+}

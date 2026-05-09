@@ -1,0 +1,18 @@
+{
+  "endpoint": "/fornecedor/{cnpj}/contratos?limit=1",
+  "method": "GET",
+  "shape": {
+    "type": "list[object]",
+    "keys": [
+      "cluster_id",
+      "contract_date",
+      "contrato_id",
+      "descricao",
+      "em_quarentena",
+      "municipio",
+      "orgao_nome",
+      "raw_id",
+      "valor_total"
+    ]
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "endpoint": "/tce-pr/cluster/merenda_escolar/comparacao-municipios?limit=1",
+  "method": "GET",
+  "shape": {
+    "type": "list[object]",
+    "keys": [
+      "cd_ibge",
+      "cluster_id",
+      "cluster_version",
+      "mediana_valor_contrato",
+      "municipio",
+      "n_contratos",
+      "orgao_codigo",
+      "orgao_nome",
+      "p25_valor",
+      "p75_valor",
+      "porte",
+      "valor_total_periodo"
+    ]
+  }
+}

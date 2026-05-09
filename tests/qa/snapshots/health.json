@@ -1,0 +1,16 @@
+{
+  "endpoint": "/health",
+  "method": "GET",
+  "shape": {
+    "type": "object",
+    "keys": [
+      "em_quarentena",
+      "item_canonical",
+      "mart_orgao_rows",
+      "mart_pares_rows",
+      "raw_compras",
+      "snapshots",
+      "status"
+    ]
+  }
+}

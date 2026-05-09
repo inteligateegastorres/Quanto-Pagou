@@ -1,0 +1,15 @@
+{
+  "endpoint": "/manchetes/diagnostico?cd_tce=410690",
+  "method": "GET",
+  "shape": {
+    "type": "object",
+    "keys": [
+      "ativas",
+      "candidatos",
+      "cd_tce",
+      "municipio_nome",
+      "parametros_hash",
+      "populacao"
+    ]
+  }
+}

@@ -97,6 +97,66 @@ ORDER BY rank_score DESC
 """
 
 
+def _diagnosticar_motivo(
+    cur: psycopg.Cursor[Any],
+    manchete_id: str,
+    cluster_id: str,
+    cd_tce: str,
+    config: dict[str, Any],
+) -> str:
+    """Diagnostica por que uma manchete antes ativa nao esta mais. Le
+    cluster_discrepancias atual e identifica o primeiro threshold que falhou."""
+    cur.execute(
+        """
+        SELECT
+            cd.n_cluster, cd.n_sujeito, cd.valor_total_sujeito,
+            cd.spread, cd.iqr_sujeito, cd.iqr_cluster, cd.comparab_proxy,
+            cd.spread_90d, cd.spread_180d, cd.spread_365d,
+            cd.n_sujeito_90d, cd.n_sujeito_180d, cd.n_sujeito_365d,
+            (m.cd_tce IS NOT NULL) AS municipio_catalogado
+        FROM analytics.cluster_discrepancias cd
+        LEFT JOIN analytics.municipio_pr m ON m.cd_tce = cd.cd_tce
+        WHERE cd.cluster_id = %s AND cd.cd_tce = %s
+        """,
+        (cluster_id, cd_tce),
+    )
+    row = cur.fetchone()
+    if row is None:
+        return "removida do cluster_discrepancias (sem contratos elegiveis no snapshot)"
+
+    cfg = config
+    if not row["municipio_catalogado"]:
+        return "municipio nao catalogado em municipio_pr"
+    if row["n_cluster"] < cfg["cluster_n_min"]:
+        return f"cluster encolheu para {row['n_cluster']} contratos (limiar {cfg['cluster_n_min']})"
+    if row["n_sujeito"] < cfg["sujeito_n_min"]:
+        return f"n_sujeito caiu para {row['n_sujeito']} (limiar {cfg['sujeito_n_min']})"
+    if row["valor_total_sujeito"] < cfg["sujeito_valor_total_min"]:
+        return f"valor total caiu para R$ {float(row['valor_total_sujeito']):,.0f} (limiar R$ {cfg['sujeito_valor_total_min']:,.0f})".replace(",", ".")
+    if row["spread"] < cfg["spread_min"]:
+        return f"spread caiu para {float(row['spread']):.1f}x (limiar {cfg['spread_min']}x)"
+    if row["iqr_sujeito"] < cfg["iqr_sujeito_min"]:
+        return f"IQR sujeito caiu para {float(row['iqr_sujeito']):.1f} (limiar {cfg['iqr_sujeito_min']})"
+    if row["iqr_sujeito"] > cfg["iqr_relativo_max_k"] * row["iqr_cluster"]:
+        return f"IQR sujeito ({float(row['iqr_sujeito']):.1f}) > {cfg['iqr_relativo_max_k']}x IQR cluster ({float(row['iqr_cluster']):.1f}) — sujeito ficou heterogeneo"
+    if row["comparab_proxy"] < cfg["comparab_min"]:
+        return f"comparabilidade caiu para {float(row['comparab_proxy']):.2f} (limiar {cfg['comparab_min']})"
+    # Estabilidade
+    janelas_passadas = sum(
+        1 for n_field, sp_field in [
+            ("n_sujeito_90d", "spread_90d"),
+            ("n_sujeito_180d", "spread_180d"),
+            ("n_sujeito_365d", "spread_365d"),
+        ]
+        if row[n_field] >= cfg["estabilidade_min_n_janela"]
+        and row[sp_field] is not None
+        and row[sp_field] >= cfg["spread_min"]
+    )
+    if janelas_passadas < cfg["estabilidade_min_janelas"]:
+        return f"estabilidade caiu para {janelas_passadas}/3 janelas (limiar {cfg['estabilidade_min_janelas']})"
+    return "saiu do top N publicado (passou todos os thresholds, mas com rank pior)"
+
+
 def refresh(config: dict[str, Any], dry_run: bool = False) -> dict[str, Any]:
     """Aplica thresholds, popula Camadas 2 e 3. Devolve stats."""
     parametros_hash = hash_config(config)
@@ -119,8 +179,55 @@ def refresh(config: dict[str, Any], dry_run: bool = False) -> dict[str, Any]:
 
     top_n = int(config.get("top_n_publicado", 20))
     publicados = candidatos[:top_n]
+    novos_ids = {f"{c['cluster_id']}__{c['cd_tce']}" for c in publicados}
 
     with psycopg.connect(settings.database_url) as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            # Persiste config aplicada (busca reversa em /manchetes precisa dela).
+            cur.execute(
+                """
+                INSERT INTO analytics.manchete_config_aplicada
+                    (parametros_hash, config_json)
+                VALUES (%s, %s::jsonb)
+                ON CONFLICT (parametros_hash) DO UPDATE SET
+                    ultima_aplicacao = NOW()
+                """,
+                (parametros_hash, json.dumps(config, default=str)),
+            )
+
+            # ANTES de truncar: capturar IDs ativos para detectar saidas.
+            cur.execute("SELECT manchete_id, cluster_id, cd_tce FROM analytics.manchete")
+            ativos_antes = cur.fetchall()
+            saidas = [a for a in ativos_antes if a["manchete_id"] not in novos_ids]
+            logger.info("%d manchetes ativas antes; %d saidas detectadas", len(ativos_antes), len(saidas))
+
+            # Diagnostica + registra saidas em manchete_saida.
+            for s in saidas:
+                # Busca payload da ultima publicacao ativa
+                cur.execute(
+                    """
+                    SELECT payload_json
+                    FROM analytics.manchete_publicada
+                    WHERE manchete_id = %s
+                    ORDER BY publicada_em DESC LIMIT 1
+                    """,
+                    (s["manchete_id"],),
+                )
+                ultimo = cur.fetchone()
+                payload_anterior = ultimo["payload_json"] if ultimo else {}
+                motivo = _diagnosticar_motivo(
+                    cur, s["manchete_id"], s["cluster_id"], s["cd_tce"], config
+                )
+                cur.execute(
+                    """
+                    INSERT INTO analytics.manchete_saida
+                        (manchete_id, motivo, payload_anterior, parametros_hash)
+                    VALUES (%s, %s, %s::jsonb, %s)
+                    ON CONFLICT (saiu_em, manchete_id) DO NOTHING
+                    """,
+                    (s["manchete_id"], motivo, json.dumps(payload_anterior, default=str), parametros_hash),
+                )
+
         with conn.cursor() as cur:
             # Camada 2: substitui o set ativo (TRUNCATE + INSERT).
             cur.execute("TRUNCATE analytics.manchete")
@@ -170,6 +277,7 @@ def refresh(config: dict[str, Any], dry_run: bool = False) -> dict[str, Any]:
     return {
         "n_candidatos": len(candidatos),
         "n_publicados": len(publicados),
+        "n_saidas": len(saidas),
         "parametros_hash": parametros_hash,
         "config_versao": config.get("versao"),
     }

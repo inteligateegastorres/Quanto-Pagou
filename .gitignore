@@ -21,7 +21,9 @@ out/
 *.tsbuildinfo
 
 # Snapshots locais (dados brutos baixados da API)
-snapshots/
+# Apenas o /snapshots/ raiz (data); tests/qa/snapshots/ e versionado
+# (schema baseline da API).
+/snapshots/
 data/raw/
 
 # Env

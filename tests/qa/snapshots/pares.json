@@ -1,0 +1,21 @@
+{
+  "endpoint": "/pares?cluster_id=oleo_diesel_s10",
+  "method": "GET",
+  "shape": {
+    "type": "list[object]",
+    "keys": [
+      "cluster_id",
+      "cluster_version",
+      "ente_nivel",
+      "iqr",
+      "maximo",
+      "mediana",
+      "minimo",
+      "n",
+      "p25",
+      "p75",
+      "porte",
+      "uf"
+    ]
+  }
+}

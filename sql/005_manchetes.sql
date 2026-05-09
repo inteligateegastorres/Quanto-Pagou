@@ -253,3 +253,41 @@ CREATE INDEX IF NOT EXISTS idx_manchete_pub_manchete
 
 COMMENT ON TABLE analytics.manchete_publicada IS
     'Camada 3: log append-only de manchetes ja publicadas. Consulta "que manchetes estavam ativas em data X?": SELECT WHERE publicada_em = (SELECT MAX(publicada_em) WHERE publicada_em <= X). Permite auditoria temporal.';
+
+
+-- ---------------------------------------------------------------------------
+-- Camada 3b: manchete_saida (vela apagada)
+-- Registra manchetes que ESTAVAM ativas mas sairam, com motivo diagnostico.
+-- "Vela apagada e tambem informacao" — credibilidade publica.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS analytics.manchete_saida (
+    saiu_em             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    manchete_id         TEXT NOT NULL,
+    motivo              TEXT NOT NULL,            -- ex: "spread caiu para 3.2 (limiar 5)"
+    payload_anterior    JSONB NOT NULL,           -- ultima versao ativa
+    parametros_hash     TEXT NOT NULL,
+    PRIMARY KEY (saiu_em, manchete_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_manchete_saida_recent
+    ON analytics.manchete_saida (saiu_em DESC);
+
+COMMENT ON TABLE analytics.manchete_saida IS
+    'Manchetes que sairam com motivo diagnostico. Detectadas no refresh comparando IDs ativos antes vs depois. Mostradas em /manchetes na secao "Recem-saidas".';
+
+
+-- ---------------------------------------------------------------------------
+-- analytics.manchete_config_aplicada
+-- Snapshot do YAML aplicado em cada refresh. Permite ao backend
+-- diagnosticar "por que esse municipio NAO esta em manchete?" sem ler
+-- o YAML do disco (busca reversa em /manchetes).
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS analytics.manchete_config_aplicada (
+    parametros_hash    TEXT PRIMARY KEY,
+    config_json        JSONB NOT NULL,
+    primeira_aplicacao TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    ultima_aplicacao   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE analytics.manchete_config_aplicada IS
+    'Snapshot do YAML aplicado em cada refresh. Backend usa pra diagnosticar busca reversa ("por que esse municipio nao esta em manchete?").';

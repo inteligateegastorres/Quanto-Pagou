@@ -1,0 +1,16 @@
+{
+  "endpoint": "/ranking/orgaos?cluster_id=oleo_diesel_s10",
+  "method": "GET",
+  "shape": {
+    "type": "list[object]",
+    "keys": [
+      "cluster_id",
+      "cluster_version",
+      "mediana_orgao",
+      "n_compras",
+      "orgao_codigo",
+      "orgao_nome",
+      "valor_total_periodo"
+    ]
+  }
+}

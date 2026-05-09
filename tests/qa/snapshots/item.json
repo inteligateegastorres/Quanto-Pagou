@@ -1,0 +1,28 @@
+{
+  "endpoint": "/item/{raw_id}",
+  "method": "GET",
+  "shape": {
+    "type": "object",
+    "keys": [
+      "catmat_id",
+      "cluster_id",
+      "cluster_version",
+      "confianca_resolucao",
+      "contract_date",
+      "descricao_original",
+      "em_quarentena",
+      "fator_conversao",
+      "fornecedor_cnpj",
+      "fornecedor_nome",
+      "metodo_resolucao",
+      "motivo_quarentena",
+      "orgao_codigo",
+      "orgao_nome",
+      "pares",
+      "raw_id",
+      "unidade_base",
+      "valor_unitario",
+      "valor_unitario_normalizado"
+    ]
+  }
+}

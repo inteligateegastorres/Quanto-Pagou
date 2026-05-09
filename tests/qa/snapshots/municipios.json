@@ -1,0 +1,16 @@
+{
+  "endpoint": "/municipios?limit=1",
+  "method": "GET",
+  "shape": {
+    "type": "list[object]",
+    "keys": [
+      "catalogado",
+      "cd_ibge",
+      "cd_tce",
+      "n_contratos",
+      "nome",
+      "porte",
+      "valor_total"
+    ]
+  }
+}

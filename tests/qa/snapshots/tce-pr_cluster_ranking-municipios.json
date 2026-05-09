@@ -1,0 +1,17 @@
+{
+  "endpoint": "/tce-pr/cluster/merenda_escolar/ranking-municipios?limit=1",
+  "method": "GET",
+  "shape": {
+    "type": "list[object]",
+    "keys": [
+      "cd_ibge",
+      "cd_tce",
+      "cluster_id",
+      "mediana_valor_contrato",
+      "municipio",
+      "n_contratos",
+      "porte",
+      "valor_total_periodo"
+    ]
+  }
+}

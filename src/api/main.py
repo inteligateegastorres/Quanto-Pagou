@@ -618,6 +618,18 @@ class ManchteOut(BaseModel):
     refresh_em: str
 
 
+class ManchteSaidaOut(BaseModel):
+    """Manchete que saiu — payload anterior + motivo diagnostico."""
+
+    saiu_em: str
+    manchete_id: str
+    motivo: str
+    cluster_id: str | None
+    municipio_nome: str | None
+    spread_anterior: Decimal | None
+    parametros_hash: str
+
+
 @app.get("/manchetes", response_model=list[ManchteOut], tags=["meta"])
 def get_manchetes(conn: ConnDep) -> list[ManchteOut]:
     """Top N manchetes ativas (algoritmo, nao curadoria). Ordenadas por rank.
@@ -643,6 +655,185 @@ def get_manchetes(conn: ConnDep) -> list[ManchteOut]:
     with conn.cursor() as cur:
         cur.execute(sql)
         return [ManchteOut(**r) for r in cur.fetchall()]
+
+
+class ManchteCandidatoDiagOut(BaseModel):
+    cluster_id: str
+    n_sujeito: int
+    spread: Decimal | None
+    iqr_sujeito: Decimal | None
+    comparab_proxy: Decimal | None
+    motivo_falha: str | None  # None se passou todos os thresholds
+
+
+class ManchteDiagnosticoOut(BaseModel):
+    cd_tce: str
+    municipio_nome: str | None
+    populacao: int | None
+    parametros_hash: str | None
+    ativas: list[ManchteOut]                # manchetes onde o municipio aparece
+    candidatos: list[ManchteCandidatoDiagOut]  # outros clusters com discrepancias avaliadas
+
+
+def _diag_motivo_falha(row: dict[str, Any], cfg: dict[str, Any]) -> str | None:
+    """Replica a logica de _diagnosticar_motivo do refresh, sobre uma linha
+    crua de cluster_discrepancias. Devolve None se passou tudo.
+    Converte tudo pra float pra evitar Decimal vs float em operacoes."""
+    def f(v: Any) -> float | None:
+        return None if v is None else float(v)
+
+    n_cluster = row["n_cluster"]
+    n_sujeito = row["n_sujeito"]
+    vt = f(row["valor_total_sujeito"])
+    spread = f(row["spread"])
+    iqr_s = f(row["iqr_sujeito"])
+    iqr_c = f(row["iqr_cluster"])
+    comparab = f(row["comparab_proxy"])
+    spread_min = float(cfg.get("spread_min", 0))
+
+    if n_cluster < cfg.get("cluster_n_min", 0):
+        return f"cluster pequeno (n={n_cluster} < {cfg.get('cluster_n_min')})"
+    if n_sujeito < cfg.get("sujeito_n_min", 0):
+        return f"poucos contratos no municipio (n={n_sujeito} < {cfg.get('sujeito_n_min')})"
+    if vt is not None and vt < float(cfg.get("sujeito_valor_total_min", 0)):
+        return f"volume baixo (R$ {vt:,.0f} < limiar)".replace(",", ".")
+    if spread is not None and spread < spread_min:
+        return f"spread {spread:.1f}x abaixo do limiar {spread_min}x"
+    if iqr_s is not None and iqr_s < float(cfg.get("iqr_sujeito_min", 0)):
+        return f"IQR sujeito muito baixo ({iqr_s:.1f}) — distribuicao homogenea, sem dispersao real"
+    if iqr_s is not None and iqr_c is not None and iqr_s > float(cfg.get("iqr_relativo_max_k", 99)) * iqr_c:
+        return f"IQR sujeito ({iqr_s:.1f}) muito acima do IQR cluster ({iqr_c:.1f}) — sujeito desproporcionalmente heterogeneo"
+    if comparab is not None and comparab < float(cfg.get("comparab_min", 0)):
+        return f"comparabilidade {comparab:.2f} abaixo do limiar {cfg.get('comparab_min')}"
+    janelas_passadas = sum(
+        1 for n_field, sp_field in [
+            ("n_sujeito_90d", "spread_90d"),
+            ("n_sujeito_180d", "spread_180d"),
+            ("n_sujeito_365d", "spread_365d"),
+        ]
+        if (row.get(n_field) or 0) >= cfg.get("estabilidade_min_n_janela", 0)
+        and row.get(sp_field) is not None
+        and float(row[sp_field]) >= spread_min
+    )
+    if janelas_passadas < cfg.get("estabilidade_min_janelas", 0):
+        return f"estabilidade {janelas_passadas}/3 janelas (limiar {cfg.get('estabilidade_min_janelas')})"
+    return None
+
+
+@app.get(
+    "/manchetes/diagnostico",
+    response_model=ManchteDiagnosticoOut,
+    tags=["meta"],
+)
+def get_manchete_diagnostico(conn: ConnDep, cd_tce: str) -> ManchteDiagnosticoOut:
+    """Busca reversa: para um municipio, mostra manchetes ativas E
+    diagnostico de por que outras (cluster, municipio) nao viraram manchete.
+
+    Fecha a cara do sistema: ninguem escapa do escrutinio por aleatoriedade.
+    Toda combinacao avaliada e visivel — passou ou explica o motivo.
+    """
+    with conn.cursor() as cur:
+        # Info do municipio
+        cur.execute(
+            "SELECT cd_tce, nome, populacao FROM analytics.municipio_pr WHERE cd_tce = %s",
+            (cd_tce,),
+        )
+        mun = cur.fetchone()
+        municipio_nome = mun["nome"] if mun else None
+        populacao = mun["populacao"] if mun else None
+
+        # Config ativa (ultima aplicada)
+        cur.execute(
+            """
+            SELECT parametros_hash, config_json
+            FROM analytics.manchete_config_aplicada
+            ORDER BY ultima_aplicacao DESC LIMIT 1
+            """
+        )
+        cfg_row = cur.fetchone()
+        if not cfg_row:
+            return ManchteDiagnosticoOut(
+                cd_tce=cd_tce, municipio_nome=municipio_nome, populacao=populacao,
+                parametros_hash=None, ativas=[], candidatos=[],
+            )
+        config = cfg_row["config_json"]
+        parametros_hash = cfg_row["parametros_hash"]
+
+        # Manchetes ativas onde aparece
+        cur.execute(
+            """
+            SELECT
+                rank_no_dia, cluster_id, cluster_version, cd_tce, cd_ibge,
+                municipio_nome, porte, populacao, n_sujeito, valor_total_sujeito,
+                med_sujeito, med_cluster, spread, iqr_sujeito, iqr_cluster,
+                comparab_proxy, spread_90d, spread_180d, spread_365d,
+                janelas_passadas, rank_score, parametros_hash,
+                refresh_em::text AS refresh_em
+            FROM analytics.manchete WHERE cd_tce = %s ORDER BY rank_no_dia
+            """,
+            (cd_tce,),
+        )
+        ativas = [ManchteOut(**r) for r in cur.fetchall()]
+        ativas_ids = {(a.cluster_id, a.cd_tce) for a in ativas}
+
+        # Todas as discrepancias (cluster, mun) avaliadas — diagnostica falha
+        cur.execute(
+            """
+            SELECT cluster_id, n_cluster, n_sujeito, valor_total_sujeito,
+                   spread, iqr_sujeito, iqr_cluster, comparab_proxy,
+                   spread_90d, spread_180d, spread_365d,
+                   n_sujeito_90d, n_sujeito_180d, n_sujeito_365d
+            FROM analytics.cluster_discrepancias WHERE cd_tce = %s
+            ORDER BY spread DESC NULLS LAST
+            """,
+            (cd_tce,),
+        )
+        candidatos: list[ManchteCandidatoDiagOut] = []
+        for row in cur.fetchall():
+            if (row["cluster_id"], cd_tce) in ativas_ids:
+                continue  # ja na lista de ativas
+            motivo = _diag_motivo_falha(row, config)
+            candidatos.append(ManchteCandidatoDiagOut(
+                cluster_id=row["cluster_id"],
+                n_sujeito=row["n_sujeito"],
+                spread=row["spread"],
+                iqr_sujeito=row["iqr_sujeito"],
+                comparab_proxy=row["comparab_proxy"],
+                motivo_falha=motivo,
+            ))
+
+    return ManchteDiagnosticoOut(
+        cd_tce=cd_tce, municipio_nome=municipio_nome, populacao=populacao,
+        parametros_hash=parametros_hash, ativas=ativas, candidatos=candidatos,
+    )
+
+
+@app.get("/manchetes/saidas", response_model=list[ManchteSaidaOut], tags=["meta"])
+def get_manchetes_saidas(
+    conn: ConnDep,
+    dias: int = Query(default=90, ge=1, le=365),
+) -> list[ManchteSaidaOut]:
+    """Manchetes que sairam nos ultimos N dias com motivo diagnostico.
+
+    Cumpre o principio "vela apagada e tambem informacao" — credibilidade
+    publica. Conhecer o que SAIU revela que o sistema e vivo e auto-corrige.
+    """
+    sql = """
+        SELECT
+            saiu_em::text AS saiu_em,
+            manchete_id,
+            motivo,
+            payload_anterior->>'cluster_id'    AS cluster_id,
+            payload_anterior->>'municipio_nome' AS municipio_nome,
+            (payload_anterior->>'spread')::numeric AS spread_anterior,
+            parametros_hash
+        FROM analytics.manchete_saida
+        WHERE saiu_em >= NOW() - (%s || ' days')::interval
+        ORDER BY saiu_em DESC
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (dias,))
+        return [ManchteSaidaOut(**r) for r in cur.fetchall()]
 
 
 @app.get("/item/{raw_id}", response_model=ItemOut, tags=["dados"])

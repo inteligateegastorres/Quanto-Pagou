@@ -1,0 +1,14 @@
+{
+  "endpoint": "/clusters",
+  "method": "GET",
+  "shape": {
+    "type": "list[object]",
+    "keys": [
+      "categoria",
+      "cluster_id",
+      "cluster_version",
+      "descricao_canonica",
+      "n_itens"
+    ]
+  }
+}

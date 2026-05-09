@@ -1,0 +1,19 @@
+{
+  "endpoint": "/instituicoes/search?q=hospital&limit=1",
+  "method": "GET",
+  "shape": {
+    "type": "object",
+    "keys": [
+      "fornecedores",
+      "fornecedores_no_objeto",
+      "objetos",
+      "orgaos",
+      "q",
+      "total_fornecedores",
+      "total_fornecedores_no_objeto",
+      "total_objeto_contratos",
+      "total_orgaos",
+      "valor_total_objeto"
+    ]
+  }
+}

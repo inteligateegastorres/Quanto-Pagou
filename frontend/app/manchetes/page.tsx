@@ -1,7 +1,12 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { fmtBRL, fmtBRLCompact } from "@/lib/api";
-import { manchetes as manchetesApi, type Manchete } from "@/lib/tcepr";
+import {
+  manchetes as manchetesApi,
+  type Manchete,
+  type ManchteDiagnostico,
+  type ManchteSaida,
+} from "@/lib/tcepr";
 import {
   Badge,
   ClusterVersionBadge,
@@ -38,11 +43,26 @@ const CLUSTER_LABEL: Record<string, string> = {
   obras_edificacao: "Obras de edificação",
 };
 
-export default async function ManchetesPage() {
+export default async function ManchetesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ cd_tce?: string }>;
+}) {
+  const sp = await searchParams;
+  const cdTceQuery = sp.cd_tce?.trim();
+
   let lista: Manchete[] = [];
+  let saidas: ManchteSaida[] = [];
+  let diagnostico: ManchteDiagnostico | null = null;
   let erro: string | null = null;
   try {
-    lista = await manchetesApi.lista();
+    [lista, saidas] = await Promise.all([
+      manchetesApi.lista(),
+      manchetesApi.saidas(90).catch(() => [] as ManchteSaida[]),
+    ]);
+    if (cdTceQuery && /^\d{6,7}$/.test(cdTceQuery)) {
+      diagnostico = await manchetesApi.diagnostico(cdTceQuery).catch(() => null);
+    }
   } catch (e) {
     erro = e instanceof Error ? e.message : "erro";
   }
@@ -69,6 +89,36 @@ export default async function ManchetesPage() {
           auditoria pública.
         </p>
       </header>
+
+      {/* Busca reversa: "minha cidade ta aqui? se nao, por que nao?" */}
+      <section className="border border-line rounded-md p-4 bg-paper text-sm space-y-3">
+        <p className="font-medium">Onde está sua cidade?</p>
+        <form action="/manchetes" method="get" className="flex gap-2 flex-wrap">
+          <input
+            type="text"
+            name="cd_tce"
+            inputMode="numeric"
+            pattern="[0-9]{6,7}"
+            defaultValue={cdTceQuery ?? ""}
+            placeholder="cd_tce (6-7 dígitos, ex: 410690)"
+            className="flex-1 min-w-0 border border-line rounded-md px-3 py-1.5 text-sm bg-paper"
+          />
+          <button
+            type="submit"
+            className="border border-ink rounded-md px-4 py-1.5 text-sm no-underline hover:bg-ink hover:text-paper"
+          >
+            Diagnosticar
+          </button>
+        </form>
+        <p className="text-xs text-muted">
+          Mostra manchetes ativas do município E os outros clusters
+          avaliados com motivo de não terem virado manchete (passou ou
+          falhou em qual threshold). &quot;Vela apagada também é
+          informação.&quot; Cd_tce no header de qualquer página de
+          município.
+        </p>
+        {diagnostico && <DiagnosticoBox d={diagnostico} />}
+      </section>
 
       <section className="border border-line rounded-md p-4 bg-paper text-sm space-y-2">
         <p className="font-medium">Como ler</p>
@@ -121,6 +171,42 @@ export default async function ManchetesPage() {
           <ManchteCard key={m.rank_no_dia} m={m} />
         ))}
       </ol>
+
+      {saidas.length > 0 && (
+        <section className="space-y-3 border-t border-line pt-6">
+          <h2 className="text-base font-semibold">
+            Recém-saídas <span className="text-xs text-muted font-normal">(últimos 90 dias · vela apagada também é informação)</span>
+          </h2>
+          <ul className="space-y-2 text-sm">
+            {saidas.map((s) => (
+              <li
+                key={`${s.saiu_em}__${s.manchete_id}`}
+                className="border border-line rounded-md p-3 bg-paper"
+              >
+                <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                  <span className="font-medium">
+                    {(s.cluster_id && CLUSTER_LABEL[s.cluster_id]) ?? s.cluster_id ?? "—"}
+                    {" · "}
+                    {s.municipio_nome ?? "—"}
+                  </span>
+                  <span className="text-xs text-muted">
+                    saiu em {s.saiu_em.slice(0, 10)}
+                  </span>
+                </div>
+                <p className="text-muted text-xs pt-1">
+                  <strong>Motivo:</strong> {s.motivo}
+                  {s.spread_anterior && (
+                    <span className="ml-2">
+                      (spread anterior:{" "}
+                      <span className="font-mono">{Number(s.spread_anterior).toFixed(1)}×</span>)
+                    </span>
+                  )}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="text-xs text-muted border-t border-line pt-6 space-y-2">
         <p>
@@ -248,6 +334,80 @@ function Cell({
       >
         {value}
       </p>
+    </div>
+  );
+}
+
+function DiagnosticoBox({ d }: { d: ManchteDiagnostico }) {
+  if (!d.municipio_nome) {
+    return (
+      <p className="text-sm text-attention pt-2">
+        Município <code>{d.cd_tce}</code> não catalogado em{" "}
+        <code>analytics.municipio_pr</code> — sem dados de população.
+      </p>
+    );
+  }
+  return (
+    <div className="border-t border-line pt-3 mt-2 space-y-3">
+      <p className="text-sm">
+        <Link href={`/municipio/${d.cd_tce}`} className="no-underline hover:underline">
+          <strong>{d.municipio_nome}</strong>
+        </Link>{" "}
+        <span className="text-xs text-muted">
+          (cd_tce {d.cd_tce} · pop {d.populacao?.toLocaleString("pt-BR") ?? "?"})
+        </span>
+      </p>
+
+      {d.ativas.length > 0 ? (
+        <div>
+          <p className="text-sm font-medium text-attention">
+            ✓ Aparece em {d.ativas.length} manchete{d.ativas.length === 1 ? "" : "s"} ativa{d.ativas.length === 1 ? "" : "s"}:
+          </p>
+          <ul className="list-disc pl-5 text-sm">
+            {d.ativas.map((m) => (
+              <li key={m.cluster_id}>
+                <strong>#{m.rank_no_dia}</strong>{" "}
+                {CLUSTER_LABEL[m.cluster_id] ?? m.cluster_id} · spread{" "}
+                {Number(m.spread).toFixed(1)}× · {m.janelas_passadas}/3 janelas
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p className="text-sm text-muted">
+          Não aparece em nenhuma manchete ativa.
+        </p>
+      )}
+
+      {d.candidatos.length > 0 && (
+        <details>
+          <summary className="cursor-pointer text-sm">
+            {d.candidatos.length} outros clusters avaliados (motivo de não-publicação)
+          </summary>
+          <ul className="text-xs space-y-1 pt-2 max-h-80 overflow-y-auto">
+            {d.candidatos
+              .filter((c) => c.motivo_falha)
+              .slice(0, 30)
+              .map((c) => (
+                <li key={c.cluster_id} className="border-l-2 border-line pl-2">
+                  <strong>{CLUSTER_LABEL[c.cluster_id] ?? c.cluster_id}</strong>
+                  {c.spread && (
+                    <span className="text-muted"> · spread {Number(c.spread).toFixed(1)}×</span>
+                  )}
+                  <span className="text-muted"> · {c.n_sujeito} contratos</span>
+                  <p className="text-muted italic pl-2">{c.motivo_falha}</p>
+                </li>
+              ))}
+          </ul>
+        </details>
+      )}
+
+      {d.parametros_hash && (
+        <p className="text-xs text-muted">
+          Diagnóstico contra config atual ({" "}
+          <code>{d.parametros_hash}</code>).
+        </p>
+      )}
     </div>
   );
 }

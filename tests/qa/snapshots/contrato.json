@@ -1,0 +1,41 @@
+{
+  "endpoint": "/contrato/{raw_id}",
+  "method": "GET",
+  "shape": {
+    "type": "object",
+    "keys": [
+      "catmat_id",
+      "catser_id",
+      "cd_ibge",
+      "cluster_descricao",
+      "cluster_id",
+      "cluster_version",
+      "confianca_resolucao",
+      "contract_date",
+      "descricao",
+      "em_quarentena",
+      "fornecedor_cnpj",
+      "fornecedor_nome",
+      "metodo_resolucao",
+      "modalidade",
+      "motivo_quarentena",
+      "municipio_nome",
+      "orgao_codigo",
+      "orgao_nome",
+      "quantidade",
+      "raw_id",
+      "raw_payload",
+      "snapshot_hash_sha256",
+      "snapshot_id",
+      "snapshot_ingested_at",
+      "snapshot_period_end",
+      "snapshot_period_start",
+      "source",
+      "source_id",
+      "source_url",
+      "unidade",
+      "valor_total",
+      "valor_unitario"
+    ]
+  }
+}

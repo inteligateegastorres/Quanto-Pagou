@@ -1,0 +1,16 @@
+{
+  "endpoint": "/tce-pr/municipio/4106902/resumo",
+  "method": "GET",
+  "shape": {
+    "type": "object",
+    "keys": [
+      "cd_ibge",
+      "cobertura_pct",
+      "municipio",
+      "n_contratos_total",
+      "n_em_cluster",
+      "n_em_quarentena",
+      "valor_total"
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "endpoint": "/tce-pr/municipio/4106902/fornecedores?limit=1",
+  "method": "GET",
+  "shape": {
+    "type": "list[object]",
+    "keys": [
+      "cd_ibge",
+      "fornecedor_cnpj",
+      "fornecedor_nome",
+      "municipio",
+      "n_contratos",
+      "n_orgaos_distintos",
+      "valor_total_periodo"
+    ]
+  }
+}

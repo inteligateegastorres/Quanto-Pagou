@@ -1,0 +1,16 @@
+{
+  "endpoint": "/manchetes/saidas",
+  "method": "GET",
+  "shape": {
+    "type": "list[object]",
+    "keys": [
+      "cluster_id",
+      "manchete_id",
+      "motivo",
+      "municipio_nome",
+      "parametros_hash",
+      "saiu_em",
+      "spread_anterior"
+    ]
+  }
+}

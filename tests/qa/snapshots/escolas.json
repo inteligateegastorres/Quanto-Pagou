@@ -1,0 +1,14 @@
+{
+  "endpoint": "/escolas?limit=1",
+  "method": "GET",
+  "shape": {
+    "type": "list[object]",
+    "keys": [
+      "escola_nome",
+      "escola_slug",
+      "n_mencoes",
+      "n_municipios",
+      "valor_total"
+    ]
+  }
+}

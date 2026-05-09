@@ -1,0 +1,20 @@
+{
+  "endpoint": "/stats/pr",
+  "method": "GET",
+  "shape": {
+    "type": "object",
+    "keys": [
+      "cobertura_cluster_pct",
+      "last_snapshot_at",
+      "modalidades",
+      "n_em_cluster",
+      "n_em_quarentena",
+      "n_escolas_catalogadas",
+      "top_clusters",
+      "total_contratos",
+      "total_fornecedores",
+      "total_municipios",
+      "valor_total_pr"
+    ]
+  }
+}

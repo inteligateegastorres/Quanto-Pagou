@@ -1,0 +1,20 @@
+{
+  "endpoint": "/escolas/{slug}/contratos",
+  "method": "GET",
+  "shape": {
+    "type": "list[object]",
+    "keys": [
+      "cd_tce",
+      "cluster_id",
+      "contract_date",
+      "contrato_id",
+      "descricao",
+      "escola_nome",
+      "municipio",
+      "orgao_nome",
+      "padrao",
+      "raw_id",
+      "valor_total"
+    ]
+  }
+}

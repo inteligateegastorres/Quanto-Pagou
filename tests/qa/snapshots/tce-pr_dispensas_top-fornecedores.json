@@ -1,0 +1,16 @@
+{
+  "endpoint": "/tce-pr/dispensas/top-fornecedores?limit=1",
+  "method": "GET",
+  "shape": {
+    "type": "list[object]",
+    "keys": [
+      "cnpj_mascarado",
+      "fornecedor_cnpj",
+      "fornecedor_nome",
+      "n_dispensas",
+      "n_municipios",
+      "n_orgaos",
+      "valor_total_dispensas"
+    ]
+  }
+}

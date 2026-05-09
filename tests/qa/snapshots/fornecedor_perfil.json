@@ -1,0 +1,18 @@
+{
+  "endpoint": "/fornecedor/{cnpj}",
+  "method": "GET",
+  "shape": {
+    "type": "object",
+    "keys": [
+      "cnpj_mascarado",
+      "fornecedor_cnpj",
+      "fornecedor_nome",
+      "n_contratos_total",
+      "n_municipios_distintos",
+      "n_orgaos_distintos",
+      "primeiro_contrato",
+      "ultimo_contrato",
+      "valor_total"
+    ]
+  }
+}

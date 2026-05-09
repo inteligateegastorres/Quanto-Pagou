@@ -1,0 +1,13 @@
+{
+  "endpoint": "/fornecedor/{cnpj}/por-modalidade",
+  "method": "GET",
+  "shape": {
+    "type": "list[object]",
+    "keys": [
+      "chave",
+      "n_contratos",
+      "nome",
+      "valor_total"
+    ]
+  }
+}

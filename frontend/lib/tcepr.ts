@@ -453,6 +453,37 @@ export type Manchete = {
   refresh_em: string;
 };
 
+export type ManchteSaida = {
+  saiu_em: string;
+  manchete_id: string;
+  motivo: string;
+  cluster_id: string | null;
+  municipio_nome: string | null;
+  spread_anterior: string | null;
+  parametros_hash: string;
+};
+
+export type ManchteCandidatoDiag = {
+  cluster_id: string;
+  n_sujeito: number;
+  spread: string | null;
+  iqr_sujeito: string | null;
+  comparab_proxy: string | null;
+  motivo_falha: string | null;
+};
+
+export type ManchteDiagnostico = {
+  cd_tce: string;
+  municipio_nome: string | null;
+  populacao: number | null;
+  parametros_hash: string | null;
+  ativas: Manchete[];
+  candidatos: ManchteCandidatoDiag[];
+};
+
 export const manchetes = {
   lista: () => jget<Manchete[]>("/manchetes"),
+  saidas: (dias = 90) => jget<ManchteSaida[]>(`/manchetes/saidas?dias=${dias}`),
+  diagnostico: (cd_tce: string) =>
+    jget<ManchteDiagnostico>(`/manchetes/diagnostico?cd_tce=${encodeURIComponent(cd_tce)}`),
 };
