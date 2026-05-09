@@ -114,8 +114,8 @@ do {
 } while (-not $ok -and (Get-Date) -lt $deadline)
 if (-not $ok) { throw "postgres nao ficou healthy em 60s" }
 
-# Aplicar migrations idempotentes na ordem (analytics + resilience + tce_pr)
-foreach ($sqlFile in @("sql/001_analytics.sql", "sql/002_resilience.sql", "sql/003_tce_pr.sql")) {
+# Aplicar migrations idempotentes na ordem (analytics + resilience + tce_pr + escolas + manchetes)
+foreach ($sqlFile in @("sql/001_analytics.sql", "sql/002_resilience.sql", "sql/003_tce_pr.sql", "sql/004_escolas.sql", "sql/005_manchetes.sql")) {
     Say "aplicando $sqlFile..."
     Get-Content $sqlFile -Raw | docker exec -i quantopagou-postgres psql -U quantopagou -d quantopagou -q *> $null
     if ($LASTEXITCODE -ne 0) { throw "psql $sqlFile falhou (exit=$LASTEXITCODE)" }
@@ -143,6 +143,12 @@ if ($rawCount -eq "" -or $rawCount -eq "0" -or $Fresh) {
 Say "rodando analytics.build_marts (canonicalizacao + refresh)..."
 python -m uv run python -m analytics.build_marts *> $null
 if ($LASTEXITCODE -ne 0) { throw "analytics.build_marts falhou (exit=$LASTEXITCODE)" }
+
+Say "rodando analytics.manchetes refresh (Camadas 2 e 3)..."
+python -m uv run python -m analytics.manchetes refresh *> $null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "    aviso: manchetes refresh falhou (exit=$LASTEXITCODE) - nao bloqueia stack" -ForegroundColor Yellow
+}
 
 # ---------- API ----------
 

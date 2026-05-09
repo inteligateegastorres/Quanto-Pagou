@@ -424,3 +424,31 @@ export const tcepr = {
     );
   },
 };
+
+// ----------------------------- Manchetes ------------------------------
+
+export type Manchete = {
+  rank_no_dia: number;
+  cluster_id: string;
+  cluster_version: string;
+  cd_tce: string;
+  cd_ibge: string | null;
+  municipio_nome: string | null;
+  porte: string | null;
+  populacao: number | null;
+  n_sujeito: number;
+  valor_total_sujeito: string;
+  med_sujeito: string;
+  med_cluster: string;
+  spread: string;
+  iqr_sujeito: string;
+  iqr_cluster: string;
+  comparab_proxy: string;
+  rank_score: string;
+  parametros_hash: string;
+  refresh_em: string;
+};
+
+export const manchetes = {
+  lista: () => jget<Manchete[]>("/manchetes"),
+};

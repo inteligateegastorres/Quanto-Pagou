@@ -78,7 +78,7 @@ until docker exec quantopagou-postgres pg_isready -U quantopagou -d quantopagou 
     sleep 1
 done
 
-for sql_file in sql/001_analytics.sql sql/002_resilience.sql sql/003_tce_pr.sql; do
+for sql_file in sql/001_analytics.sql sql/002_resilience.sql sql/003_tce_pr.sql sql/004_escolas.sql sql/005_manchetes.sql; do
     say "aplicando $sql_file (idempotente)..."
     docker exec -i quantopagou-postgres psql -U quantopagou -d quantopagou -q < "$sql_file" >/dev/null
 done
@@ -101,6 +101,10 @@ fi
 
 say "rodando analytics.build_marts..."
 python -m uv run python -m analytics.build_marts >/dev/null
+
+say "rodando analytics.manchetes refresh (Camadas 2 e 3)..."
+python -m uv run python -m analytics.manchetes refresh >/dev/null \
+    || warn "manchetes refresh falhou - nao bloqueia stack"
 
 # ---------- API ----------
 API_PID=$(load_pid api)
