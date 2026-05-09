@@ -76,6 +76,18 @@ export default async function ContratosPage({
   const page = Math.max(1, parseInt(params.page || "1", 10) || 1);
   const order = params.order || "valor_desc";
 
+  // Validacao de data: catch antes de chamar a API. since/until precisam
+  // ser AAAA-MM-DD validos (mes 1-12, dia consistente). Se invalido,
+  // mostramos mensagem amigavel e nao chamamos o backend (que hoje 500).
+  const dateErrors: { campo: string; valor: string }[] = [];
+  for (const campo of ["since", "until"] as const) {
+    const v = params[campo];
+    if (!v) continue;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || Number.isNaN(Date.parse(v + "T00:00:00Z"))) {
+      dateErrors.push({ campo, valor: v });
+    }
+  }
+
   const filters: ContratoSearchFilters = {
     cluster_id: params.cluster_id,
     cd_tce: params.cd_tce,
@@ -95,10 +107,16 @@ export default async function ContratosPage({
 
   let result: ContratoSearchPage | null = null;
   let err: string | null = null;
-  try {
-    result = await contratosApi.search(filters);
-  } catch (e) {
-    err = e instanceof Error ? e.message : "erro";
+  if (dateErrors.length > 0) {
+    err = `Data inválida em ${dateErrors
+      .map((d) => `${d.campo}="${d.valor}"`)
+      .join(" e ")}. Use o formato AAAA-MM-DD (ex: 2024-12-31).`;
+  } else {
+    try {
+      result = await contratosApi.search(filters);
+    } catch (e) {
+      err = e instanceof Error ? e.message : "erro";
+    }
   }
 
   // Labels — pra header dinamico
@@ -360,9 +378,18 @@ export default async function ContratosPage({
       )}
 
       {err && (
-        <p className="text-sm text-attention">
-          Falha ao consultar: {err}
-        </p>
+        <div className="border border-attention/40 bg-attention/5 rounded-md p-4 text-sm">
+          <p className="font-semibold text-attention mb-1">
+            {dateErrors.length > 0 ? "Filtro inválido" : "Falha ao consultar"}
+          </p>
+          <p className="text-muted">{err}</p>
+          {dateErrors.length > 0 && (
+            <p className="text-xs text-muted mt-2">
+              Ajuste o filtro acima e clique em &quot;Aplicar&quot;, ou{" "}
+              <Link href="/contratos">limpe os filtros</Link>.
+            </p>
+          )}
+        </div>
       )}
 
       {result && result.contratos.length === 0 && !err && (

@@ -1,8 +1,22 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { api, fmtBRL } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ raw_id: string }>;
+}): Promise<Metadata> {
+  const { raw_id } = await params;
+  return {
+    title: `Item #${raw_id} · Quanto Pagou`,
+    description: "Item canonicalizado com comparação contra pares e fonte primária.",
+    robots: { index: false, follow: false },
+  };
+}
 
 export default async function ItemPage({
   params,

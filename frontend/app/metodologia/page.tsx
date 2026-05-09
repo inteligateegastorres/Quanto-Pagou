@@ -1,4 +1,11 @@
 import Link from "next/link";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Metodologia · Quanto Pagou",
+  description:
+    "Como o Quanto Pagou coleta, normaliza e compara preços de contratos públicos. Fontes, resolução de cluster, normalização de unidade, guardrails, política de correção.",
+};
 
 export default function MetodologiaPage() {
   return (
