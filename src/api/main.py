@@ -20,8 +20,9 @@ Decisoes:
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from datetime import date
 from decimal import Decimal
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 import psycopg
 from fastapi import Depends, FastAPI, HTTPException, Query
@@ -509,7 +510,42 @@ def get_pares(
         cur.execute(sql, (cluster_id, cluster_version))
         rows = cur.fetchall()
     if not rows:
-        raise HTTPException(404, f"sem mart_pares para {cluster_id} {cluster_version}")
+        # Distingue tres casos:
+        #   1. cluster nao existe                 -> 404 simples
+        #   2. cluster existe mas e contract-level (TCE-PR sem unit price)
+        #                                         -> 404 sugerindo o endpoint correto
+        #   3. cluster existe item-a-item mas sem dados que passem o threshold
+        #                                         -> 404 explicando o filtro
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT cluster_id FROM analytics.cluster_registry "
+                "WHERE cluster_id = %s AND cluster_version = %s LIMIT 1",
+                (cluster_id, cluster_version),
+            )
+            existe = cur.fetchone() is not None
+            if not existe:
+                raise HTTPException(
+                    404, f"cluster '{cluster_id}' (v={cluster_version}) nao existe"
+                )
+            cur.execute(
+                "SELECT COUNT(*) AS n FROM analytics.item_canonical "
+                "WHERE cluster_id = %s AND cluster_version = %s "
+                "  AND valor_unitario_normalizado IS NOT NULL",
+                (cluster_id, cluster_version),
+            )
+            n_com_unit_price = cur.fetchone()["n"]
+        if n_com_unit_price == 0:
+            raise HTTPException(
+                404,
+                f"cluster '{cluster_id}' e contract-level (sem preco unitario "
+                f"normalizado) — use /tce-pr/cluster/{cluster_id}/comparacao-municipios "
+                f"para comparacao por contrato entre municipios PR.",
+            )
+        raise HTTPException(
+            404,
+            f"cluster '{cluster_id}' nao tem itens com confianca >= 0.75 "
+            f"(threshold de mart_pares) — verifique /quarentena/resumo.",
+        )
     return [ParesOut(**r) for r in rows]
 
 
@@ -518,16 +554,17 @@ def ranking_orgaos(
     conn: ConnDep,
     cluster_id: str,
     cluster_version: str = "v1",
-    order: str = Query(default="mediana_desc", description="mediana_desc | mediana_asc | n_desc"),
+    order: Literal["mediana_desc", "mediana_asc", "n_desc"] = Query(
+        default="mediana_desc",
+        description="mediana_desc | mediana_asc | n_desc",
+    ),
     limit: int = Query(default=10, ge=1, le=100),
 ) -> list[RankingOrgaoOut]:
     order_sql = {
         "mediana_desc": "mediana_orgao DESC",
         "mediana_asc": "mediana_orgao ASC",
         "n_desc": "n_compras DESC",
-    }.get(order)
-    if order_sql is None:
-        raise HTTPException(400, f"order invalido: {order}")
+    }[order]
     sql = f"""
         SELECT cluster_id, cluster_version, orgao_codigo, orgao_nome,
                n_compras, mediana_orgao, valor_total_periodo
@@ -902,11 +939,11 @@ def contratos_search(
         default=None,
         description="Busca textual livre em descricao OU fornecedor_nome OU orgao_nome (ILIKE %q% case-insensitive). Cobre 'UPA Centro' (objeto), 'Atlantica Construcoes' (fornecedor), 'Funcao Estatal de Atencao' (orgao).",
     ),
-    since: str | None = Query(default=None, description="contract_date >= YYYY-MM-DD"),
-    until: str | None = Query(default=None, description="contract_date <= YYYY-MM-DD"),
+    since: date | None = Query(default=None, description="contract_date >= YYYY-MM-DD"),
+    until: date | None = Query(default=None, description="contract_date <= YYYY-MM-DD"),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=50, ge=1, le=200),
-    order: str = Query(
+    order: Literal["valor_desc", "valor_asc", "data_desc", "data_asc"] = Query(
         default="valor_desc",
         description="valor_desc | valor_asc | data_desc | data_asc",
     ),
@@ -983,9 +1020,7 @@ def contratos_search(
         "valor_asc": "rc.valor_total ASC NULLS LAST",
         "data_desc": "rc.contract_date DESC NULLS LAST",
         "data_asc": "rc.contract_date ASC NULLS LAST",
-    }.get(order)
-    if order_sql is None:
-        raise HTTPException(400, f"order invalido: {order}")
+    }[order]
 
     # Conta total + soma — uma query so
     sql_total = f"""
@@ -1780,15 +1815,17 @@ def tce_pr_ranking_municipios(
         default=None,
         description="Filtra por modalidade (pregao, dispensa, concorrencia, etc). 'sem_modalidade' = nao resolvida.",
     ),
-    since: str | None = Query(
+    since: date | None = Query(
         default=None,
         description="Data assinatura mínima (YYYY-MM-DD). Filtra rc.contract_date.",
     ),
-    until: str | None = Query(
+    until: date | None = Query(
         default=None,
         description="Data assinatura máxima (YYYY-MM-DD inclusive).",
     ),
-    order: str = Query(default="mediana_desc"),
+    order: Literal["mediana_desc", "mediana_asc", "total_desc", "n_desc"] = Query(
+        default="mediana_desc"
+    ),
     limit: int = Query(default=20, ge=1, le=200),
 ) -> list[RankingMunicipioOut]:
     """Ranking de municipios PR para um cluster (soma todos os orgaos do
@@ -1801,9 +1838,7 @@ def tce_pr_ranking_municipios(
         "mediana_asc": "mediana_valor_contrato ASC",
         "total_desc": "valor_total_periodo DESC",
         "n_desc": "n_contratos DESC",
-    }.get(order)
-    if order_sql is None:
-        raise HTTPException(400, f"order invalido: {order}")
+    }[order]
     sql = f"""
         SELECT
             ic.cluster_id,
@@ -1859,7 +1894,9 @@ def tce_pr_comparacao_municipios(
     cluster_id: str,
     cluster_version: str = "v1",
     porte: str | None = None,
-    order: str = Query(default="mediana_desc"),
+    order: Literal["mediana_desc", "mediana_asc", "total_desc", "n_desc"] = Query(
+        default="mediana_desc"
+    ),
     limit: int = Query(default=30, ge=1, le=200),
 ) -> list[ContratoMunicipioOut]:
     """Compara municipios PR para um cluster especifico (ex: merenda escolar).
@@ -1872,9 +1909,7 @@ def tce_pr_comparacao_municipios(
         "mediana_asc": "mediana_valor_contrato ASC",
         "total_desc": "valor_total_periodo DESC",
         "n_desc": "n_contratos DESC",
-    }.get(order)
-    if order_sql is None:
-        raise HTTPException(400, f"order invalido: {order}")
+    }[order]
     sql = f"""
         SELECT cluster_id, cluster_version, cd_ibge, municipio, porte,
                orgao_codigo, orgao_nome, n_contratos, valor_total_periodo,
