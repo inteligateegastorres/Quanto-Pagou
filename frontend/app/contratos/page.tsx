@@ -244,16 +244,19 @@ export default async function ContratosPage({
 
         <div className="space-y-1">
           <label className="text-xs uppercase tracking-wide text-muted block">
-            Busca textual no objeto do contrato
+            Busca textual (objeto, fornecedor ou órgão)
           </label>
           <input
             name="q"
             defaultValue={params.q ?? ""}
-            placeholder='ex: "UPA Centro", "Hospital Municipal", "Escola Carlos Gomes", "creche infantil"'
+            placeholder='ex: "Atlantica Construcoes" (fornecedor), "UPA Centro" (objeto), "Fundacao Estatal de Saude" (órgão), "Escola Carlos Gomes"'
             className="w-full border border-line rounded-md px-3 py-2 text-sm bg-paper"
           />
           <p className="text-xs text-muted">
-            Substring case-insensitive na descrição. Acentos importam (UPA ≠ upa? — não, é case-insensitive; mas "Sao" ≠ "São").
+            Substring case-insensitive em <strong>3 campos</strong>:
+            descrição do objeto, nome do fornecedor que recebeu o pagamento,
+            nome do órgão contratante. Acentos importam (digite como
+            aparece na fonte; "Sao" ≠ "São").
           </p>
         </div>
 

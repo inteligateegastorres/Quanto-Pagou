@@ -698,7 +698,7 @@ def contratos_search(
     ),
     q: str | None = Query(
         default=None,
-        description="Busca textual livre em descricao (ILIKE %q%). Ex: 'UPA Centro', 'Hospital Municipal', 'Escola Carlos Gomes'. Case-insensitive.",
+        description="Busca textual livre em descricao OU fornecedor_nome OU orgao_nome (ILIKE %q% case-insensitive). Cobre 'UPA Centro' (objeto), 'Atlantica Construcoes' (fornecedor), 'Funcao Estatal de Atencao' (orgao).",
     ),
     since: str | None = Query(default=None, description="contract_date >= YYYY-MM-DD"),
     until: str | None = Query(default=None, description="contract_date <= YYYY-MM-DD"),
@@ -764,9 +764,15 @@ def contratos_search(
         where.append("rc.contract_date <= %s::date")
         args.append(until)
     if q:
-        # ILIKE com substring em ambos os lados; case-insensitive nativo.
-        where.append("rc.descricao ILIKE %s")
-        args.append(f"%{q}%")
+        # ILIKE em 3 campos: objeto + fornecedor + orgao. ORs no mesmo
+        # AND-block do WHERE; substring em ambos os lados, case-insensitive.
+        where.append(
+            "(rc.descricao ILIKE %s "
+            "OR rc.fornecedor_nome ILIKE %s "
+            "OR rc.orgao_nome ILIKE %s)"
+        )
+        like = f"%{q}%"
+        args.extend([like, like, like])
 
     where_sql = " AND ".join(where)
 
