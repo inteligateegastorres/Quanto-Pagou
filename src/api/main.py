@@ -32,7 +32,6 @@ from pydantic import BaseModel, Field
 
 from ingest.config import settings
 
-
 # Threshold de contratos para gerar perfil publico de fornecedor (guardrail
 # §6.5 do plano: filtra fornecedores eventuais, reduz risco de exposicao
 # injusta). Reusado em /fornecedor/{cnpj} e em /fornecedores (listagem).
@@ -60,7 +59,9 @@ async def lifespan(_app: FastAPI):
 
 
 def get_conn():
-    assert _pool is not None, "pool not initialized"
+    # NAO use assert: python -O remove asserts em producao.
+    if _pool is None:
+        raise RuntimeError("pool not initialized — lifespan nao rodou?")
     with _pool.connection() as conn:
         yield conn
 

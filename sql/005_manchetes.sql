@@ -17,9 +17,8 @@ CREATE SCHEMA IF NOT EXISTS analytics;
 -- Fatos estatisticos por (cluster, municipio). Nao filtra; expoe tudo.
 -- O calculo e identico ao dry-run final (perfil C calibrado em 2026-05-09).
 -- ---------------------------------------------------------------------------
-DROP MATERIALIZED VIEW IF EXISTS analytics.cluster_discrepancias CASCADE;
-
-CREATE MATERIALIZED VIEW analytics.cluster_discrepancias AS
+-- Idempotente. Para evoluir schema, criar migration nova que faz DROP antes.
+CREATE MATERIALIZED VIEW IF NOT EXISTS analytics.cluster_discrepancias AS
 WITH ref AS (
     -- Data de referencia para janelas temporais = MAX(contract_date) do
     -- snapshot atual. NAO usa NOW() porque o snapshot pode estar atrasado

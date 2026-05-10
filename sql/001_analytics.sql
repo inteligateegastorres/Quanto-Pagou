@@ -61,8 +61,9 @@ COMMENT ON TABLE analytics.item_canonical IS
 -- Usado pelo card narrativo: "voce pagou X; pares pagam Y; intervalo p25-p75".
 -- Filtra em_quarentena, valor_unitario_normalizado nulo, confianca < 0.75.
 -- ---------------------------------------------------------------------------
-DROP MATERIALIZED VIEW IF EXISTS analytics.mart_pares CASCADE;
-CREATE MATERIALIZED VIEW analytics.mart_pares AS
+-- IF NOT EXISTS pra preservar dados entre re-runs do dev_up.
+-- Mudancas de definicao exigem migration nova com DROP explicito.
+CREATE MATERIALIZED VIEW IF NOT EXISTS analytics.mart_pares AS
 SELECT
     ic.cluster_id,
     ic.cluster_version,
@@ -99,8 +100,7 @@ COMMENT ON MATERIALIZED VIEW analytics.mart_pares IS
 -- Mart 2: ranking de orgaos por cluster (gancho viral "Top orgaos federais
 -- que pagam mais por X").
 -- ---------------------------------------------------------------------------
-DROP MATERIALIZED VIEW IF EXISTS analytics.mart_orgao_cluster CASCADE;
-CREATE MATERIALIZED VIEW analytics.mart_orgao_cluster AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS analytics.mart_orgao_cluster AS
 SELECT
     ic.cluster_id,
     ic.cluster_version,

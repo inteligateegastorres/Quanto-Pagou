@@ -84,8 +84,7 @@ CREATE INDEX IF NOT EXISTS idx_municipio_pr_ibge  ON analytics.municipio_pr (cd_
 --  - agrupa por orgao + municipio (multiple entidades por municipio:
 --    prefeitura, camara, autarquias)
 -- ---------------------------------------------------------------------------
-DROP MATERIALIZED VIEW IF EXISTS analytics.mart_contratos_municipio CASCADE;
-CREATE MATERIALIZED VIEW analytics.mart_contratos_municipio AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS analytics.mart_contratos_municipio AS
 SELECT
     ic.cluster_id,
     ic.cluster_version,
@@ -124,8 +123,7 @@ COMMENT ON MATERIALIZED VIEW analytics.mart_contratos_municipio IS
 -- Mart 4: ranking de fornecedores por municipio (PR).
 -- Gancho viral "Top fornecedores que mais ganham contratos da Prefeitura X".
 -- ---------------------------------------------------------------------------
-DROP MATERIALIZED VIEW IF EXISTS analytics.mart_fornecedores_municipio CASCADE;
-CREATE MATERIALIZED VIEW analytics.mart_fornecedores_municipio AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS analytics.mart_fornecedores_municipio AS
 SELECT
     mp.cd_ibge                                          AS cd_ibge,
     COALESCE(mp.nome, rc.raw_payload->>'municipio')     AS municipio,

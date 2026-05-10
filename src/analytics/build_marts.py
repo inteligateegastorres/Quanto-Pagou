@@ -25,7 +25,6 @@ from analytics.escolas import extrair_escola
 from analytics.resolution import (
     CanonicalRow,
     GoldenCluster,
-    KeywordCluster,
     _compile_patterns,
     canonicalize,
     canonicalize_tce_pr_row,
@@ -265,9 +264,11 @@ def run(dry_run: bool = False) -> dict[str, Any]:
                 "analytics.mart_fornecedores_municipio",
                 "analytics.cluster_discrepancias",  # Camada 1 das manchetes
             ):
-                console.print(f"[dim]REFRESH MATERIALIZED VIEW {mv}...[/]")
+                console.print(f"[dim]REFRESH MATERIALIZED VIEW CONCURRENTLY {mv}...[/]")
                 try:
-                    conn.execute(f"REFRESH MATERIALIZED VIEW {mv}")
+                    # CONCURRENTLY exige UNIQUE INDEX (todas as 5 MVs tem) e
+                    # nao bloqueia leituras. Custo: ~2x tempo do REFRESH normal.
+                    conn.execute(f"REFRESH MATERIALIZED VIEW CONCURRENTLY {mv}")
                 except psycopg.errors.UndefinedTable:
                     conn.rollback()
                     logger.warning(
