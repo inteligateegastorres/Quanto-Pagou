@@ -2,10 +2,10 @@
 
 > Plataforma cívica para monitorar gastos públicos brasileiros e identificar possíveis desvios.
 
-**Versão:** v5.3 (2026-05-09)
+**Versão:** v5.4 (2026-05-09)
 **Status:** v5 + manchetes algorítmicas + Wave A (higiene) completa +
-Wave B (estrutura) parcialmente — B.2/B.3/B.4 ✅, B.1 fase 1 ✅. B.1
-fase 2 e Wave C (qualidade) próximos.
+Wave B (estrutura) parcial + Wave LGPD documentada (§18) com L.1
+implementado. **Não pronto para go-live público** — ver §18.3.
 
 ---
 
@@ -1238,7 +1238,176 @@ Cobertura de teste real (não só parser) + segurança operacional.
 
 ---
 
+## 18. Wave LGPD — pacote jurídico-administrativo (pré-go-live)
+
+Bloco **bloqueante para domínio público**, derivado de análise jurídica
+externa de 2026-05-09. Cobre lacunas LGPD que Wave A endereçou apenas
+parcialmente (`data/PRIVACY.md` v1 cobre conceitualmente; falta
+arquitetura de eliminação, distinção PJ vs MEI, LIA/RIPD formais,
+canal de direitos, encarregado).
+
+**Estimativa total:** 2-4 semanas (técnica + jurídica + UI).
+
+### 18.0 Por que vai entre Wave B e Wave C
+
+Reviewer jurídico marcou como **CRÍTICO** os itens 1.1, 1.2, 1.3, 1.6
+(arquitetura de eliminação) — bloqueantes para go-live público. Wave C
+(qualidade) é hardening operacional importante mas não bloqueante. A
+sequência correta:
+
+1. ~~Wave A — higiene~~ ✅ (commits `4b6e11f`-`d18f2df`)
+2. ~~Wave B — estrutura~~ ⚠️ parcial (B.1 fase 2 pendente)
+3. **Wave LGPD aqui** ← bloqueante para go-live
+4. Wave C — qualidade
+5. Go-live público
+
+### 18.A Wave LGPD — 15 itens
+
+Cada item com prioridade, aceite e estimativa. Itens marcados
+**CRÍTICA** são bloqueantes; **ALTA** ficam ok pra ser entregues em
+paralelo com revisão jurídica humana.
+
+| # | Item | Prioridade | Aceite | Tempo |
+|---|---|---|---|---|
+| **L.1** | `analytics.eliminacao` + tombstones + filtro MVs + CLI `eliminar.py` + endpoint `/contrato` 410 Gone | **CRÍTICA** | Solicitação de eliminação atendida em ≤15d via art. 18 IV LGPD; raw permanece em `raw.snapshots` com hash; conteúdo desaparece da vitrine; `/eliminacoes/publicas` lista IDs eliminados sem reproduzir conteúdo | 1d |
+| **L.2** | Enriquecer `analytics.fornecedor` com `tipo_juridico` (RFB CNPJ aberto) + mascarar MEI/EI por padrão | **CRÍTICA** | Perfil `/fornecedor/{cnpj}` retorna 404 ou shape mascarado quando `tipo_juridico IN ('MEI','EI')` por default; flag explícita pra exibir requer base legal documentada por caso | 2d |
+| **L.3** | LIA estruturada (Guia ANPD "Legítimo Interesse") em `docs/legal/LIA.md` | **CRÍTICA** | Cobre: identificação do tratamento, finalidade legítima, necessidade, balanceamento (interesse vs direitos do titular), salvaguardas implementadas | 1d (humano jurídico) |
+| **L.4** | RIPD em `docs/legal/RIPD.md` (Resolução CD/ANPD nº 4/2023) | **CRÍTICA** | Cobre: descrição, finalidade, legitimação, ciclo de vida, riscos, medidas mitigadoras | 1d (humano jurídico) |
+| **L.5** | Política de Privacidade em rota `/politica-privacidade` + footer global | Alta | Rota pública renderiza política completa (art. 9º LGPD); link no footer de toda página; refletir `data/PRIVACY.md` v2 | 4h |
+| **L.6** | Termos de Uso em `/termos` + licença de dados (CC-BY 4.0 ou ODbL) | Alta | Rota pública; cobre: uso pessoal/comercial, atribuição, garantias, limitação de responsabilidade, foro | 4h |
+| **L.7** | Encarregado nomeado + canal `/lgpd` + e-mail dedicado (ou autodeclaração de pequeno porte) | Alta | Rodapé global cita encarregado; rota `/lgpd` documenta direitos do art. 18 + canal; ticket ID + SLA 15d | 4h |
+| **L.8** | Catálogo de subprocessadores em `docs/legal/SUBPROCESSADORES.md` | Alta | Lista: Vercel, Supabase, Cloudflare R2, Fly.io, Resend (futuro). Cada um com: razão social, finalidade, jurisdição, base legal de transferência internacional (Resolução CD/ANPD 19/2024) | 2h |
+| **L.9** | Política de retenção em `docs/legal/RETENCAO.md` + job de expurgo do `raw_payload` redundante | Média | Documento define prazos por tipo (raw, canonical, mart, log); job mensal reduz `raw_payload` mantendo só campos não derivados nas colunas dedicadas | 1d |
+| **L.10** | `analytics.audit_log` (registro de operações art. 37 LGPD) via triggers | Média | Tabela registra: operação (insert/update/delete/select), schema/tabela/raw_id, ator (lifespan ou ticket), data, base legal aplicada | 1d |
+| **L.11** | Disclaimer de origem em `/comparar`, `/manchetes`, `/fornecedor/*`, `/municipio/*`, `/cluster/*` | Média | Banner discreto: "Dado extraído de TCE-PR/Compras.gov.br em DD/MM. Possíveis erros — [reportar correção]". Componente reusável `<DisclaimerOrigem>` | 2h |
+| **L.12** | `/correcoes` formal: ticket ID + fluxo auditável + SLA 15d | Média | Form gera ticket no banco (`analytics.correcao_ticket`); usuário recebe link público pra acompanhar; SLA 15d (LGPD) ou 48h (correção factual) com badge de prazo | 1d |
+| **L.13** | Direito à revisão de ranking (art. 20 §1º): botão "contestar este ranking" em `/manchetes`, `/ranking/*` | Baixa | Form `/contestar?manchete_id=X` registra pedido de revisão; resposta humana documentada em `/correcoes` | 4h |
+| **L.14** | Buscar instituição-âncora (Open Knowledge BR / Transparência BR / Abraji) | **CRÍTICA não-técnica** | E-mail enviado a ≥2 instituições propondo parceria/co-mantenança; resposta documentada em `docs/PARCERIAS.md` | externo |
+| **L.15** | Submeter pacote (L.1-L.13) a revisor jurídico independente especializado em LGPD/cívico | **CRÍTICA não-técnica** | Parecer recebido + ajustes incorporados; documentado em `docs/legal/REVISAO_JURIDICA_v1.md` | externo |
+
+### 18.B Sequência recomendada
+
+| Fase | Itens | Atores | Tempo |
+|---|---|---|---|
+| Técnica imediata | L.1 (tombstones) | dev | 1d |
+| Técnica próxima | L.2 (PJ vs MEI/EI), L.10 (audit_log) | dev | 3d |
+| UI | L.5, L.6, L.7, L.11, L.12, L.13 | dev | 3d |
+| Jurídica | L.3 (LIA), L.4 (RIPD), L.8 (subprocessadores), L.9 (retenção) | jurídico humano | 5d |
+| Externa | L.14 (instituição), L.15 (revisor jurídico) | autor | 1-2 sem |
+
+### 18.C Pontos discordados da análise externa
+
+Discordâncias documentadas com fundamento, sem ignorar a crítica:
+
+| Crítica | Discordância |
+|---|---|
+| "ALTA — NÃO RECOMENDADO PARA PRODUÇÃO" | Projeto **não está em produção**. Sem domínio público, sem indexação, sem usuário externo. Risco atual = 0. Frase corretamente lida: "não recomendado para virar produção sem cumprir Wave LGPD". |
+| "Threshold ≥5 contratos é heurística sem fundamento" | Concordo no isolado, mas é camada de defesa em camadas. Item L.2 fecha a defesa (tipo_juridico). |
+| "Imutabilidade conflita com direito de eliminação" | Imutabilidade do **snapshot raw** é defensável (auditoria contra falsificação); imutabilidade do **publicado** não é. L.1 resolve com tombstones. |
+| "Cobertura de testes é teatro" | Mantenho discordância parcial: 28 casos de parser travam bugs reais. Faltam testes de integração HTTP — em §17.C.1 (Wave C). |
+| "Adotar openapi-typescript" | Reabrir em v2; v1 com `schema_snapshot.py check` no CI já protege contra drift. |
+
+---
+
+## 18. Wave LGPD — bloqueante para go-live público (2026-05-09)
+
+Resposta a parecer técnico-jurídico independente recebido em 2026-05-09
+(`ANALISE_JURIDICA_QUANTO_PAGOU.md` + `PARECER_QUANTO_PAGOU.md`). O
+parecer triou 25+ achados em CRÍTICA / ALTA / MÉDIA / BAIXA.
+
+**Triagem rápida (8 dos achados já fechados pela Wave A):**
+
+| Achado | Status |
+|---|---|
+| 2.4 `assert _pool` runtime | ✅ Wave A.7 (`4b6e11f`) |
+| 2.2 sem `SECURITY.md` | ✅ Wave A.4 (`4d3298b`) |
+| 6.1 sem `LICENSE` | ✅ Wave A.1+A.2 (`4d3298b`) |
+| 6.2 sem `CONTRIBUTING`/`CoC` | ✅ Wave A.3+A.5 (`4d3298b`) |
+| 4.1 CI sem pytest/ruff | ✅ Wave A.10 (`d18f2df`) |
+| 1.5 retenção documentada | ⚠️ parcial — `data/PRIVACY.md` cobre conceitualmente; falta job de expurgo (vira L.9) |
+| 3.1 sem documentação LGPD | ⚠️ parcial — arquivo existe; falta rota pública (L.5) |
+| 3.4 logs aplicação | ⚠️ parcial — depende de hosting |
+
+**Discordâncias documentadas** (com justificativa em resposta no PR):
+
+- "Não recomendado para produção" — projeto **não está em produção**;
+  zero exposição atual. O parecer está certo no diagnóstico do que
+  falta antes do go-live, errado na iminência de risco.
+- "Threshold ≥5 contratos é heurística sem fundamento" — concordo no
+  isolado, mas é defesa em camadas. Concedido: precisa item L.2
+  (distinção PJ vs MEI/EI) pra fechar a defesa.
+- "Cobertura de testes é teatro" — overstated, conforme já argumentado
+  em PLANO §17.0.
+
+### 18.1 Itens da Wave LGPD (15 itens, ~2-4 semanas)
+
+Bloqueante para virar domínio público + indexação Google. Ordem por
+gravidade jurídica + dependência técnica.
+
+| # | Item | Categoria | Tamanho |
+|---|---|---|---|
+| **L.1** | `analytics.eliminacao` (tombstones) + filtro 5 MVs + ALTER `item_canonical` + script CLI + endpoint `/eliminacoes/publicas` + `/contrato/{id}` retorna 410 Gone se eliminado | Tech crítico | 1d |
+| **L.2** | Enriquecer `analytics.fornecedor` com `tipo_juridico` (RFB CNPJ aberto). Mascarar MEI/EI por padrão. Perfil de PF/MEI exige base legal específica documentada | Tech crítico | 2d |
+| **L.3** | LIA estruturada (Guia ANPD "Legítimo Interesse") em `docs/legal/LIA.md` — finalidade, necessidade, proporcionalidade, salvaguardas | Documental crítico | 1d |
+| **L.4** | RIPD/DPIA em `docs/legal/RIPD.md` (Resolução CD/ANPD 4/2023) — contexto, descrição, identificação de riscos, medidas de mitigação | Documental crítico | 1d |
+| **L.5** | Política de Privacidade em rota `/politica-privacidade` (espelha `data/PRIVACY.md` mas como página web). Link no footer global | UI documental | 4h |
+| **L.6** | Termos de Uso em `/termos` + licença de dados (`LICENSE-DATA` raiz, sugestão CC-BY 4.0). Link no footer | UI documental | 4h |
+| **L.7** | Encarregado nomeado (DPO ou autodeclaração de pequeno porte conforme Resolução CD/ANPD 2/2022) + canal `/lgpd` + e-mail dedicado | Documental | 4h |
+| **L.8** | Catálogo de subprocessadores em `docs/legal/SUBPROCESSADORES.md` (Supabase + Vercel + R2) com DPA referenciado | Documental | 2h |
+| **L.9** | Política de retenção em `docs/legal/RETENCAO.md` + job de expurgo do `raw_payload` após N dias (verificação de qualidade do parse) | Tech | 1d |
+| **L.10** | `analytics.audit_log` (registro de operações, art. 37) com triggers PostgreSQL ou middleware FastAPI logando ator/operação/dado | Tech | 1d |
+| **L.11** | Disclaimer de origem visível em `/comparar`, `/manchetes`, `/fornecedor/*` ("Dados extraídos de [fonte] em [data]. Possíveis erros — reportar em /correcoes") | UI cosmético | 2h |
+| **L.12** | `/correcoes` formal: ticket ID, SLA 15d, fluxo auditável (vai além do `mailto:` atual) | Tech | 1d |
+| **L.13** | Direito à revisão de ranking (art. 20 §1º): botão "contestar este ranking" em `/manchetes` e `/ranking/orgaos` | UI funcional | 4h |
+| **L.14** | Buscar instituição-âncora (Open Knowledge BR / Transparência BR / observatório universitário) | Externo | n/a |
+| **L.15** | Submeter pacote a revisor jurídico independente real (advogado especializado em LGPD aplicada a iniciativas cívicas) | Externo | n/a |
+
+### 18.2 Sequência recomendada
+
+**Hoje (sessão técnica):**
+- §18 documentado + L.1 (tombstones) implementado
+
+**Próxima sessão técnica (1-2 dias):**
+- L.2 (PJ vs MEI/EI via RFB CNPJ aberto) — bloqueante arquitetural, mais delicado
+- L.10 (audit_log) — desbloqueia evidência de cumprimento art. 37
+- L.9 (retenção + expurgo)
+
+**Sessão jurídica/documental (paralela, humano não-dev):**
+- L.3 LIA, L.4 RIPD, L.5 Política, L.6 Termos, L.7 DPO, L.8 Subprocessadores
+- Ideal: contratar revisor jurídico real (L.15) para validar o pacote
+
+**Sessão UI (após L.5/L.6/L.7 prontos):**
+- L.11 disclaimers, L.12 `/correcoes` formal, L.13 contestar ranking
+
+**Externos (em paralelo):**
+- L.14 contatar Open Knowledge BR / Transparência BR
+- L.15 contatar advogado LGPD
+
+**Wave C (qualidade) entra DEPOIS de L.1+L.2 prontos** — testes HTTP
+ajudam validar tombstones e mascaramento sem regressão.
+
+### 18.3 Criterio de "pronto para go-live público"
+
+Não vamos abrir indexação Google enquanto:
+
+- ❌ L.1, L.2, L.3, L.4, L.5, L.6, L.7 não estiverem prontos
+- ❌ L.15 (revisor jurídico) não tiver visto o pacote
+- ❌ A Wave C.4 (Cloudflare na frente, rate-limit, CORS) não estiver
+  configurada
+
+São condições mínimas, não suficientes. Ideal: também L.8, L.9, L.10,
+L.11, L.12 + L.14 (instituição-âncora confirmada).
+
+---
+
 ## 14. Changelog
+
+**v5.4 (2026-05-09)** — Wave LGPD documentada (PLANO §18) + L.1 tombstones implementados:
+- **§18 novo** — 15 itens da Wave LGPD com prioridade, aceite, tempo. Bloqueante para go-live público. Sequência: A→B→**LGPD**→C
+- **§18.A tabela** mapeia: 4 críticas (L.1 L.2 L.14 L.15), 4 altas (L.5-L.8), 5 médias (L.9-L.13), 0 baixas
+- **§18.B** sequência por ator (dev, jurídico humano, autor) com janelas de tempo
+- **§18.C** documenta 5 discordâncias com fundamento (frase "produção" calibrada, threshold como camada de defesa, imutabilidade nuançada, testes de parser legítimos, openapi-typescript adiado)
+- **L.1 implementado** (próximo commit) — `analytics.eliminacao` + ALTER `item_canonical` + DROP+CREATE 5 MVs com filtro + `scripts/eliminar.py` CLI + endpoint `/eliminacoes/publicas` + `/contrato/{raw_id}` retorna 410 Gone
 
 **v5.3 (2026-05-09)** — Wave B (estrutura) parcialmente implementada (PLANO §17.B):
 - **B.4 ✅** (`2c94d64`): 16 `scripts/probe_*.py` movidos para `scripts/_exploration/` via `git mv` (preserva histórico). README do `_exploration/` documenta cada probe + audit trail das decisões (PNCP descartado, etc)
