@@ -106,6 +106,19 @@ Pronto:
 - **Frontend cache otimizado** (PLANO §17.A.9): `jget` usa
   `revalidate: 1800` (30min); `jgetLive` para buscas interativas.
   Reduz custo Vercel/Supabase em produção.
+- **Tombstones LGPD art. 18 IV** (PLANO §18 L.1):
+  `analytics.eliminacao` registra solicitações atendidas; trigger
+  sincroniza `item_canonical.eliminada_em`; 5 MVs filtram automaticamente;
+  endpoint `/contrato/{raw_id}` retorna 410 Gone se eliminado;
+  `/eliminacoes/publicas` lista (raw_id + motivo + fundamento) sem
+  reproduzir conteúdo. CLI `scripts/eliminar.py`. Snapshot raw
+  preservado (auditoria).
+
+Em andamento — Wave LGPD (PLANO §18, bloqueante para go-live público):
+- **L.1 ✅** tombstones (acima)
+- **L.2** distinção PJ vs MEI/EI via RFB CNPJ aberto (pendente)
+- **L.3-L.13** documentos jurídicos + UI (pendente)
+- **L.14-L.15** instituição-âncora + revisão jurídica externa (pendente)
 
 Não pronto (depende do usuário humano para destravar):
 - Domínio `quantopagou.org`, organização GitHub, contas Vercel/Supabase/R2.
@@ -319,6 +332,8 @@ Lista completa em `/openapi.json`; abaixo, agrupada por área.
 | `GET /manchetes` | Top N manchetes ativas (PLANO §15). Selecionadas pelo YAML versionado, com hash de auditoria e estabilidade temporal (janelas_passadas/3). |
 | `GET /manchetes/saidas?dias=N` | Vela apagada — manchetes que saíram nos últimos N dias com motivo diagnóstico. |
 | `GET /manchetes/diagnostico?cd_tce=X` | Busca reversa — manchetes ativas do município + diagnóstico de quais (cluster, mun) avaliados não viraram manchete e por quê. |
+| `GET /eliminacoes/publicas` | LGPD art. 18 IV — lista IDs eliminados + motivo + fundamento legal. Transparência sem reproduzir conteúdo. |
+| `GET /contrato/{raw_id}` | Detalhe; **retorna 410 Gone** se raw_id está em `analytics.eliminacao` (LGPD). |
 
 **Comparação (núcleo do produto)**
 
@@ -425,6 +440,14 @@ analytics.manchete               -- selecao apos config/manchete_v1.yaml
 analytics.manchete_publicada     -- log append-only (auditoria temporal)
 analytics.manchete_saida         -- vela apagada (motivo diagnostico)
 analytics.manchete_config_aplicada -- snapshot do YAML por hash
+
+-- LGPD art. 18 IV (PLANO §18 L.1) — direito de eliminacao
+analytics.eliminacao             -- (raw_id, motivo, fundamento_legal,
+                                 --  eliminada_em, ator, ticket_ref).
+                                 -- Trigger sincroniza item_canonical.
+                                 -- raw.snapshots/raw.compras NUNCA mudam.
+analytics.item_canonical.eliminada_em  -- coluna nova; NULL = ativo;
+                                 -- 5 MVs filtram WHERE IS NULL
 ```
 
 Filtros aplicados nos marts: `em_quarentena=false`, `valor_unitario_normalizado IS NOT NULL`, `confianca_resolucao >= 0.75`.
