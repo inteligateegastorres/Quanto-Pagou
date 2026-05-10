@@ -1071,6 +1071,117 @@ Listados em ordem de prioridade. Nenhum bloqueante para o MVP atual.
 
 ---
 
+## 17. Plano de resposta à análise externa (2026-05-09)
+
+Análise externa do repositório feita por terceiro contra um snapshot
+**anterior à v5.1** (1 commit antigo do `main`). Várias críticas já
+foram endereçadas pelas sessões A/B/C de hoje (vide §15, §16, §14).
+
+Este §17 documenta o plano de resposta às críticas **ainda válidas**.
+Estruturado em 3 waves (higiene → estrutura → qualidade) com itens
+auditáveis, estimativas, critérios de aceite e riscos.
+
+### 17.0 Triagem da análise externa
+
+**Já endereçado (reviewer não viu — pre-v5.1):**
+
+| Crítica | Resposta |
+|---|---|
+| Seed dividido SQL+Python (35 cidades hardcoded) | `scripts/load_ibge_populacao.py` unificou: 35 → 396 (99.7% match) |
+| "Top-N dsObjeto fora de cluster" | Sistema `/manchetes` toca o problema por outro ângulo (PLANO §15); pipeline específico de candidatos a YAML novo está em §17.B |
+| Audit-trail de comparações | `analytics.manchete_publicada` (Camada 3, §15.2) |
+| Drift CHECKLIST↔API | `tests/qa/schema_snapshot.py` (30 endpoints baselined) |
+| Hardcode de números no UI | Zona A da home migrada (rank=1 da API); badges família reusada |
+
+**Pontos discordados (com justificativa):**
+
+| Crítica | Discordância |
+|---|---|
+| "Cobertura de testes é teatro" | Os 28 casos parametrizados de `test_resolution.py` travam bugs reais (S10→10L, gramatura→peso). Frame correto: parser tests sólidos, **faltam integration tests HTTP** — endereço em Wave C. |
+| Adotar `openapi-typescript` | Adiciona dep + build step + risco drift no v1 (~30 endpoints, 1 dev). Custo total > benefício. `schema_snapshot.py check` no CI já protege contra drift. Reabrir em v2. |
+| "Threshold ≥5 contratos sozinho não é salvaguarda LGPD" | Concordo no isolado, **mas é defesa em camadas**: ≥5 + `noindex,nofollow` + modal "como interpretar" + linguagem factual + `cnpj_mascarado` + `/correcoes`. O que falta mesmo é documentar a postura — Wave A item 6. |
+
+### 17.A Wave A — higiene (3h, 10 itens, alta alavancagem)
+
+Corrige 6 dos 10 pontos críticos do reviewer e destrava colaboração
+externa.
+
+| # | O quê | Onde | Aceite | Tempo |
+|---|---|---|---|---|
+| A.1 | `LICENSE` (AGPL-3.0) no root | `LICENSE` | `gh api .../repos` retorna `license.spdx_id == "AGPL-3.0"` | 5 min |
+| A.2 | `frontend/LICENSE` (MIT) | `frontend/LICENSE` | Arquivo presente; nota no README seção Licença | 5 min |
+| A.3 | `CONTRIBUTING.md` | root | Cobre: stack, dev_up, padrão de PR, link CoC | 30 min |
+| A.4 | `SECURITY.md` | root | Canal de relato (e-mail), SLA, escopo (sem auth, dado público) | 15 min |
+| A.5 | `CODE_OF_CONDUCT.md` | root | Adotar Contributor Covenant 2.1 (template oficial) | 5 min |
+| A.6 | `data/PRIVACY.md` + parágrafo no `/manifesto` | `data/PRIVACY.md`, `frontend/app/manifesto/page.tsx` | Cobre: base legal LGPD, retenção, direitos art.18, canal takedown | 1h |
+| A.7 | `assert _pool is not None` → `raise RuntimeError` | `src/api/main.py:64` | grep não retorna mais `assert _pool` em código de runtime | 5 min |
+| A.8 | `REFRESH MATERIALIZED VIEW CONCURRENTLY` | `sql/001_analytics.sql`, `sql/005_manchetes.sql`, `src/analytics/build_marts.py` | Refresh concorrente sem janela de indisponibilidade; UNIQUE INDEX validado | 30 min |
+| A.9 | Frontend cache: `cache: "no-store"` → `next: { revalidate: 1800 }` | `frontend/lib/api.ts:54` (e dependentes) | Endpoints de leitura agregada com 30min TTL; buscas live com query string mantêm `no-store` | 1h |
+| A.10 | `.github/workflows/ci.yml` (PR-time) | `.github/workflows/ci.yml` | Roda em push/PR: `ruff check src/`, `mypy src/`, `pytest`, `cd frontend && npx next lint && npx tsc --noEmit`; status check obrigatório no `main` | 1h |
+
+**Wave A fecha:** crítica 1 (LICENSE), 2 (CI), 4 (cache), e parte de 5 (mart) e 8 (LGPD doc) do reviewer + abre porta pra colaboração externa.
+
+### 17.B Wave B — estrutura (1 dia, 4 itens)
+
+Reduz dívida técnica antes que calcifique. Cada item validado por
+`schema_snapshot.py check` quando aplicável.
+
+| # | O quê | Onde | Aceite | Tempo |
+|---|---|---|---|---|
+| B.1 | Quebrar `src/api/main.py` em `routers/{meta,catalogo,tce_pr,fornecedor,municipio,escola,quarentena,busca,manchetes}.py` + `schemas/` | `src/api/` | `main.py` < 200 linhas (só montagem de routers); `schema_snapshot check` antes/depois é idêntico (zero quebra) | 4h |
+| B.2 | Pipeline `unmatched_top_dsobjeto.csv` (top-N keyword fora de cluster) | `scripts/unmatched_dsobjeto_top.py` + artefato em CI | Script roda sobre `item_canonical WHERE em_quarentena=true AND motivo_quarentena='sem_keyword_match'`; agrupa por trigram/normalize de `descricao` truncada; top 200 por contagem; salva CSV. Anexar como artifact no `ingest-weekly.yml`. | 4h |
+| B.3 | Composite indexes `(source, ...)` em `raw.compras` para queries quentes | `sql/006_perf_indexes.sql` (novo) | EXPLAIN ANALYZE em `/contratos/search?cd_tce=...` mostra Index Scan em vez de Seq Scan; latência p95 cai mensurável (medir com `time curl`) | 1h |
+| B.4 | Mover `scripts/probe_*.py` (19 arquivos exploratórios) para `scripts/_exploration/` | `scripts/_exploration/` | `ls scripts/` mostra só código de produção (~6 arquivos); README e dev_up referenciam paths atualizados | 30 min |
+
+**Wave B fecha:** crítica 2 (catedral main.py), parte de 9 (cobertura keyword 34%) e 11 (probe scripts confusos).
+
+### 17.C Wave C — qualidade (1 dia, opcional, depende de tempo)
+
+Cobertura de teste real (não só parser) + segurança operacional.
+
+| # | O quê | Onde | Aceite | Tempo |
+|---|---|---|---|---|
+| C.1 | Testes de contrato HTTP via `fastapi.testclient` | `tests/test_api_contratos.py` (novo) | 5-10 testes cobrindo `/health`, `/manchetes`, `/manchetes/diagnostico`, `/contratos/search`, `/fornecedor/{cnpj}`. Cada teste valida status + shape (keys do response). | 3h |
+| C.2 | Smoke E2E frontend via Playwright | `frontend/tests/e2e/` (novo) | 3 specs: `/`, `/manchetes`, `/contratos`. Cada um: status 200, h1 visível, sem `console.error`. Roda em CI. | 3h |
+| C.3 | Documentação de teto do free tier | `DEPLOY.md` | Adiciona seção "Quando sai do free": Vercel function-secs (limite mensal), Supabase row reads, R2 egress. Estimativa de quantos hits/mês cada um aguenta. | 1h |
+| C.4 | Cloudflare na frente do domínio (rate-limit + CORS allowlist) | `DEPLOY.md` + Cloudflare config (humano) | Documentar setup no `DEPLOY.md`; bloqueia `/manchetes/diagnostico?cd_tce=...` em loop. | 1h |
+
+**Wave C fecha:** crítica 1 (cobertura de testes — frame "integration"), 13 (custos free tier) e parte de "rate-limit/CORS antes do go-live".
+
+### 17.D Itens fora de escopo (deferidos)
+
+| # | O quê | Por quê deferir |
+|---|---|---|
+| D.1 | `openapi-typescript` para gerar tipos TS | Custo tooling > benefício no v1; reabrir em v2 |
+| D.2 | Embeddings (Tier 2) para cluster | Já em PLANO §16.3 / §5.3 — Fase 1+ por design |
+| D.3 | pgbouncer transaction-mode + `prepare_threshold=None` | Só relevante se rodarmos atrás de Supabase pooler em Vercel Functions; hoje stack é local. Documentar antes do deploy real. |
+
+### 17.E Riscos do plano
+
+| Risco | Mitigação |
+|---|---|
+| **Wave B.1 quebra contrato API** ao quebrar main.py em routers | `schema_snapshot.py check` antes/depois. CI obrigatório. Refactor em commits pequenos. |
+| **Wave A.9 (revalidate) faz `/manchetes` mostrar dados defasados** | TTL 1800s (30min) é menor que a cadência de refresh (semanal). Manchete só muda no cron weekly. Sem risco de inconsistência. |
+| **CI A.10 falha em casos legacy (lint warnings)** | Configurar `ruff` com regras existentes (não bumpar); aceitar mypy strict só em código novo |
+| **LGPD A.6 sem revisão jurídica humana** | Documentar o policy é melhor que não documentar. Marcar como "v1 — pendente revisão jurídica antes do go-live público". |
+| **Wave C.1 testes HTTP exigem Postgres no CI** | Usar `services: postgres` em GH Actions; aplicar migrations no setup |
+
+### 17.F Sequência recomendada
+
+**Próxima sessão:**
+1. Wave A inteira (3h) — alta alavancagem, fecha 6 críticas + destrava colaboração
+2. Confirma com você antes de seguir
+
+**Sessão seguinte (se Wave A ok):**
+3. Wave B.1 (refactor main.py) — maior risco, fazer com calma
+4. Wave B.2 (pipeline dsobjeto) — alimenta backlog de YAML
+5. Wave B.3-4 (perf + cleanup)
+
+**Sessão 3 (opcional):**
+6. Wave C completa — quality gates pré-go-live
+
+---
+
 ## 14. Changelog
 
 **v5.1 (2026-05-09)** — implementação completa da v5 + sistema de manchetes algorítmicas:
