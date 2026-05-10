@@ -2,9 +2,10 @@
 
 > Plataforma cívica para monitorar gastos públicos brasileiros e identificar possíveis desvios.
 
-**Versão:** v5.1 (2026-05-09)
-**Status:** v5 implementado. Sistema de manchetes algorítmicas no ar.
-Próximas frentes em §16.
+**Versão:** v5.2 (2026-05-09)
+**Status:** v5 implementado + manchetes algorítmicas + Wave A higiene
+do plano de resposta à análise externa (PLANO §17.A). Próximas frentes:
+§16 (pós-v5) e §17.B/C (waves estrutura + qualidade).
 
 ---
 
@@ -1101,25 +1102,45 @@ auditáveis, estimativas, critérios de aceite e riscos.
 | Adotar `openapi-typescript` | Adiciona dep + build step + risco drift no v1 (~30 endpoints, 1 dev). Custo total > benefício. `schema_snapshot.py check` no CI já protege contra drift. Reabrir em v2. |
 | "Threshold ≥5 contratos sozinho não é salvaguarda LGPD" | Concordo no isolado, **mas é defesa em camadas**: ≥5 + `noindex,nofollow` + modal "como interpretar" + linguagem factual + `cnpj_mascarado` + `/correcoes`. O que falta mesmo é documentar a postura — Wave A item 6. |
 
-### 17.A Wave A — higiene (3h, 10 itens, alta alavancagem)
+### 17.A Wave A — higiene (3h, 10 itens) — ✅ IMPLEMENTADA 2026-05-09
 
 Corrige 6 dos 10 pontos críticos do reviewer e destrava colaboração
-externa.
+externa. **5 commits** entregues, todos com validação local antes do
+push.
 
-| # | O quê | Onde | Aceite | Tempo |
+| # | O quê | Status | Commit | Notas |
 |---|---|---|---|---|
-| A.1 | `LICENSE` (AGPL-3.0) no root | `LICENSE` | `gh api .../repos` retorna `license.spdx_id == "AGPL-3.0"` | 5 min |
-| A.2 | `frontend/LICENSE` (MIT) | `frontend/LICENSE` | Arquivo presente; nota no README seção Licença | 5 min |
-| A.3 | `CONTRIBUTING.md` | root | Cobre: stack, dev_up, padrão de PR, link CoC | 30 min |
-| A.4 | `SECURITY.md` | root | Canal de relato (e-mail), SLA, escopo (sem auth, dado público) | 15 min |
-| A.5 | `CODE_OF_CONDUCT.md` | root | Adotar Contributor Covenant 2.1 (template oficial) | 5 min |
-| A.6 | `data/PRIVACY.md` + parágrafo no `/manifesto` | `data/PRIVACY.md`, `frontend/app/manifesto/page.tsx` | Cobre: base legal LGPD, retenção, direitos art.18, canal takedown | 1h |
-| A.7 | `assert _pool is not None` → `raise RuntimeError` | `src/api/main.py:64` | grep não retorna mais `assert _pool` em código de runtime | 5 min |
-| A.8 | `REFRESH MATERIALIZED VIEW CONCURRENTLY` | `sql/001_analytics.sql`, `sql/005_manchetes.sql`, `src/analytics/build_marts.py` | Refresh concorrente sem janela de indisponibilidade; UNIQUE INDEX validado | 30 min |
-| A.9 | Frontend cache: `cache: "no-store"` → `next: { revalidate: 1800 }` | `frontend/lib/api.ts:54` (e dependentes) | Endpoints de leitura agregada com 30min TTL; buscas live com query string mantêm `no-store` | 1h |
-| A.10 | `.github/workflows/ci.yml` (PR-time) | `.github/workflows/ci.yml` | Roda em push/PR: `ruff check src/`, `mypy src/`, `pytest`, `cd frontend && npx next lint && npx tsc --noEmit`; status check obrigatório no `main` | 1h |
+| A.1 | `LICENSE` (AGPL-3.0) no root | ✅ | `4d3298b` | Texto oficial GNU baixado direto |
+| A.2 | `frontend/LICENSE` (MIT) | ✅ | `4d3298b` | Espelha multi-licença declarada no PLANO §11.1 |
+| A.3 | `CONTRIBUTING.md` | ✅ | `4d3298b` | Setup local + padrão PR + RFC para mudanças sensíveis (manchete YAML, threshold confiança, copy pública) |
+| A.4 | `SECURITY.md` | ✅ | `4d3298b` | Escopo, canal `contato@quantopagou.org`, SLA 5d/10d/30d, sem bug bounty financeiro (só crédito) |
+| A.5 | `CODE_OF_CONDUCT.md` | ✅ | `4d3298b` | Contributor Covenant 2.1 com canal de enforcement preenchido |
+| A.6 | `data/PRIVACY.md` + parágrafo no `/manifesto` | ✅ | `4d3298b` | 6 categorias de dado, 3 bases legais (art.7 II/V/IX), 6 salvaguardas, retenção, art.18, canal takedown. **Marcado como v1 — pendente revisão jurídica antes do go-live público** |
+| A.7 | `assert _pool` → `raise RuntimeError` | ✅ | `4b6e11f` | grep limpo: zero `assert` em runtime |
+| A.8 | `REFRESH MATERIALIZED VIEW CONCURRENTLY` | ✅ | `4b6e11f` | Validado em build real: 47.85s vs ~50s antes (overhead aceitável). Migrations agora usam `CREATE IF NOT EXISTS`; mudanças de schema futuras exigem migration nova com DROP explícito |
+| A.9 | Frontend `cache: "no-store"` → `revalidate: 1800` | ✅ | `fe116be` | `jget` com TTL 30min; novo `jgetLive` para buscas (`/instituicoes/search`, `/contratos/search`, `/manchetes/diagnostico`). TTL < cron weekly = zero risco inconsistência |
+| A.10 | `.github/workflows/ci.yml` (PR-time) | ✅ | `d18f2df` | 2 jobs (backend + frontend). Lints continue-on-error temporário (cleanup gradual em §17.B). pytest e tsc estritos. Validado local antes do push: ruff "All checks passed", pytest 28/28 |
 
-**Wave A fecha:** crítica 1 (LICENSE), 2 (CI), 4 (cache), e parte de 5 (mart) e 8 (LGPD doc) do reviewer + abre porta pra colaboração externa.
+**Cleanup adicional aplicado** durante A.10 (parte do refactor):
+- `pyproject.toml`: ruff config com `ignore = ["B008"]` (FastAPI Query/Depends idiomático) + `per-file-ignores` em legacy (api/main.py, build_marts, manchetes, tce_pr.py, scripts/, tests/qa/) com cleanup tracked em §17.B
+- 15 autofixes mecânicas (imports não usados, formatação) em scripts probe_*, build_marts, banco_check, load_ibge
+- `resolution.py`: comentário inline 103 chars → 100 chars sem ignorar regra global
+
+**Wave A fechou** (vs predição original):
+- ✅ crítica 1 (LICENSE) — `LICENSE` + `frontend/LICENSE` no repo
+- ✅ crítica 2 (CI) — `ci.yml` rodando ruff + pytest + tsc em PR
+- ✅ crítica 3 (`assert _pool`) — `raise RuntimeError`
+- ✅ crítica 4 (mart REFRESH) — CONCURRENTLY + IF NOT EXISTS
+- ✅ crítica 5 (frontend cache) — revalidate 30min + jgetLive
+- ✅ crítica 6 (LGPD documentada) — `data/PRIVACY.md` v1 + manifesto
+- ✅ crítica 7 (`CONTRIBUTING/SECURITY/CoC`) — 3 docs criadas
+
+**Não fechadas em Wave A** (vão pra B/C):
+- crítica "src/api/main.py monolítico" → §17.B.1
+- crítica "scripts/probe_* misturados" → §17.B.4
+- crítica "rate-limit/CORS" → §17.C.4 (Cloudflare)
+- crítica "cobertura keyword 34% sem loop de feedback" → §17.B.2
+- crítica "sem testes HTTP/E2E" → §17.C.1, C.2
 
 ### 17.B Wave B — estrutura (1 dia, 4 itens)
 
@@ -1183,6 +1204,13 @@ Cobertura de teste real (não só parser) + segurança operacional.
 ---
 
 ## 14. Changelog
+
+**v5.2 (2026-05-09)** — Wave A do plano de resposta à análise externa (PLANO §17.A):
+- **Backend fixes** (`4b6e11f`): `assert _pool` → `raise RuntimeError` (python -O bug); `REFRESH MATERIALIZED VIEW CONCURRENTLY` em todas as 5 MVs (validado: 47.85s); migrations idempotentes com `CREATE IF NOT EXISTS`
+- **Frontend cache** (`fe116be`): `jget` agora usa `revalidate: 1800` (30min) por padrão; novo `jgetLive` para buscas interativas. Reduz custo Vercel/Supabase em produção
+- **Governance** (`4d3298b`): `LICENSE` (AGPL-3.0) + `frontend/LICENSE` (MIT) + `CONTRIBUTING.md` (setup, padrão PR, RFC para mudanças sensíveis) + `SECURITY.md` (escopo, canal, SLA) + `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1) + `data/PRIVACY.md` (LGPD v1, 6 categorias, 3 bases legais, 6 salvaguardas) + parágrafo no `/manifesto`
+- **CI** (`d18f2df`): `.github/workflows/ci.yml` com 2 jobs (backend ruff/mypy/pytest + frontend lint/tsc); ruff config com `ignore = ["B008"]` (FastAPI idiom) e `per-file-ignores` em arquivos legacy
+- **PLANO §17** (`810c2c8`): plano de resposta à análise externa documentado com triagem (já feito vs discordado vs pendente) + 3 waves (A higiene 3h / B estrutura 1d / C qualidade 1d) + riscos + sequência
 
 **v5.1 (2026-05-09)** — implementação completa da v5 + sistema de manchetes algorítmicas:
 - **Topo do PLANO** — atualizado com tabela de status (✅/⚠️) das 8 propostas v5
