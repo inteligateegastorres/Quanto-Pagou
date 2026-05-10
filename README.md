@@ -3,11 +3,14 @@
 Plataforma cívica para monitorar gastos públicos brasileiros e identificar possíveis desvios.
 
 > **Status:** sprint local concluído + Fase 1 PR já no ar. Pipeline TCE-PR
-> estadual completo (156k contratos reais de 397 municípios), 19 clusters
-> keyword (~34% cobertura), 506 escolas extraídas, ~28 endpoints API e
-> 17 páginas frontend incluindo busca tripla (`/buscar`, `/fornecedores`,
-> `/instituicoes`), drill-down universal em `/contratos` e QA checklist
-> versionado em `tests/qa/`. Pendente: domínio, contas
+> estadual completo (156k contratos reais de 397 municípios — agora todos
+> com população IBGE 2022), 19 clusters keyword (~34% cobertura), 506
+> escolas extraídas, **sistema de manchetes algorítmicas** (3 camadas SQL
+> + YAML versionado + estabilidade temporal + vela apagada + busca
+> reversa), ~32 endpoints API e 18 páginas frontend incluindo busca tripla
+> (`/buscar`, `/fornecedores`, `/instituicoes`), `/manchetes`, drill-down
+> universal em `/contratos` e QA versionado em `tests/qa/` (CHECKLIST +
+> banco_check + schema_snapshot). Pendente: domínio, contas
 > Vercel/Supabase/R2, revisão jurídica (ver [DEPLOY.md](./DEPLOY.md)).
 > Banner global diferencia Paraná real (verde) × Federal fixture (laranja).
 
@@ -69,6 +72,23 @@ Pronto:
   overflow-protection nos cards (números grandes não transbordam mais
   para cards adjacentes); helper `fmtBRLCompact` para "R$ 5,12 bi".
 - 28 testes unitários travando regressões do parser de unidade.
+- **Sistema de manchetes algorítmicas** (`/manchetes`, ver PLANO §15). 3
+  camadas SQL: `cluster_discrepancias` (MV de fatos), `manchete` (seleção
+  após `config/manchete_v1.yaml`), `manchete_publicada` + `manchete_saida`
+  (logs auditáveis). Inclui estabilidade temporal (≥2 de 3 janelas
+  90/180/365d), vela apagada (manchete que sai com motivo diagnóstico),
+  busca reversa (`/manchetes/diagnostico?cd_tce=X` mostra todos os
+  candidatos avaliados). Re-tunável em ~1s editando YAML.
+- **IBGE Censo 2022 carregado** em `analytics.municipio_pr`: 35 → 396
+  municípios catalogados (99.7% match contra TCE-PR). Pop total
+  11.431.051. `scripts/load_ibge_populacao.py`.
+- **Hardening de QA:** `tests/qa/banco_check.py` (13 PASS contra
+  /health e /stats/pr), `tests/qa/schema_snapshot.py update|check` (30
+  endpoints versionados em `tests/qa/snapshots/` — drift CHECKLIST↔API
+  detectado em CI).
+- **Cron weekly** (`.github/workflows/ingest-weekly.yml`, quartas 06:00
+  UTC) ingere TCE-PR + Compras.gov.br + roda build_marts + manchetes
+  refresh + sync R2.
 
 Não pronto (depende do usuário humano para destravar):
 - Domínio `quantopagou.org`, organização GitHub, contas Vercel/Supabase/R2.
@@ -267,6 +287,9 @@ Lista completa em `/openapi.json`; abaixo, agrupada por área.
 | `GET /stats/pr` | Agregados ao vivo do pipeline TCE-PR (alimenta a home sem hardcode). |
 | `GET /clusters?categoria=...` | Lista clusters ativos com `n_itens`. |
 | `GET /quarentena/resumo` | Saúde pública do pipeline (% por categoria × motivo). |
+| `GET /manchetes` | Top N manchetes ativas (PLANO §15). Selecionadas pelo YAML versionado, com hash de auditoria e estabilidade temporal (janelas_passadas/3). |
+| `GET /manchetes/saidas?dias=N` | Vela apagada — manchetes que saíram nos últimos N dias com motivo diagnóstico. |
+| `GET /manchetes/diagnostico?cd_tce=X` | Busca reversa — manchetes ativas do município + diagnóstico de quais (cluster, mun) avaliados não viraram manchete e por quê. |
 
 **Comparação (núcleo do produto)**
 
@@ -308,7 +331,8 @@ Lista completa em `/openapi.json`; abaixo, agrupada por área.
 
 | Rota | Conteúdo |
 |---|---|
-| `/` | Landing em 3 zonas: Paraná real (top municípios + top fornecedores) / Federal fixture (insight diesel + ranking) / Categorias. CTAs Buscar/Comparar/Manifesto. |
+| `/` | Landing com **Zona A puxando manchete rank=1 da API** (sem hardcode) + Paraná real + Federal fixture + Categorias. |
+| `/manchetes` | Sistema algorítmico (PLANO §15): top N atual + busca reversa (cd_tce → manchetes ativas + diagnóstico de quais clusters NÃO viraram manchete e por quê) + recém-saídas (vela apagada com motivo). |
 | `/buscar` | Busca combinada — municípios PR (top 30 ou filtro por nome) **e** fornecedores (top 30, filtro nome ou CNPJ). |
 | `/fornecedores` | Página dedicada à empresa que recebeu pagamento. Filtro mínimo de contratos editável (default 5 = guardrail §6.5). |
 | `/instituicoes` | Busca por **destinatário no objeto** (UPA, escola, hospital, posto, CRAS). Agrega "quem foi pago" + "por município/órgão". Banner explicita que termo no objeto ≠ verba total da unidade. |
@@ -363,6 +387,15 @@ analytics.mart_orgao_cluster  -- (cluster, orgao)           → n_compras, media
 
 -- saúde
 analytics.v_quarentena_resumo -- (categoria, motivo) → n
+
+-- manchetes algoritmicas (PLANO §15) — 3 camadas separadas
+analytics.cluster_discrepancias  -- MV: fatos por (cluster, municipio) +
+                                 -- spreads em 3 janelas (90/180/365d) +
+                                 -- comparab proxy v1
+analytics.manchete               -- selecao apos config/manchete_v1.yaml
+analytics.manchete_publicada     -- log append-only (auditoria temporal)
+analytics.manchete_saida         -- vela apagada (motivo diagnostico)
+analytics.manchete_config_aplicada -- snapshot do YAML por hash
 ```
 
 Filtros aplicados nos marts: `em_quarentena=false`, `valor_unitario_normalizado IS NOT NULL`, `confianca_resolucao >= 0.75`.

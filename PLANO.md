@@ -2,56 +2,39 @@
 
 > Plataforma cívica para monitorar gastos públicos brasileiros e identificar possíveis desvios.
 
-**Versão:** v5 (2026-05-09)
-**Status:** Decisões confirmadas. Foco agora é **executar, não planejar mais**.
+**Versão:** v5.1 (2026-05-09)
+**Status:** v5 implementado. Sistema de manchetes algorítmicas no ar.
+Próximas frentes em §16.
 
 ---
 
-## v5 (2026-05-09) — propostas na mesa
+## v5.1 (2026-05-09) — status de implementação
 
-Sessão de planejamento focada em narrativa pública, badges de confiança e
-roadmap editorial. **Propostas, não decisões** — implementação pendente
-de aprovação caso a caso. Ver §14 para detalhamento.
+**Frente narrativa — todas implementadas:**
 
-**Frente narrativa (refina §6 sem invalidar):**
+| Proposta | Status | Onde |
+|---|---|---|
+| 1.a Modal "Como interpretar" | ✅ implementado | `/metodologia` (`<details>` em §IQR) |
+| 1.b "Por que confiar / Por que duvidar" | ✅ implementado | `/metodologia` (2 colunas no topo) |
+| 1.c Reescrita da home | ⚠️ Zona A apenas | Manchete acima do fold puxa rank=1 da API |
+| 1.d `/correcoes` como vitrine | ⚠️ texto + form, sem schema | `analytics.correcoes` adiado até 1º relato |
 
-- **1.a Modal "Como interpretar"** — 4 quadros pedagógicos (o que vê /
-  por que faixa / 3 cores / o que pode estar errado) plugado em
-  `/metodologia` e ao lado de toda barra p25-p75.
-- **1.b Seção "Por que confiar / Por que duvidar"** — duas colunas
-  simétricas no topo de `/metodologia`. Vacina anti-objeção.
-- **1.c Reescrita da home** — invertida para "manchete → evidência →
-  navegue". Manchete acima do fold (puxa do insight da semana). Stats
-  viram footer da manchete; categorias monitoradas saem da home.
-- **1.d `/correcoes` como vitrine** — reformular a página explicando o
-  processo + formulário inline + promoção em `/metodologia` + badge
-  "corrigido em X" nas páginas afetadas. Schema `analytics.correcoes`
-  novo (id, item/cluster, data, delta, fonte).
+**Frente roadmap — 3 de 4 implementadas:**
 
-**Frente roadmap (executável):**
+| Proposta | Status | Onde |
+|---|---|---|
+| 2.a 5 templates de insight | ⚠️ substituído por sistema /manchetes | §15 |
+| 2.b Família de 6 badges | ✅ implementado | `lib/Badge.tsx` em 4 páginas |
+| 2.c Próxima manchete (medicamentos) | ⚠️ exploração feita; publicação pendente | §13.7 atualizada com achados |
+| 2.d Comparação por escola Abordagem 1 | ✅ implementado | `/escolas/[slug]` ordenado por valor |
 
-- **2.a 5 templates de insight + cron weekly de candidatos automáticos**
-  (T1 spread extremo, T2 fornecedor concentrado, T3 dispensa repetida,
-  T4 categoria subindo, T5 contrato mais caro). Espalha gatilhos de
-  descoberta em cluster/município/fornecedor/contratos.
-- **2.b Família de 6 badges de confiança** — confiança alta/média/sem
-  cluster + fonte primária + atualizado em + cluster_version. Mapeamento
-  página-a-página. Refina §6.2.
-- **2.c Próxima manchete editorial = medicamentos por habitante** (plano
-  A). Plano B (combustível com âncora ANP) **inviável**: TCE-PR não
-  publica volume em litros, só valor por contrato.
-- **2.d Comparação por escola revisitada:** Abordagem 1 (transparência de
-  volume por escola, em `/escolas/[slug]`) implementar. Abordagem 3
-  (comparar tipo de intervenção entre escolas) mantida adiada com
-  critérios de reabertura listados em §14.
+**Sistema novo (não estava na v5 original):**
+**Manchetes algorítmicas** — vide §15 (3 camadas SQL + YAML + estabilidade
+temporal + vela apagada + busca reversa). Substitui parcialmente 2.a; o
+algoritmo seleciona discrepâncias sem curadoria humana.
 
-**Decisões pendentes (precisam você):**
-
-1. 1.c: aplicar a home toda ou só Zona A primeiro?
-2. 1.d: implementar schema `analytics.correcoes` agora ou esperar 1º relato?
-3. 2.a: publicar candidatos automáticos sem revisão ou só curados?
-4. 2.c: confirma plano A (medicamentos)? Próximo passo é query exploratória.
-5. 2.d: confirma Abordagem 1 + adiar Abordagem 3?
+**Próximos passos pós-v5:** §16 (3 sessões A/B/C — todas implementadas
+em 2026-05-09; resta operacional + Fase 1+).
 
 ---
 
@@ -911,7 +894,195 @@ sample top-3 e bottom-3 (ler descrição) · validar denominador IBGE ·
 
 ---
 
+## 15. Sistema de manchetes algorítmicas
+
+Sistema novo entregue em 2026-05-09 (não estava na v5 original, surgiu
+da discussão crítica do usuário sobre 2.a). **Algorítmico, não
+curadoria** — `nenhuma tela tem valores hardcoded; tudo vem do banco`.
+
+### 15.1 Princípios
+
+1. **Algoritmo estúpido de propósito.** Aplica critérios versionados em
+   `config/manchete_v1.yaml`. Discordou da seleção? PR no YAML, com
+   dados.
+2. **Separação rígida de camadas** (3 camadas SQL):
+   fatos × seleção × log. Permite re-tunar parâmetros em ~1s sem
+   recomputar fatos.
+3. **Tudo audit-trail.** Cada manchete carrega hash do YAML que a
+   selecionou; cada refresh registra log com snapshot completo.
+4. **Vela apagada também é informação.** Manchete que sai com motivo
+   diagnóstico aparece na página por 90 dias.
+5. **Ninguém escapa por aleatoriedade.** Busca reversa
+   (`/manchetes/diagnostico?cd_tce=X`) mostra todas as combinações
+   avaliadas com motivo de não-publicação.
+
+### 15.2 Arquitetura — 3 camadas
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Camada 1: analytics.cluster_discrepancias  (Materialized View)  │
+│ FATOS estatísticos por (cluster, município).                    │
+│ Refresh: junto com build_marts (semanal cron).                  │
+│ Computa: spread, IQR, comparab proxy, spreads por janela        │
+│ (90/180/365d) — referência = MAX(contract_date) do snapshot.    │
+│ NÃO filtra. Expõe tudo. Custo: alto (re-computa MV).            │
+└─────────────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ Camada 2: analytics.manchete  (Table)                           │
+│ SELEÇÃO após aplicar thresholds do YAML.                        │
+│ Refresh: TRUNCATE + INSERT a cada `manchetes refresh`.          │
+│ Custo: ~1s. Re-tunável sem recomputar Camada 1.                 │
+└─────────────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ Camada 3a: analytics.manchete_publicada  (Append-only log)      │
+│ Snapshot de cada manchete publicada com hash do YAML.           │
+│ Pergunta: "que manchetes estavam ativas em DD/MM com qual       │
+│ config?" Auditoria temporal pública.                            │
+└─────────────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ Camada 3b: analytics.manchete_saida  (Vela apagada)             │
+│ Manchetes que saíram com motivo diagnóstico ("spread caiu para  │
+│ 6.6× — limiar 8.0×"). Detectadas no refresh comparando ativos   │
+│ antes vs depois.                                                │
+└─────────────────────────────────────────────────────────────────┘
+
+Configuração ativa: analytics.manchete_config_aplicada
+(snapshot do YAML por hash, usado pelo backend para diagnóstico).
+```
+
+### 15.3 Thresholds calibrados (perfil C — v1)
+
+YAML em `config/manchete_v1.yaml`. Calibrados via dry-run em 2026-05-09
+contra snapshot 156k contratos PR:
+
+```yaml
+cluster_n_min: 1000              # massa mínima do cluster
+sujeito_n_min: 30                # contratos do município no cluster
+sujeito_valor_total_min: 500000  # R$ no cluster pelo município
+spread_min: 5.0                  # mediana_sujeito / mediana_cluster
+iqr_sujeito_min: 2.0             # tem dispersão real (p75/p25)
+iqr_relativo_max_k: 2.0          # IQR_suj <= 2× IQR_cluster (filtro β)
+comparab_min: 0.75               # proxy v1 (HHI mod × HHI forn × spread temp)
+estabilidade_min_janelas: 2      # de 3 (90d, 180d, 365d)
+estabilidade_min_n_janela: 5     # janela com n < 5 não conta
+top_n_publicado: 20
+```
+
+Rendimento atual: **5 manchetes ativas** (era 8 antes da estabilidade
+temporal). Top 2 com 3/3 janelas (robustas), 3 com 2/3.
+
+### 15.4 Comparabilidade proxy v1 (limites conhecidos)
+
+Média geométrica de 3 sub-scores:
+- HHI da modalidade no cluster (alto = homogêneo)
+- 1 − HHI do fornecedor no cluster (baixo HHI = mercado competitivo)
+- Spread temporal (meses distintos com contratos / 12)
+
+**Saturada no caso TCE-PR:** HHI fornecedor é ~0 em todos os clusters
+(milhares de fornecedores), spread temporal é ~1 (espalhamento natural
+no ano). Só HHI modalidade discrimina. Threshold 0.75 derruba clusters
+com modalidade muito misturada (transporte, obras pavimentação,
+materiais hidráulicos); 0.65 = piso permissivo.
+
+Refinar em v1.5: adicionar COV de valor + similaridade textual entre
+descrições do cluster. Embeddings (Tier 2) só em v2+.
+
+### 15.5 Endpoints + páginas entregues
+
+**API:**
+- `GET /manchetes` — top N ativas
+- `GET /manchetes/saidas?dias=N` — vela apagada (últimos N dias)
+- `GET /manchetes/diagnostico?cd_tce=X` — busca reversa
+
+**Frontend:**
+- `/manchetes` — lista + form de busca reversa + seção recém-saídas
+- Home Zona A — manchete rank=1 (sem hardcode)
+- `/cluster/[id]` — box "Manchetes deste cluster" (filtra)
+- `/municipio/[cd_tce]` — box "Manchetes onde este município aparece"
+
+### 15.6 Hardening de QA entregue junto
+
+- `tests/qa/banco_check.py` — 13 PASS / 0 FAIL contra `/health` e `/stats/pr`
+- `tests/qa/schema_snapshot.py` (update/check) — 30 endpoints versionados
+  em `tests/qa/snapshots/`. Resolve drift CHECKLIST↔API preventivamente
+  (classe inteira F-001/F-004/F-009/F-015 do FINDINGS).
+- IBGE Censo 2022 carregado em `municipio_pr` — 35 → 396 catalogados.
+  Desbloqueou 80% das cidades para o sistema de manchetes.
+
+### 15.7 Cron e fluxo operacional
+
+`.github/workflows/ingest-weekly.yml` (quartas 06:00 UTC):
+1. Aplica migrations (incluindo `005_manchetes.sql`)
+2. Ingere TCE-PR (~55s)
+3. Ingere Compras.gov.br (best-effort)
+4. `python -m analytics.build_marts` (refresh Camada 1 inclusa)
+5. **`python -m analytics.manchetes refresh`** (Camadas 2 e 3)
+6. Upload R2 + summary
+
+Manual: `python -m uv run python -m analytics.manchetes refresh`
+(idempotente, ~1s para re-aplicar YAML).
+
+---
+
+## 16. Próximos passos (pós-v5.1)
+
+Listados em ordem de prioridade. Nenhum bloqueante para o MVP atual.
+
+### 16.1 Curto prazo (técnico, autônomo)
+
+| # | O quê | Tamanho |
+|---|---|---|
+| 1 | Adaptar `dev_up.{ps1,sh}` para chamar `manchetes refresh` (já está no cron weekly) | trivial |
+| 2 | Página `/manchetes/historico?em=YYYY-MM-DD` lendo `manchete_publicada` | médio |
+| 3 | Reescrita completa da home (Zonas B/C, não só A) — promover §13.2 confiar/duvidar como Zona B | médio |
+| 4 | Schema `analytics.correcoes` + badge "corrigido em X" — aguarda primeiro relato real | médio |
+
+### 16.2 Médio prazo (decisões de produto)
+
+| # | O quê | Decisão pendente |
+|---|---|---|
+| 5 | **Comparabilidade proxy v1.5** — adicionar COV de valor + similaridade textual (regex categórica) entre objetos do cluster | Investir antes de embeddings ou direto v2? |
+| 6 | **Publicar manchete medicamentos por habitante** (§13.7) | Aguarda revisão final do texto editorial |
+| 7 | **2.a destaques separados de manchetes** — cron de candidatos T1/T4/T5 em `/destaques/` curado vs algorítmico | Vale a separação ou /manchetes basta? |
+| 8 | **Manchetes sobre fornecedor** | Risco jurídico — fora de v1, v1.5, v2. Reabrir só com revisão jurídica |
+
+### 16.3 Longo prazo (Fase 1+)
+
+| # | O quê | Bloqueado por |
+|---|---|---|
+| 9 | **Embeddings (Tier 2)** — derrota proxy v1 da comparabilidade, melhora cluster | Fase 1+ por design (PLANO §5.3) |
+| 10 | **Spider Compras.gov.br real** (federal item-a-item) | API federal estabilizar |
+| 11 | **Domínio + Vercel + Supabase + R2 + revisão jurídica** | Usuário humano (PLANO §11) |
+| 12 | **Spiders estaduais** (Tá de Pé) | Fase 2 |
+
+### 16.4 Hardening contínuo
+
+| # | O quê | Valor |
+|---|---|---|
+| 13 | Adicionar `schema_snapshot.py check` ao CI do GitHub Actions | Drift detectado em PR antes do merge |
+| 14 | Automatizar §B.5 do CHECKLIST — kill API + headless test de degradação | UI degradação validada |
+| 15 | Cobertura de testes unitários para `analytics.manchetes._diagnosticar_motivo` (lógica espelhada API/Python) | Evita drift entre _diag_motivo_falha e _diagnosticar_motivo |
+
+---
+
 ## 14. Changelog
+
+**v5.1 (2026-05-09)** — implementação completa da v5 + sistema de manchetes algorítmicas:
+- **Topo do PLANO** — atualizado com tabela de status (✅/⚠️) das 8 propostas v5
+- **Nova §15** — sistema de manchetes algorítmicas (3 camadas SQL + YAML versionado + estabilidade temporal + vela apagada + busca reversa). Substitui parcialmente §13.5 (2.a viral)
+- **Nova §16** — próximos passos pós-v5.1 organizados em 4 grupos
+- **Backend novo:** `sql/005_manchetes.sql` (3 tabelas + MV + manchete_saida + manchete_config_aplicada), `src/analytics/manchetes.py` (refresh + diagnóstico), `config/manchete_v1.yaml` (perfil C calibrado: 5 manchetes ativas)
+- **API nova:** `/manchetes`, `/manchetes/saidas`, `/manchetes/diagnostico`
+- **Frontend novo:** `/manchetes` (lista + busca reversa + recém-saídas), `lib/ManchteContext.tsx` (manchetes contextuais em `/cluster` e `/municipio`), Zona A da home migrada (sem hardcode), `lib/Badge.tsx` (família de 6 badges)
+- **Hardening:** `tests/qa/banco_check.py` (13 PASS), `tests/qa/schema_snapshot.py` (30 endpoints versionados em `tests/qa/snapshots/`), `scripts/load_ibge_populacao.py` (35 → 396 municípios catalogados)
+- **Integração:** GitHub Actions `ingest-weekly.yml` ganhou step de manchetes refresh; `dev_up.{ps1,sh}` aplica nova migration
+- **Findings de QA resolvidos:** F-001/F-002/F-004/F-009/F-012/F-015 (drift schema — CHECKLIST atualizado), F-010/F-013/F-014/F-016/F-017 (frontend), F-003/F-006/F-007/F-008 (backend tipagem + mensagens), F-011 (copy /comparar)
 
 **v5 (2026-05-09)** — sessão de planejamento focada em narrativa e roadmap editorial:
 - **Nova §13** — propostas v5 detalhadas (8 itens divididos entre frente narrativa e frente roadmap)
