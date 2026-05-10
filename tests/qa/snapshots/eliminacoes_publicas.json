@@ -1,0 +1,8 @@
+{
+  "endpoint": "/eliminacoes/publicas",
+  "method": "GET",
+  "shape": {
+    "type": "list[unknown]",
+    "keys": []
+  }
+}

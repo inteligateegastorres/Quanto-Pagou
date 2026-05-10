@@ -552,6 +552,53 @@ def quarentena_resumo(conn: ConnDep) -> list[QuarentenaResumoOut]:
         return [QuarentenaResumoOut(**r) for r in cur.fetchall()]
 
 
+# ----------------------------- Eliminacoes (LGPD art. 18 IV) ----------------
+
+
+class EliminacaoPublicaOut(BaseModel):
+    """Lista publica de eliminacoes (transparencia LGPD).
+
+    Mostra raw_id + motivo + fundamento + data, SEM reproduzir o conteudo
+    eliminado. Cidadao confere que pedidos sao atendidos; conteudo
+    permanece eliminado.
+    """
+
+    raw_id: int
+    eliminada_em: str
+    motivo: str
+    fundamento_legal: str
+    ticket_ref: str | None
+
+
+@app.get(
+    "/eliminacoes/publicas",
+    response_model=list[EliminacaoPublicaOut],
+    tags=["meta"],
+)
+def eliminacoes_publicas(
+    conn: ConnDep,
+    limit: int = Query(default=100, ge=1, le=1000),
+) -> list[EliminacaoPublicaOut]:
+    """Lista publica de eliminacoes atendidas (LGPD art. 18 IV).
+
+    Transparencia radical: todo cidadao pode auditar quais raw_ids foram
+    removidos e com qual fundamento legal. Conteudo nunca e reproduzido
+    aqui — so o registro do ato.
+
+    Refletir como vitrine de cumprimento (similar a `/correcoes`) — vide
+    PLANO §18 L.1.
+    """
+    sql = """
+        SELECT raw_id, eliminada_em::text AS eliminada_em,
+               motivo, fundamento_legal, ticket_ref
+        FROM analytics.eliminacao
+        ORDER BY eliminada_em DESC LIMIT %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (limit,))
+        return [EliminacaoPublicaOut(**r) for r in cur.fetchall()]
+
+
 # ----------------------------- Manchetes ------------------------------------
 
 
@@ -890,7 +937,37 @@ def contrato_detalhe(conn: ConnDep, raw_id: int) -> ContratoDetalheOut:
     Agrega: raw.compras + item_canonical + cluster_registry + snapshot +
     municipio_pr (so se source = tce_pr/contrato). raw_payload exposto
     completo para auditoria.
+
+    LGPD art. 18 IV: se houver registro em analytics.eliminacao, retorna
+    410 Gone com motivo publico (sem reproduzir o conteudo eliminado).
     """
+    # Checa eliminacao primeiro — antes de gastar query no detalhe
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT eliminada_em::text AS eliminada_em, motivo, fundamento_legal
+            FROM analytics.eliminacao WHERE raw_id = %s
+            """,
+            (raw_id,),
+        )
+        elim = cur.fetchone()
+    if elim is not None:
+        # 410 Gone e o codigo HTTP correto para "recurso existiu mas
+        # foi removido permanentemente"
+        raise HTTPException(
+            status_code=410,
+            detail={
+                "raw_id": raw_id,
+                "eliminada_em": elim["eliminada_em"],
+                "motivo": elim["motivo"],
+                "fundamento_legal": elim["fundamento_legal"],
+                "info": (
+                    "Conteudo removido a pedido do titular ou por base legal. "
+                    "raw.snapshots preservados (auditoria); vitrine publica filtra. "
+                    "Ver /eliminacoes/publicas pra lista agregada."
+                ),
+            },
+        )
     sql = """
         SELECT
             rc.id AS raw_id,

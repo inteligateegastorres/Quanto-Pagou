@@ -56,6 +56,7 @@ STATIC: list[tuple[str, str]] = [
     ("/manchetes", "/manchetes"),
     ("/manchetes/saidas", "/manchetes_saidas"),
     ("/manchetes/diagnostico?cd_tce=410690", "/manchetes_diagnostico"),
+    ("/eliminacoes/publicas", "/eliminacoes_publicas"),
 ]
 
 
