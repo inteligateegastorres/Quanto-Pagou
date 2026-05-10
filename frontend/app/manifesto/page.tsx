@@ -177,6 +177,32 @@ export default function ManifestoPage() {
         </p>
       </Section>
 
+      <Section title="Sobre dados pessoais — postura LGPD">
+        <p>
+          Tratamos exclusivamente <strong>dados públicos</strong> publicados
+          pelos próprios órgãos de controle (TCE-PR, Compras.gov.br) — base
+          legal: cumprimento de obrigação legal (LAI 12.527/2011 + Lei
+          Complementar 131/2009) e interesse legítimo de monitoramento de
+          gasto público. Não coletamos cookies de rastreamento, não
+          desmascaramos CPFs que o TCE já mascarou, e respeitamos
+          guardrails de exposição (perfil de fornecedor só com ≥ 5
+          contratos, <code>noindex</code>, sem ranking acusatório, etc).
+        </p>
+        <p>
+          Detalhamento completo, base legal por categoria de dado, prazo
+          de retenção e canal para exercer os direitos do art. 18 LGPD em{" "}
+          <a
+            href="https://github.com/inteligateegastorres/Quanto-Pagou/blob/main/data/PRIVACY.md"
+            target="_blank"
+            rel="noreferrer"
+          >
+            data/PRIVACY.md
+          </a>
+          . <strong>v1 — pendente revisão jurídica antes do go-live público</strong>;
+          mudanças relevantes ficam no changelog do PLANO.
+        </p>
+      </Section>
+
       <footer className="pt-6 border-t border-line text-sm text-muted space-y-2">
         <p>
           <Link href="/metodologia">Metodologia</Link> ·{" "}
