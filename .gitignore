@@ -25,6 +25,9 @@ out/
 # (schema baseline da API).
 /snapshots/
 data/raw/
+# CSV gerado por scripts/unmatched_dsobjeto_top.py (alimenta YAML).
+# Versiona-lo daria diff inutil a cada refresh; consultar como artifact CI.
+data/unmatched/
 
 # Env
 .env

@@ -131,6 +131,23 @@ jobs:
         run: |
           python -m uv run python -m analytics.manchetes refresh | tee /tmp/manchetes.log
 
+      - name: Top descricoes sem cluster (alimenta backlog YAML)
+        # Roda scripts/unmatched_dsobjeto_top.py e sobe CSV como artifact.
+        # PR no config/cluster_keywords.yaml usa esse CSV pra escolher
+        # proximas keywords. Resolve PLANO §17.B.2.
+        continue-on-error: true
+        run: |
+          python -m uv run python scripts/unmatched_dsobjeto_top.py --top 200
+
+      - name: Upload top_dsobjeto.csv como artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unmatched-dsobjeto-${{ steps.ano.outputs.ano }}
+          path: data/unmatched/top_dsobjeto.csv
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: Upload snapshots para R2 (best-effort)
         if: ${{ !inputs.skip_r2 && env.R2_BUCKET != '' }}
         continue-on-error: true
