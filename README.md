@@ -88,7 +88,24 @@ Pronto:
   detectado em CI).
 - **Cron weekly** (`.github/workflows/ingest-weekly.yml`, quartas 06:00
   UTC) ingere TCE-PR + Compras.gov.br + roda build_marts + manchetes
-  refresh + sync R2.
+  refresh + `unmatched_dsobjeto_top` (artifact) + sync R2.
+- **CI em PR** (`.github/workflows/ci.yml`): ruff + mypy + pytest
+  (backend) + next lint + tsc (frontend). Status checks bloqueiam
+  merge.
+- **Governance** (PLANO §17.A): `LICENSE` (AGPL-3.0) + `frontend/LICENSE`
+  (MIT) + `CONTRIBUTING.md` + `SECURITY.md` + `CODE_OF_CONDUCT.md`
+  (Contributor Covenant 2.1) + `data/PRIVACY.md` (LGPD v1, 6
+  categorias, 3 bases legais, 6 salvaguardas).
+- **Performance** (PLANO §17.B.3): `sql/006_perf_indexes.sql` com 4
+  partial indexes — drill-down típico de 73ms → 6.7ms (~10× speedup
+  validado por EXPLAIN ANALYZE).
+- **Backlog do YAML automatizado** (PLANO §17.B.2):
+  `scripts/unmatched_dsobjeto_top.py` ranqueia top 200 descrições em
+  quarentena (104k contratos sem cluster keyword). PR no
+  `cluster_keywords.yaml` consulta o CSV gerado pelo CI.
+- **Frontend cache otimizado** (PLANO §17.A.9): `jget` usa
+  `revalidate: 1800` (30min); `jgetLive` para buscas interativas.
+  Reduz custo Vercel/Supabase em produção.
 
 Não pronto (depende do usuário humano para destravar):
 - Domínio `quantopagou.org`, organização GitHub, contas Vercel/Supabase/R2.
@@ -212,9 +229,21 @@ cd frontend && npm install && npm run dev
 ### Inspeções e testes
 
 ```bash
+# inspecionar banco
 python -m uv run python scripts/inspect_raw.py
 python -m uv run python scripts/inspect_marts.py
+
+# testes unitarios (parser, etc)
 python -m uv run pytest tests/ -v
+
+# QA hardening (validados em CI)
+python -m uv run python tests/qa/banco_check.py        # PG vs API
+python -m uv run python tests/qa/schema_snapshot.py check  # drift schema
+python -m uv run ruff check src/ scripts/ tests/        # lint
+python -m uv run mypy src/                              # types
+
+# pipeline de candidatos a YAML novo (top descricoes sem cluster)
+python -m uv run python scripts/unmatched_dsobjeto_top.py --top 200
 ```
 
 ---
