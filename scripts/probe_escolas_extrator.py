@@ -17,7 +17,6 @@ from psycopg.rows import dict_row
 
 from ingest.config import settings
 
-
 # Tokens que sinalizam fim do nome da escola.
 # Inclui " e " (conjuncao que comeca proxima entidade) e variantes de
 # "atraves" (frequente em obras: "atraves da construcao de salas").
@@ -177,10 +176,10 @@ def main() -> None:
     print(f"Com escola extraida: {extraidos} ({100*extraidos/total:.1f}%)")
     print(f"\nPor padrao: {padrao_counter.most_common()}")
     print(f"\nNomes unicos (slugs): {len(slug_counter)}")
-    print(f"\nTop 15 slugs (mais frequentes):")
+    print("\nTop 15 slugs (mais frequentes):")
     for slug, n in slug_counter.most_common(15):
         print(f"  {n:>3}x  {slug}")
-    print(f"\n--- Samples obras_edificacao (30): ---")
+    print("\n--- Samples obras_edificacao (30): ---")
     for cl, mun, pad, nome, slug in samples:
         print(f"  [{mun:<22}] [{pad:<18}] {nome!r}  ->  {slug}")
 

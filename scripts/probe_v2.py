@@ -62,7 +62,7 @@ def main() -> None:
             if "json" in ctype.lower():
                 try:
                     data = r.json()
-                    print(f"    JSON OK")
+                    print("    JSON OK")
                     if isinstance(data, dict):
                         print(f"    keys: {sorted(data.keys())[:12]}")
                         # OpenAPI?

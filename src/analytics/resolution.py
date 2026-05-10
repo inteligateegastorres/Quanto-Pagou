@@ -15,7 +15,6 @@ from typing import Any
 
 import yaml
 
-
 CONFIG_DIR = Path(__file__).resolve().parents[2] / "config"
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 
@@ -45,7 +44,8 @@ class Resolution:
     cluster_id: str | None
     cluster_version: str | None
     categoria: str | None
-    metodo_resolucao: str            # 'tier1_catmat_golden' | 'tier1_catmat_sintetico' | 'sem_cluster'
+    # tier1_catmat_golden | tier1_catmat_sintetico | sem_cluster
+    metodo_resolucao: str
     confianca_resolucao: float       # 0.0 - 1.0
     descricao_canonica: str | None
 

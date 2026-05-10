@@ -202,35 +202,34 @@ def main() -> int:
     table.add_column("diff", justify="right")
     table.add_column("status", justify="center")
 
-    with conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            for c in CHECKS:
-                cur.execute(c.sql)
-                row = cur.fetchone()
-                if row is None or "n" not in row:
-                    table.add_row(c.name, "—", "—", "—", "[red]ERR[/]")
-                    fail_count += 1
-                    continue
-                db_val = row["n"]
-                api_val = api_cache[c.api_path].get(c.api_field)
-                if api_val is None:
-                    table.add_row(c.name, str(db_val), "(missing)", "—", "[red]FAIL[/]")
-                    fail_count += 1
-                    continue
-                diff = abs(int(db_val) - int(api_val))
-                status = "[green]PASS[/]" if diff <= c.tolerancia else "[red]FAIL[/]"
-                if diff <= c.tolerancia:
-                    pass_count += 1
-                else:
-                    fail_count += 1
-                if not args.quiet or status == "[red]FAIL[/]":
-                    table.add_row(
-                        c.name,
-                        f"{db_val:,}".replace(",", "."),
-                        f"{api_val:,}".replace(",", "."),
-                        str(diff) if diff > 0 else "—",
-                        status,
-                    )
+    with conn, conn.cursor(row_factory=dict_row) as cur:
+        for c in CHECKS:
+            cur.execute(c.sql)
+            row = cur.fetchone()
+            if row is None or "n" not in row:
+                table.add_row(c.name, "—", "—", "—", "[red]ERR[/]")
+                fail_count += 1
+                continue
+            db_val = row["n"]
+            api_val = api_cache[c.api_path].get(c.api_field)
+            if api_val is None:
+                table.add_row(c.name, str(db_val), "(missing)", "—", "[red]FAIL[/]")
+                fail_count += 1
+                continue
+            diff = abs(int(db_val) - int(api_val))
+            status = "[green]PASS[/]" if diff <= c.tolerancia else "[red]FAIL[/]"
+            if diff <= c.tolerancia:
+                pass_count += 1
+            else:
+                fail_count += 1
+            if not args.quiet or status == "[red]FAIL[/]":
+                table.add_row(
+                    c.name,
+                    f"{db_val:,}".replace(",", "."),
+                    f"{api_val:,}".replace(",", "."),
+                    str(diff) if diff > 0 else "—",
+                    status,
+                )
 
     console.print(table)
 

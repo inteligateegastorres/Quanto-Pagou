@@ -74,7 +74,7 @@ def main() -> None:
             items = gazettes.get("gazettes") or []
             print(f"  total_gazettes: {total}, items aqui: {len(items)}")
             for g in items[:3]:
-                print(f"\n  GAZETTE")
+                print("\n  GAZETTE")
                 print(f"    territory_id : {g.get('territory_id')}")
                 print(f"    territory_name: {g.get('territory_name')}")
                 print(f"    date         : {g.get('date')}")

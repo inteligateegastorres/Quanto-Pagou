@@ -68,7 +68,7 @@ def main() -> None:
             if "json" in ctype.lower():
                 try:
                     data = r.json()
-                    print(f"    JSON ok")
+                    print("    JSON ok")
                     if isinstance(data, dict):
                         if "openapi" in data or "swagger" in data:
                             paths = list((data.get("paths") or {}).keys())

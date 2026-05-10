@@ -118,7 +118,7 @@ def main() -> None:
             text = re.sub(r"<style.*?</style>", " ", text, flags=re.DOTALL)
             text = re.sub(r"<[^>]+>", " ", text)
             text = re.sub(r"\s+", " ", text).strip()
-            print(f"\n  Texto visivel da pagina (primeiros 1500 chars):")
+            print("\n  Texto visivel da pagina (primeiros 1500 chars):")
             print(f"    {text[:1500]!r}")
 
         # Tenta seguir cada JS interno baixando-o pra ver chamadas

@@ -24,7 +24,6 @@ from rich.console import Console
 
 from ingest.config import settings
 
-
 IBGE_MUNICIPIOS_URL = (
     "https://servicodados.ibge.gov.br/api/v1/localidades/estados/41/municipios"
 )

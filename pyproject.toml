@@ -39,3 +39,18 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM"]
+# B008: FastAPI usa Query()/Depends() em defaults — idiomatico, nao bug.
+ignore = ["B008"]
+
+[tool.ruff.lint.per-file-ignores]
+# Codigo legacy com SQL inline e copy longo. Cleanup tracked em PLANO §17.B.
+# Refactor de api/main.py em routers (§17.B.1) vai eliminar a maioria.
+"src/api/main.py" = ["E501"]
+"src/analytics/build_marts.py" = ["E501"]
+"src/analytics/manchetes.py" = ["E501", "SIM117"]
+"src/ingest/tce_pr.py" = ["E501", "SIM117"]
+"src/ingest/compras.py" = ["SIM103"]
+# Scripts: docstrings longos. Probe_* sao exploratorios (§17.B.4 vai
+# mover pra _exploration/).
+"scripts/*.py" = ["E501", "SIM117", "B007", "F841"]
+"tests/qa/*.py" = ["E501", "SIM117"]

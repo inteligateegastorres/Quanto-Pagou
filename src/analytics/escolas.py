@@ -15,7 +15,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-
 _END_TOKENS = (
     r"para\s+",
     r"do\s+munic[ií]pio",

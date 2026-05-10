@@ -20,7 +20,7 @@ import logging
 import time
 import zipfile
 from collections.abc import Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -134,9 +134,8 @@ def _extract_inner_xml(
     """Extrai e parseia um XML especifico de dentro de um sub-zip.
     Retorna None se sub-zip nao existe ou XML esta vazio."""
     try:
-        with zipfile.ZipFile(year_zip) as outer:
-            with outer.open(sub_zip_name) as sub_fh:
-                sub_bytes = sub_fh.read()
+        with zipfile.ZipFile(year_zip) as outer, outer.open(sub_zip_name) as sub_fh:
+            sub_bytes = sub_fh.read()
         with zipfile.ZipFile(io.BytesIO(sub_bytes)) as inner:
             with inner.open(inner_xml_name) as xml_fh:
                 xml_bytes = xml_fh.read()
