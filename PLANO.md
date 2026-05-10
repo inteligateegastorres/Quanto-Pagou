@@ -2,10 +2,10 @@
 
 > Plataforma cívica para monitorar gastos públicos brasileiros e identificar possíveis desvios.
 
-**Versão:** v5.2 (2026-05-09)
-**Status:** v5 implementado + manchetes algorítmicas + Wave A higiene
-do plano de resposta à análise externa (PLANO §17.A). Próximas frentes:
-§16 (pós-v5) e §17.B/C (waves estrutura + qualidade).
+**Versão:** v5.3 (2026-05-09)
+**Status:** v5 + manchetes algorítmicas + Wave A (higiene) completa +
+Wave B (estrutura) parcialmente — B.2/B.3/B.4 ✅, B.1 fase 1 ✅. B.1
+fase 2 e Wave C (qualidade) próximos.
 
 ---
 
@@ -1142,19 +1142,54 @@ push.
 - crítica "cobertura keyword 34% sem loop de feedback" → §17.B.2
 - crítica "sem testes HTTP/E2E" → §17.C.1, C.2
 
-### 17.B Wave B — estrutura (1 dia, 4 itens)
+### 17.B Wave B — estrutura (1 dia, 4 itens) — ⚠️ PARCIALMENTE IMPLEMENTADA 2026-05-09
 
-Reduz dívida técnica antes que calcifique. Cada item validado por
-`schema_snapshot.py check` quando aplicável.
+3 de 4 itens completos. **B.1 dividido em 2 fases** (split bigbang
+em refactor seguro com schema_snapshot validando entre passos).
 
-| # | O quê | Onde | Aceite | Tempo |
+| # | O quê | Status | Commit | Notas |
 |---|---|---|---|---|
-| B.1 | Quebrar `src/api/main.py` em `routers/{meta,catalogo,tce_pr,fornecedor,municipio,escola,quarentena,busca,manchetes}.py` + `schemas/` | `src/api/` | `main.py` < 200 linhas (só montagem de routers); `schema_snapshot check` antes/depois é idêntico (zero quebra) | 4h |
-| B.2 | Pipeline `unmatched_top_dsobjeto.csv` (top-N keyword fora de cluster) | `scripts/unmatched_dsobjeto_top.py` + artefato em CI | Script roda sobre `item_canonical WHERE em_quarentena=true AND motivo_quarentena='sem_keyword_match'`; agrupa por trigram/normalize de `descricao` truncada; top 200 por contagem; salva CSV. Anexar como artifact no `ingest-weekly.yml`. | 4h |
-| B.3 | Composite indexes `(source, ...)` em `raw.compras` para queries quentes | `sql/006_perf_indexes.sql` (novo) | EXPLAIN ANALYZE em `/contratos/search?cd_tce=...` mostra Index Scan em vez de Seq Scan; latência p95 cai mensurável (medir com `time curl`) | 1h |
-| B.4 | Mover `scripts/probe_*.py` (19 arquivos exploratórios) para `scripts/_exploration/` | `scripts/_exploration/` | `ls scripts/` mostra só código de produção (~6 arquivos); README e dev_up referenciam paths atualizados | 30 min |
+| B.1 | Quebrar `src/api/main.py` em routers + schemas | ⚠️ **fase 1** | `f6ff003` | **Fase 1**: lifespan + pool + ConnDep + threshold extraídos pra `src/api/deps.py` (-34 linhas). main.py 2177→2143. **Fase 2 pendente**: mover 30 endpoints pra `routers/{meta,catalogo,dados,contrato,fornecedor,municipio,escola,instituicao,tce_pr}.py` + 34 modelos pra `schemas/`. main.py alvo: <200 linhas. Cada router com `schema_snapshot check` entre passos pra evitar regressão. Caught 1 bug real (psycopg removido) — sistema funcionando como projetado |
+| B.2 | Pipeline `unmatched_top_dsobjeto.csv` | ✅ | `44f9dfb` | `scripts/unmatched_dsobjeto_top.py` com normalização de 21 prefixos boilerplate iterativa + strip acentos + truncate em 8 palavras. 104k contratos em quarentena → 43k grupos → top 200 vai pra `data/unmatched/top_dsobjeto.csv` (gitignored, gerado). Artifact `unmatched-dsobjeto-{ano}` no `ingest-weekly.yml` com retention 30d. Top resultados misturam candidatos úteis (servicos artistico-culturais) com placeholders genéricos — refinamento iterativo da regex em PRs futuros |
+| B.3 | Composite indexes em `raw.compras` | ✅ | `61dc42f` | `sql/006_perf_indexes.sql` com 4 partial indexes (source só tem 2 valores → cardinalidade péssima como primeira coluna B-tree; partial é melhor). EXPLAIN ANALYZE de drill-down típico: **73ms → 6.7ms (~10× speedup)**. Índices: `idx_compras_tce_data`, `idx_compras_tce_cd_tce`, `idx_compras_tce_modalidade`, `idx_item_canon_cluster_all`. Adicionado a dev_up + ingest-weekly |
+| B.4 | Mover `scripts/probe_*.py` para `_exploration/` | ✅ | `2c94d64` | 16 probes movidos via `git mv` (preserva histórico). `scripts/` raiz limpo: 14 arquivos de produção. `_exploration/README.md` documenta cada probe + por que existe + quando reabrir |
 
-**Wave B fecha:** crítica 2 (catedral main.py), parte de 9 (cobertura keyword 34%) e 11 (probe scripts confusos).
+**Cleanup adicional descoberto durante Wave B:**
+- B.4 expôs que `scripts/` agora tem só código de produção — ajuda
+  qualquer novo dev a entender o que vale rodar
+- B.3 mostrou que o real bottleneck era `raw_payload->>'cd_tce'` sem
+  índice (composite com source à frente seria pior, partial é
+  cirúrgico)
+- B.1 fase 1 capturou 1 bug em runtime (`import psycopg` removido) que
+  só apareceu via `schema_snapshot check` — validação salvou commit
+
+**Wave B fechou** (vs predição original):
+- ✅ crítica 11 (probe scripts misturados) — `_exploration/` separa
+- ✅ crítica "cobertura keyword 34% sem loop de feedback" — pipeline
+  unmatched alimenta backlog do YAML
+- ✅ crítica de performance — partial indexes 10× speedup
+- ⚠️ crítica 2 (catedral main.py) — **parcialmente**, fase 1 feita;
+  fase 2 (movimentação completa) pendente em §17.B.1.f2
+
+### 17.B.1.f2 — refactor de routers/schemas (fase 2 de B.1)
+
+Pendente. Plano:
+
+| Router | Endpoints | Modelos a mover |
+|---|---|---|
+| `routers/meta.py` | /health, /quarentena/resumo, /stats/pr, /manchetes, /manchetes/diagnostico, /manchetes/saidas | HealthOut, QuarentenaResumoOut, StatsPrOut, ManchteOut, ManchteDiagnosticoOut, ManchteSaidaOut, ManchteCandidatoDiagOut, StatsPrModalidadeOut, StatsPrTopClusterOut |
+| `routers/catalogo.py` | /clusters | ClusterOut |
+| `routers/dados.py` | /pares, /ranking/orgaos, /item/{raw_id} | ParesOut, RankingOrgaoOut, ItemOut, ParesAggOut |
+| `routers/contrato.py` | /contrato/{raw_id}, /contratos/search | ContratoOut, ContratoSearchPageOut, ContratoSearchItemOut |
+| `routers/instituicao.py` | /instituicoes/search | InstituicoesSearchOut + sub-modelos |
+| `routers/escola.py` | /escolas, /escolas/{slug}/contratos | EscolaListItemOut, EscolaContratoOut |
+| `routers/municipio.py` | /municipios, /municipio/{key}/info | MunicipioListItemOut, MunicipioInfoOut |
+| `routers/fornecedor.py` | /fornecedor/{cnpj}, /fornecedor/{cnpj}/* (5), /fornecedores | FornecedorPerfilOut, FornecedorAgregadoOut, FornecedorContratoOut, FornecedorListItemOut |
+| `routers/tce_pr.py` | /tce-pr/dispensas/top-fornecedores, /tce-pr/municipio/* (3), /tce-pr/cluster/* (2) | DispensaTopFornecedorOut, TcePrSummaryOut, ContratoMunicipioOut, RankingMunicipioOut, FornecedorMunicipioOut |
+
+**Critério de aceite:** main.py < 200 linhas; `schema_snapshot check`
+verde a cada router migrado; todos os 30 endpoints respondem com
+mesmo shape. Próxima sessão.
 
 ### 17.C Wave C — qualidade (1 dia, opcional, depende de tempo)
 
@@ -1204,6 +1239,12 @@ Cobertura de teste real (não só parser) + segurança operacional.
 ---
 
 ## 14. Changelog
+
+**v5.3 (2026-05-09)** — Wave B (estrutura) parcialmente implementada (PLANO §17.B):
+- **B.4 ✅** (`2c94d64`): 16 `scripts/probe_*.py` movidos para `scripts/_exploration/` via `git mv` (preserva histórico). README do `_exploration/` documenta cada probe + audit trail das decisões (PNCP descartado, etc)
+- **B.3 ✅** (`61dc42f`): `sql/006_perf_indexes.sql` com 4 partial indexes em `raw.compras` + `item_canonical`. **EXPLAIN ANALYZE: 73ms → 6.7ms (~10× speedup)** em drill-down típico
+- **B.2 ✅** (`44f9dfb`): `scripts/unmatched_dsobjeto_top.py` com normalização robusta (21 prefixos boilerplate iterativa + strip acentos + truncate). 104k em quarentena → top 200 alimenta backlog do YAML. Artifact no cron weekly retention 30d
+- **B.1 ⚠️ fase 1** (`f6ff003`): `lifespan/pool/ConnDep/threshold` extraídos para `src/api/deps.py`. main.py: 2177 → 2143 linhas. Fase 2 (mover 30 endpoints + 34 modelos) documentada em §17.B.1.f2 com plano por router. Validado por schema_snapshot check (capturou 1 bug real durante refactor — sistema funcionando)
 
 **v5.2 (2026-05-09)** — Wave A do plano de resposta à análise externa (PLANO §17.A):
 - **Backend fixes** (`4b6e11f`): `assert _pool` → `raise RuntimeError` (python -O bug); `REFRESH MATERIALIZED VIEW CONCURRENTLY` em todas as 5 MVs (validado: 47.85s); migrations idempotentes com `CREATE IF NOT EXISTS`
