@@ -58,7 +58,22 @@ export type Item = {
   pares: Pares | null;
 };
 
+// TTL default pra fetches agregados (clusters, /pares, /stats/pr, /manchetes,
+// perfis, etc). Ingestao real e cron weekly, entao 30min nao desfasa nada.
+// Buscas interativas com query do usuario chamam `jgetLive` (no-store).
+const REVALIDATE_DEFAULT_S = 1800;
+
 export async function jget<T>(path: string): Promise<T> {
+  const r = await fetch(`${API_BASE}${path}`, {
+    next: { revalidate: REVALIDATE_DEFAULT_S },
+  });
+  if (!r.ok) throw new Error(`API ${path} -> ${r.status}`);
+  return (await r.json()) as T;
+}
+
+/** Sem cache. Use em buscas interativas com query string viva
+ * (ex: /contratos/search?q=..., /instituicoes/search?q=...). */
+export async function jgetLive<T>(path: string): Promise<T> {
   const r = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
   if (!r.ok) throw new Error(`API ${path} -> ${r.status}`);
   return (await r.json()) as T;

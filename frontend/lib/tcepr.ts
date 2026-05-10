@@ -2,7 +2,7 @@
 // e por contrato (TCE-PR nao publica item-a-item) — UI deixa isso
 // explicito para nao confundir com a comparacao federal CATMAT.
 
-import { jget } from "./api";
+import { jget, jgetLive } from "./api";
 
 export type TcePrSummary = {
   cd_ibge: string;
@@ -214,13 +214,15 @@ export type InstituicoesSearch = {
 };
 
 export const instituicoes = {
+  // Live: query do usuario muda; nao cachear.
   search: (q: string, limit = 20) =>
-    jget<InstituicoesSearch>(
+    jgetLive<InstituicoesSearch>(
       `/instituicoes/search?q=${encodeURIComponent(q)}&limit=${limit}`,
     ),
 };
 
 export const contratos = {
+  // Live: drill-down universal com filtros interativos.
   search: (filters: ContratoSearchFilters = {}) => {
     const qs = new URLSearchParams();
     for (const [k, v] of Object.entries(filters)) {
@@ -229,7 +231,7 @@ export const contratos = {
       }
     }
     const q = qs.toString();
-    return jget<ContratoSearchPage>(`/contratos/search${q ? "?" + q : ""}`);
+    return jgetLive<ContratoSearchPage>(`/contratos/search${q ? "?" + q : ""}`);
   },
 };
 
@@ -262,7 +264,9 @@ export const escolas = {
     if (opts.cd_tce) qs.set("cd_tce", opts.cd_tce);
     if (opts.limit != null) qs.set("limit", String(opts.limit));
     const q = qs.toString();
-    return jget<EscolaListItem[]>(`/escolas${q ? "?" + q : ""}`);
+    // Live so quando ha busca; sem busca, catalogo cacheavel.
+    const fetcher = opts.search ? jgetLive : jget;
+    return fetcher<EscolaListItem[]>(`/escolas${q ? "?" + q : ""}`);
   },
   contratos: (slug: string, limit = 50) =>
     jget<EscolaContrato[]>(
@@ -359,7 +363,9 @@ export const buscar = {
     if (opts.search) qs.set("search", opts.search);
     if (opts.limit != null) qs.set("limit", String(opts.limit));
     const q = qs.toString();
-    return jget<MunicipioListItem[]>(`/municipios${q ? "?" + q : ""}`);
+    // Live so com search; sem search e topo cacheavel.
+    const fetcher = opts.search ? jgetLive : jget;
+    return fetcher<MunicipioListItem[]>(`/municipios${q ? "?" + q : ""}`);
   },
   fornecedores: (opts: { search?: string; min_contratos?: number; limit?: number } = {}) => {
     const qs = new URLSearchParams();
@@ -367,7 +373,8 @@ export const buscar = {
     if (opts.min_contratos != null) qs.set("min_contratos", String(opts.min_contratos));
     if (opts.limit != null) qs.set("limit", String(opts.limit));
     const q = qs.toString();
-    return jget<FornecedorListItem[]>(`/fornecedores${q ? "?" + q : ""}`);
+    const fetcher = opts.search ? jgetLive : jget;
+    return fetcher<FornecedorListItem[]>(`/fornecedores${q ? "?" + q : ""}`);
   },
 };
 
@@ -484,6 +491,7 @@ export type ManchteDiagnostico = {
 export const manchetes = {
   lista: () => jget<Manchete[]>("/manchetes"),
   saidas: (dias = 90) => jget<ManchteSaida[]>(`/manchetes/saidas?dias=${dias}`),
+  // Live: usuario busca municipio especifico.
   diagnostico: (cd_tce: string) =>
-    jget<ManchteDiagnostico>(`/manchetes/diagnostico?cd_tce=${encodeURIComponent(cd_tce)}`),
+    jgetLive<ManchteDiagnostico>(`/manchetes/diagnostico?cd_tce=${encodeURIComponent(cd_tce)}`),
 };
