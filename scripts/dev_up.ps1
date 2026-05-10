@@ -114,8 +114,8 @@ do {
 } while (-not $ok -and (Get-Date) -lt $deadline)
 if (-not $ok) { throw "postgres nao ficou healthy em 60s" }
 
-# Aplicar migrations idempotentes na ordem (analytics + resilience + tce_pr + escolas + manchetes)
-foreach ($sqlFile in @("sql/001_analytics.sql", "sql/002_resilience.sql", "sql/003_tce_pr.sql", "sql/004_escolas.sql", "sql/005_manchetes.sql")) {
+# Aplicar migrations idempotentes na ordem (analytics + resilience + tce_pr + escolas + manchetes + perf indexes)
+foreach ($sqlFile in @("sql/001_analytics.sql", "sql/002_resilience.sql", "sql/003_tce_pr.sql", "sql/004_escolas.sql", "sql/005_manchetes.sql", "sql/006_perf_indexes.sql")) {
     Say "aplicando $sqlFile..."
     Get-Content $sqlFile -Raw | docker exec -i quantopagou-postgres psql -U quantopagou -d quantopagou -q *> $null
     if ($LASTEXITCODE -ne 0) { throw "psql $sqlFile falhou (exit=$LASTEXITCODE)" }
