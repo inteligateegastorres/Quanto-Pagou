@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { api, fmtBRL } from "@/lib/api";
 import { ManchteContextBox } from "@/lib/ManchteContext";
+import { DisclaimerOrigem } from "@/lib/DisclaimerOrigem";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,8 @@ export default async function ClusterPage({
           categoria {cluster.categoria} · {cluster.n_itens} itens analisados
         </p>
       </header>
+
+      <DisclaimerOrigem fonte="mista" />
 
       <ManchteContextBox cluster_id={cluster_id} />
 

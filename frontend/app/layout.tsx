@@ -64,9 +64,27 @@ export default function RootLayout({
         </header>
         <main className="max-w-5xl mx-auto px-6 py-10">{children}</main>
         <footer className="border-t border-line mt-20">
-          <div className="max-w-5xl mx-auto px-6 py-6 text-xs text-muted">
-            Dados: Compras.gov.br · Snapshots versionados ·{" "}
-            <Link href="/correcoes">Reportar erro</Link>
+          <div className="max-w-5xl mx-auto px-6 py-6 text-xs text-muted space-y-2">
+            <div>
+              Dados: TCE-PR · Compras.gov.br · Snapshots versionados ·{" "}
+              <Link href="/correcoes">Reportar erro</Link>
+            </div>
+            <div>
+              <Link href="/politica-privacidade">Política de Privacidade</Link>
+              {" · "}
+              <Link href="/termos">Termos de Uso</Link>
+              {" · "}
+              <Link href="/lgpd">Canal LGPD</Link>
+              {" · "}
+              <Link href="/eliminacoes/publicas">Eliminações públicas</Link>
+              {" · "}
+              <Link href="/manifesto">Manifesto</Link>
+            </div>
+            <div className="text-muted/70">
+              Encarregado (autodeclaração de pequeno porte, Res. CD/ANPD
+              2/2022): <code>lgpd@quantopagou.org</code>. Código sob AGPL-3.0;
+              dados derivados sob CC-BY 4.0.
+            </div>
           </div>
         </footer>
       </body>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { fmtBRL } from "@/lib/api";
 import { ClusterVersionBadge } from "@/lib/Badge";
+import { DisclaimerOrigem } from "@/lib/DisclaimerOrigem";
 import { tcepr, buscar, type RankingMunicipio } from "@/lib/tcepr";
 
 export const dynamic = "force-dynamic";
@@ -180,6 +181,8 @@ export default async function CompararPage({
           interpretar com cuidado.
         </p>
       </header>
+
+      <DisclaimerOrigem fonte="tce-pr" />
 
       <form action="/comparar" method="get" className="space-y-3 border border-line rounded-md p-4 bg-white">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

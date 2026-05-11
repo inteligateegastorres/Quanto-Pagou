@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { fmtBRL, fmtBRLCompact } from "@/lib/api";
+import { DisclaimerOrigem } from "@/lib/DisclaimerOrigem";
 import {
   manchetes as manchetesApi,
   type Manchete,
@@ -89,6 +90,8 @@ export default async function ManchetesPage({
           auditoria pública.
         </p>
       </header>
+
+      <DisclaimerOrigem fonte="tce-pr" />
 
       {/* Busca reversa: "minha cidade ta aqui? se nao, por que nao?" */}
       <section className="border border-line rounded-md p-4 bg-paper text-sm space-y-3">

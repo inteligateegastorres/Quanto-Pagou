@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { fmtBRL, fmtBRLCompact } from "@/lib/api";
 import { Stat } from "@/lib/Stat";
 import { GuardrailFornecedorBadge } from "@/lib/Badge";
+import { DisclaimerOrigem } from "@/lib/DisclaimerOrigem";
 import {
   fornecedor as fornecedorApi,
   type FornecedorPerfil,
@@ -36,11 +36,17 @@ export default async function FornecedorPage({
 }) {
   const { cnpj } = await params;
 
+  // LGPD L.2.b: API retorna 404 com mensagem distinta para
+  //   (a) threshold < 5 contratos
+  //   (b) tipo_juridico != 'PJ' (MEI/EI/PF/desconhecido)
+  // Em vez de notFound() generico, renderizamos pagina explicativa pra
+  // dar gancho de correcao e nao deixar o usuario achar que o site quebrou.
   let perfil: FornecedorPerfil;
   try {
     perfil = await fornecedorApi.perfil(cnpj);
-  } catch {
-    notFound();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    return <PerfilIndisponivel cnpj={cnpj} motivo={msg} />;
   }
 
   const [porOrgao, porMunicipio, porCategoria, porModalidade, contratos] =
@@ -87,6 +93,9 @@ export default async function FornecedorPage({
           <GuardrailFornecedorBadge n_contratos={perfil.n_contratos_total} />
         </div>
       </header>
+
+      <DisclaimerOrigem fonte="tce-pr" />
+
 
       <section className="border border-attention/40 bg-attention/5 rounded-md p-4 text-sm space-y-2">
         <p className="font-medium text-attention">
@@ -350,4 +359,80 @@ function ContratoRow({ c }: { c: FornecedorContrato }) {
 function fmtDateBR(iso: string): string {
   const [y, m, d] = iso.slice(0, 10).split("-");
   return `${d}/${m}/${y}`;
+}
+
+function PerfilIndisponivel({
+  cnpj,
+  motivo,
+}: {
+  cnpj: string;
+  motivo: string;
+}) {
+  const ePJ = motivo.includes("tipo jurídico");
+  const ePoucoContratos = motivo.includes("mínimo");
+  return (
+    <article className="space-y-6 max-w-2xl">
+      <header>
+        <Link href="/" className="text-xs text-muted no-underline">
+          ← início
+        </Link>
+        <h1 className="text-2xl font-semibold tracking-tight pt-2">
+          Perfil indisponível
+        </h1>
+        <p className="text-xs uppercase tracking-wide text-muted pt-2">
+          CNPJ <code>{cnpj}</code>
+        </p>
+      </header>
+
+      <section className="border border-attention/40 bg-attention/5 rounded-md p-4 text-sm space-y-3">
+        <p className="font-medium text-attention">
+          Este perfil não está disponível publicamente
+        </p>
+        {ePJ && (
+          <p className="leading-relaxed">
+            O tipo jurídico deste CNPJ não está confirmado como{" "}
+            <strong>pessoa jurídica</strong>. Por defesa em camadas LGPD
+            (PLANO §18 L.2), perfis de microempreendedores (MEI), empresários
+            individuais (EI) ou pessoas físicas não são publicados por
+            padrão — o CNPJ destes tipos está atrelado ao CPF do titular,
+            o que muda o regime jurídico do dado.
+          </p>
+        )}
+        {ePoucoContratos && (
+          <p className="leading-relaxed">
+            Este fornecedor tem menos de 5 contratos públicos registrados em
+            nossa base. Por guardrail §6.5 do plano, fornecedores eventuais
+            não geram perfil público para reduzir risco de exposição
+            injusta.
+          </p>
+        )}
+        {!ePJ && !ePoucoContratos && (
+          <p className="leading-relaxed">
+            Não foi possível carregar este perfil. Pode ser CNPJ não
+            encontrado na base, fornecedor com menos de 5 contratos, ou
+            tipo jurídico não confirmado como pessoa jurídica.
+          </p>
+        )}
+        <p className="leading-relaxed text-muted">
+          Se você acredita que este perfil <strong>deve</strong> ser
+          público — por exemplo, é uma empresa formalmente constituída
+          (LTDA, S.A., EIRELI, cooperativa) cujo nome não casou com nossa
+          heurística de classificação — solicite verificação em{" "}
+          <Link href="/correcoes">/correcoes</Link>. SLA: 15 dias (art. 19
+          LGPD) ou 48h para correção factual.
+        </p>
+      </section>
+
+      <section className="text-sm text-muted space-y-2">
+        <p>
+          Documentos relacionados:{" "}
+          <Link href="/politica-privacidade">Política de Privacidade</Link>
+          {" · "}
+          <Link href="/lgpd">Canal LGPD</Link>
+          {" · "}
+          <Link href="/metodologia">Metodologia</Link>
+        </p>
+      </section>
+    </article>
+  );
 }

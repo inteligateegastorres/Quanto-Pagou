@@ -1725,6 +1725,8 @@ def list_fornecedores(
 ) -> list[FornecedorListItemOut]:
     """Lista fornecedores com contratos no banco. Default = top por volume,
     threshold de 5 contratos (alinhado com a pagina /fornecedor/[cnpj])."""
+    # LGPD L.2.b: listagem so devolve PJ confirmado. JOIN com
+    # analytics.fornecedor filtra MEI/EI/PF e nao-classificados.
     sql = """
         SELECT
             rc.fornecedor_cnpj,
@@ -1733,7 +1735,9 @@ def list_fornecedores(
             ROUND(SUM(rc.valor_total)::numeric, 2) AS valor_total,
             COUNT(DISTINCT rc.raw_payload->>'cd_tce') AS n_municipios_distintos
         FROM raw.compras rc
+        JOIN analytics.fornecedor f ON f.cnpj = rc.fornecedor_cnpj
         WHERE rc.fornecedor_cnpj IS NOT NULL
+          AND f.tipo_juridico = 'PJ'
           AND (
               %s::text IS NULL
               OR lower(rc.fornecedor_nome) LIKE '%%' || lower(%s) || '%%'
@@ -1811,6 +1815,30 @@ def municipio_info(conn: ConnDep, key: str) -> MunicipioInfoOut:
 # implícito ("pior"), linguagem factual estrita. noindex/nofollow é
 # imposto no frontend (meta tag). _FORNECEDOR_THRESHOLD definido no topo
 # do modulo para reuso na listagem.
+#
+# LGPD L.2 (default deny): _require_pj_or_404 garante que todos os
+# endpoints derivados (/por-orgao, /por-municipio, /por-categoria,
+# /por-modalidade, /contratos) so respondem para PJ confirmado. Sem
+# isso, quem souber o CNPJ raw poderia pular o gate do perfil principal.
+
+
+def _require_pj_or_404(conn, cnpj: str) -> None:
+    """Verifica em analytics.fornecedor que o CNPJ esta classificado
+    como pessoa juridica (LGPD L.2). MEI/EI/PF e nao-classificados (NULL)
+    sao bloqueados com 404. Use antes da query principal em qualquer
+    endpoint que aceite cnpj como path/query."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT tipo_juridico FROM analytics.fornecedor WHERE cnpj = %s",
+            (cnpj,),
+        )
+        row = cur.fetchone()
+    if row is None or row.get("tipo_juridico") != "PJ":
+        raise HTTPException(
+            404,
+            "perfil público indisponível: tipo jurídico não confirmado como pessoa jurídica "
+            "(defesa LGPD para MEI/EI/PF). Solicite verificação em /correcoes.",
+        )
 
 
 @app.get("/fornecedor/{cnpj}", response_model=FornecedorPerfilOut, tags=["fornecedor"])
@@ -1874,6 +1902,7 @@ def fornecedor_perfil(conn: ConnDep, cnpj: str) -> FornecedorPerfilOut:
 def fornecedor_por_orgao(
     conn: ConnDep, cnpj: str, limit: int = Query(default=15, ge=1, le=100)
 ) -> list[FornecedorAgregadoOut]:
+    _require_pj_or_404(conn, cnpj)
     sql = """
         SELECT
             rc.orgao_codigo AS chave,
@@ -1899,6 +1928,7 @@ def fornecedor_por_orgao(
 def fornecedor_por_municipio(
     conn: ConnDep, cnpj: str, limit: int = Query(default=15, ge=1, le=100)
 ) -> list[FornecedorAgregadoOut]:
+    _require_pj_or_404(conn, cnpj)
     sql = """
         SELECT
             COALESCE(mp.cd_ibge, rc.raw_payload->>'cd_tce') AS chave,
@@ -1925,6 +1955,7 @@ def fornecedor_por_municipio(
 def fornecedor_por_categoria(
     conn: ConnDep, cnpj: str
 ) -> list[FornecedorAgregadoOut]:
+    _require_pj_or_404(conn, cnpj)
     sql = """
         SELECT
             COALESCE(ic.cluster_id, '_quarentena') AS chave,
@@ -1956,6 +1987,7 @@ def fornecedor_por_modalidade(
     'sem_modalidade' = contratos onde nao foi possivel resolver via
     Licitacao + LicitacaoXContrato (fragmentado, ano cruzado, ou modalidade
     fora do mapa normalizado). Mostrado para nao esconder volume."""
+    _require_pj_or_404(conn, cnpj)
     sql = """
         SELECT
             COALESCE(rc.modalidade, 'sem_modalidade') AS chave,
@@ -1981,6 +2013,7 @@ def fornecedor_contratos(
     conn: ConnDep, cnpj: str, limit: int = Query(default=20, ge=1, le=100)
 ) -> list[FornecedorContratoOut]:
     """Top contratos do fornecedor por valor (mais recentes desempatam)."""
+    _require_pj_or_404(conn, cnpj)
     sql = """
         SELECT
             rc.id AS raw_id,

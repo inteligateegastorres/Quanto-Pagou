@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { DisclaimerOrigem } from "@/lib/DisclaimerOrigem";
 import {
   tcepr,
   type ContratoMunicipio,
@@ -137,6 +138,7 @@ export default async function MunicipioPage({
         <h1 className="text-3xl font-semibold tracking-tight">
           Compras públicas de {info.nome}
         </h1>
+        <DisclaimerOrigem fonte="tce-pr" />
         <p className="text-muted">
           Município paranaense de {porteLabel}. Os números abaixo vêm dos
           arquivos consolidados do{" "}

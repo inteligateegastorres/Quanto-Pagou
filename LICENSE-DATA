@@ -1,0 +1,55 @@
+Quanto Pagou — Dados derivados
+===============================
+
+Os dados publicados nesta plataforma (resultados agregados, marts,
+manchetes, perfis de fornecedor PJ, classificações e métricas) são
+disponibilizados sob a licença
+
+    Creative Commons Attribution 4.0 International (CC-BY 4.0)
+    https://creativecommons.org/licenses/by/4.0/legalcode.pt
+
+Resumo (não substitui o texto legal):
+
+- Você PODE: copiar, redistribuir, adaptar, transformar, criar obras
+  derivadas, inclusive para fins comerciais.
+- Você DEVE: atribuir crédito apropriado, fornecer link para a licença,
+  e indicar se mudanças foram feitas. A atribuição pode ser:
+
+      "Dados derivados de Quanto Pagou (quantopagou.org), CC-BY 4.0,
+      a partir de TCE-PR/PIT (dado público) e Compras.gov.br
+      (dado público)."
+
+- Você NÃO PODE: aplicar termos legais ou medidas tecnológicas que
+  restrinjam legalmente outros de fazer o que a licença permite.
+
+Origens primárias
+-----------------
+
+Os dados brutos vêm de portais oficiais brasileiros sob a Lei de Acesso
+à Informação (12.527/2011) e a Lei de Transparência (Lei Complementar
+131/2009). Estes dados PRIMÁRIOS são de domínio público e não são
+licenciados por nós:
+
+- TCE-PR (Pacote de Informação Transparência — PIT)
+  https://pit.tce.pr.gov.br/
+- Compras.gov.br (Dados Abertos)
+  https://dadosabertos.compras.gov.br/
+
+O que licenciamos sob CC-BY 4.0 é o trabalho derivado: classificação
+em clusters, normalização de unidades, agregações estatísticas,
+identificação de discrepâncias, manchetes algorítmicas e perfis
+agregados de fornecedor (PJ confirmado).
+
+Código-fonte
+------------
+
+O código-fonte deste projeto é licenciado separadamente sob AGPL-3.0
+(ver LICENSE). Esta licença CC-BY 4.0 cobre apenas os dados/resultados.
+
+Sem garantias
+-------------
+
+OS DADOS SÃO FORNECIDOS "COMO ESTÃO", SEM GARANTIA DE EXATIDÃO,
+COMPLETUDE OU ADEQUAÇÃO A UM FIM ESPECÍFICO. Verificar contra fonte
+primária antes de uso jornalístico, administrativo ou judicial.
+Página de correções pública em /correcoes documenta erros conhecidos.
