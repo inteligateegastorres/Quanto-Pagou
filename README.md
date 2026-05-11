@@ -174,6 +174,13 @@ Pronto:
   roda dia 1 de cada mês 06:00 UTC sempre em dry-run (Job Summary
   com relatório); apply só via `workflow_dispatch` manual até
   ≥1 ciclo humano validado.
+- **Hardening em resposta à análise externa** (v5.9):
+  `.github/dependabot.yml` (atualizações weekly para pip, npm,
+  github-actions), `.github/workflows/gitleaks.yml` (scan de secrets
+  em PR/push), `docs/architecture/adr/` (5 ADRs cobrindo decisões
+  críticas) + `docs/architecture/THREAT_MODEL.md` (STRIDE com riscos
+  conhecidos), Sentry condicional em `src/api/main.py` (inicializa
+  apenas se `SENTRY_DSN_API` setado).
 - **Política de retenção** (PLANO §18 L.9.a): `docs/legal/RETENCAO.md`
   v1 com prazos por camada (raw imutável, audit_log 5 anos,
   manchetes 2 anos, MVs sem retenção, raw_payload 90d após

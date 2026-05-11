@@ -2,13 +2,14 @@
 
 > Plataforma cívica para monitorar gastos públicos brasileiros e identificar possíveis desvios.
 
-**Versão:** v5.8 (2026-05-11)
+**Versão:** v5.9 (2026-05-11)
 **Status:** v5 + manchetes algorítmicas + Wave A (higiene) completa +
-Wave B (estrutura) parcial + Wave LGPD avançada (§18): L.1, L.2 (v1 +
-2.b), L.5, L.6, L.7, L.9 (a + b + c), L.10, L.11, L.12, L.13 todos
-implementados. **Restam para go-live público:** L.3 (LIA), L.4 (RIPD),
-L.8 (subprocessadores), L.14 (instituição-âncora), L.15 (revisor
-jurídico). Ver §18.3.
+Wave B (estrutura) parcial + Wave LGPD avançada (§18): 11 itens
+implementados (L.1, L.2 + 2.b, L.5, L.6, L.7, L.9 a+b+c, L.10, L.11,
+L.12, L.13) + hardening de resposta à análise externa de 2026-05-11
+(Dependabot, gitleaks, ADRs/threat model, Sentry prep). **Restam para
+go-live público:** L.3 (LIA), L.4 (RIPD), L.8 (subprocessadores),
+L.14 (instituição-âncora), L.15 (revisor jurídico). Ver §18.3.
 
 ---
 
@@ -1420,6 +1421,13 @@ L.14 (instituição-âncora); L.15 (revisor jurídico).
 ---
 
 ## 14. Changelog
+
+**v5.9 (2026-05-11)** — Hardening em resposta à análise externa:
+- Cross-check rigoroso de análise externa (2026-05-11) — ~70% das críticas eram drift (LICENSE, SECURITY.md, CONTRIBUTING, CoC, CI, README já entregues em Wave A; política LGPD completa via Wave §18). Sobreviveram 4 itens legítimos: Dependabot, Secret Scanning, ADRs/threat model, Sentry.
+- **Dependabot** (`.github/dependabot.yml`): 3 ecossistemas (pip, npm, github-actions), weekly segunda 09:00 BRT, grupos minor+patch, 5 PRs/ecosystem max.
+- **Gitleaks** (`.github/workflows/gitleaks.yml`): scan em PR e push em main, complementa GitHub Secret Scanning (ação manual do mantenedor no painel). `SECURITY.md` ganha seção "Defesas em profundidade já no lugar" listando CI, gitleaks, Dependabot, audit_log, tombstones.
+- **ADRs + Threat Model** (`docs/architecture/`): 5 ADRs cobrindo decisões críticas (progressive correctness, defesa em camadas LGPD, default deny PJ vs MEI, ticket auditável QP-AAAA-XXXX, dual licensing AGPL+CC-BY) + `THREAT_MODEL.md` estruturado em STRIDE com riscos conhecidos e backlog.
+- **Sentry prep**: `src/api/main.py` inicializa `sentry_sdk` condicionalmente quando `SENTRY_DSN_API` setado e pacote instalado (no-op em dev). `.env.production.example` documenta DSN + `SENTRY_TRACES_SAMPLE_RATE` (default 0.05). `DEPLOY.md` atualizado.
 
 **v5.8 (2026-05-11)** — Wave LGPD: L.13 contestar ranking + L.9.b/c expurgo:
 - **L.13 ✅** `sql/012_correcao_revisao_ranking.sql` adiciona tipo `revisao_ranking` em `analytics.correcao_ticket` (ALTER CHECK ampliado) + mapeamento `_SLA_POR_TIPO['revisao_ranking'] = 'lgpd_15d'` em `main.py` + enum/label correspondente em `frontend/lib/correcoes.ts`. Novo componente `frontend/lib/BotaoContestarRanking.tsx` gera link com querystring pré-preenchida (`tipo=revisao_ranking&url=...&descricao=...`) para `/correcoes#form`. Refatorei `/correcoes/page.tsx` para aceitar `searchParams` e usar `defaultValue` em select/textarea/input. Inserido em 3 páginas: `frontend/app/manchetes/page.tsx` (em cada `ManchteCard`), `frontend/app/cluster/[cluster_id]/page.tsx` (header do ranking de órgãos), `frontend/app/fornecedor/[cnpj]/page.tsx` (após "Distribuição por órgão"). Smoke test E2E: POST cria QP-2026-XXXX com SLA `lgpd_15d` e prazo +15d.
