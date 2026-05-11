@@ -19,11 +19,12 @@ Decisoes:
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, Literal
 
 import psycopg
+from psycopg import sql as psycopg_sql
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 
@@ -389,6 +390,49 @@ class ItemOut(BaseModel):
     pares: ParesOut | None = Field(
         default=None,
         description="Pares de comparacao (mesma uf+porte+ente). Ausente se em_quarentena.",
+    )
+
+
+# Correcoes (LGPD L.12)
+
+
+class CorrecaoTicketIn(BaseModel):
+    tipo: Literal[
+        "factual",
+        "lgpd_acesso",
+        "lgpd_correcao",
+        "lgpd_eliminacao",
+        "classificacao_pj",
+        "outro",
+    ] = Field(description="Natureza do pedido. Define SLA (factual=48h, lgpd_*=15d).")
+    descricao: str = Field(min_length=20, max_length=4000)
+    url_afetada: str | None = Field(default=None, max_length=500)
+    raw_id_afetado: int | None = None
+    fornecedor_cnpj: str | None = Field(default=None, max_length=20)
+    fonte_correta: str | None = Field(default=None, max_length=1000)
+    publicar_descricao: bool = Field(
+        default=False,
+        description="Se TRUE, a descricao pode aparecer na vitrine publica /correcoes ao ser resolvido. Default FALSE (privacidade).",
+    )
+    contato_email: str | None = Field(default=None, max_length=255)
+
+
+class CorrecaoTicketOut(BaseModel):
+    ticket_id: str
+    criado_em: str
+    tipo: str
+    sla_classe: str
+    status: str
+    descricao_publica: str | None = Field(
+        description="Descricao do problema, apenas se publicar_descricao=TRUE OU se status nao for terminal. Caso contrario None.",
+    )
+    url_afetada: str | None
+    raw_id_afetado: int | None
+    fornecedor_cnpj: str | None
+    resolvido_em: str | None
+    resolucao_publica: str | None
+    prazo_iso: str | None = Field(
+        description="Prazo nominal de resposta (criado_em + SLA). Pode ser passado sem resposta — auditoria publica.",
     )
 
 
@@ -2262,3 +2306,156 @@ def tce_pr_comparacao_municipios(
     with conn.cursor() as cur:
         cur.execute(sql, (cluster_id, cluster_version, porte, porte, limit))
         return [ContratoMunicipioOut(**r) for r in cur.fetchall()]
+
+
+# ----------------------------- Correcoes (LGPD L.12) ------------------
+
+# Mapa tipo -> sla_classe. factual_48h pra erro de fato; lgpd_15d pra
+# pedidos LGPD (art. 19) e tudo o que envolve direito do titular ou
+# classificacao de fornecedor (impacto sobre titular precisa avaliacao
+# proporcional).
+_SLA_POR_TIPO = {
+    "factual": "factual_48h",
+    "outro": "factual_48h",
+    "lgpd_acesso": "lgpd_15d",
+    "lgpd_correcao": "lgpd_15d",
+    "lgpd_eliminacao": "lgpd_15d",
+    "classificacao_pj": "lgpd_15d",
+}
+
+_STATUS_TERMINAL = {"resolvido_corrigido", "resolvido_sem_correcao", "rejeitado"}
+
+
+def _correcao_row_to_out(row: dict) -> CorrecaoTicketOut:
+    """Converte linha do banco em DTO publico aplicando regras de privacidade.
+
+    Descricao so vai pra fora se publicar_descricao=TRUE ou se o ticket
+    ainda esta ativo (reportador precisa ver o que reportou pra acompanhar).
+    Email NUNCA sai do banco — auditavel mas nao publico.
+    """
+    expor_descricao = (
+        row.get("publicar_descricao")
+        or row.get("status") not in _STATUS_TERMINAL
+    )
+    prazo = None
+    if row.get("criado_em") and row.get("sla_classe"):
+        delta_horas = 48 if row["sla_classe"] == "factual_48h" else 15 * 24
+        prazo = (row["criado_em"] + timedelta(hours=delta_horas)).isoformat()
+    return CorrecaoTicketOut(
+        ticket_id=row["ticket_id"],
+        criado_em=row["criado_em"].isoformat(),
+        tipo=row["tipo"],
+        sla_classe=row["sla_classe"],
+        status=row["status"],
+        descricao_publica=row["descricao"] if expor_descricao else None,
+        url_afetada=row.get("url_afetada"),
+        raw_id_afetado=row.get("raw_id_afetado"),
+        fornecedor_cnpj=row.get("fornecedor_cnpj"),
+        resolvido_em=row["resolvido_em"].isoformat() if row.get("resolvido_em") else None,
+        resolucao_publica=row.get("resolucao_publica"),
+        prazo_iso=prazo,
+    )
+
+
+@app.post(
+    "/correcoes/ticket",
+    response_model=CorrecaoTicketOut,
+    tags=["correcoes"],
+    status_code=201,
+)
+def criar_correcao_ticket(
+    conn: ConnDep, payload: CorrecaoTicketIn
+) -> CorrecaoTicketOut:
+    """Cria ticket de correcao com ID publico QP-AAAA-XXXX.
+
+    Audit_log (L.10) registra automaticamente via trigger.
+    """
+    sla = _SLA_POR_TIPO[payload.tipo]
+    with conn.cursor() as cur:
+        # SET LOCAL nao aceita parametros prepared — usar Literal pra escape seguro.
+        cur.execute(
+            psycopg_sql.SQL("SET LOCAL app.audit_actor = {}").format(
+                psycopg_sql.Literal("/correcoes/ticket (public)")
+            )
+        )
+        cur.execute(
+            psycopg_sql.SQL("SET LOCAL app.audit_base_legal = {}").format(
+                psycopg_sql.Literal(
+                    "LGPD art. 18 — direitos do titular / correcao"
+                )
+            )
+        )
+        cur.execute("SELECT analytics.fn_gerar_ticket_id() AS tid")
+        ticket_id = cur.fetchone()["tid"]
+        cur.execute(
+            """
+            INSERT INTO analytics.correcao_ticket
+                (ticket_id, tipo, sla_classe, url_afetada, raw_id_afetado,
+                 fornecedor_cnpj, descricao, fonte_correta, publicar_descricao,
+                 contato_email)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING *
+            """,
+            (
+                ticket_id, payload.tipo, sla,
+                payload.url_afetada, payload.raw_id_afetado,
+                payload.fornecedor_cnpj, payload.descricao,
+                payload.fonte_correta, payload.publicar_descricao,
+                payload.contato_email,
+            ),
+        )
+        row = cur.fetchone()
+    conn.commit()
+    return _correcao_row_to_out(row)
+
+
+@app.get(
+    "/correcoes/ticket/{ticket_id}",
+    response_model=CorrecaoTicketOut,
+    tags=["correcoes"],
+)
+def get_correcao_ticket(
+    conn: ConnDep, ticket_id: str
+) -> CorrecaoTicketOut:
+    """Consulta status publico do ticket. Email do reportador nunca sai;
+    descricao so sai se publicar_descricao=TRUE ou ticket ainda ativo."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT * FROM analytics.correcao_ticket WHERE ticket_id = %s",
+            (ticket_id,),
+        )
+        row = cur.fetchone()
+    if row is None:
+        raise HTTPException(404, f"ticket {ticket_id} não encontrado")
+    return _correcao_row_to_out(row)
+
+
+@app.get(
+    "/correcoes/recentes",
+    response_model=list[CorrecaoTicketOut],
+    tags=["correcoes"],
+)
+def list_correcoes_recentes(
+    conn: ConnDep,
+    limit: int = Query(default=20, ge=1, le=100),
+) -> list[CorrecaoTicketOut]:
+    """Vitrine publica das ultimas correcoes resolvidas (PLANO §6.6).
+
+    So inclui tickets em estado terminal. Descricao aparece apenas se
+    publicar_descricao=TRUE; caso contrario o ticket aparece como
+    'correcao processada' sem detalhe — mas resolucao_publica e
+    visivel para todos os terminais.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT *
+            FROM analytics.correcao_ticket
+            WHERE status IN ('resolvido_corrigido','resolvido_sem_correcao','rejeitado')
+            ORDER BY resolvido_em DESC NULLS LAST, criado_em DESC
+            LIMIT %s
+            """,
+            (limit,),
+        )
+        rows = cur.fetchall()
+    return [_correcao_row_to_out(r) for r in rows]

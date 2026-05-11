@@ -93,6 +93,9 @@ BEGIN
         v_pk_text := v_raw_id::TEXT;
     ELSIF TG_TABLE_NAME = 'fornecedor' THEN
         v_pk_text := COALESCE(v_new_jsonb, v_old_jsonb)->>'cnpj';
+    ELSIF TG_TABLE_NAME = 'correcao_ticket' THEN
+        v_pk_text := COALESCE(v_new_jsonb, v_old_jsonb)->>'ticket_id';
+        v_raw_id := (COALESCE(v_new_jsonb, v_old_jsonb)->>'raw_id_afetado')::BIGINT;
     ELSE
         v_pk_text := NULL;
     END IF;

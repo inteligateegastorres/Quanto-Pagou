@@ -25,6 +25,7 @@ import argparse
 import sys
 
 import psycopg
+from psycopg import sql as psycopg_sql
 from psycopg.rows import dict_row
 from rich.console import Console
 
@@ -85,8 +86,17 @@ def main(argv: list[str] | None = None) -> int:
             # Setting de sessao capturado pelo trigger analytics.fn_audit_log
             # (L.10). Trigger tem fallback pra coluna ator do INSERT, mas
             # explicitar aqui mantem o padrao pra futuros writes.
-            cur.execute("SET LOCAL app.audit_actor = %s", (args.ator,))
-            cur.execute("SET LOCAL app.audit_base_legal = %s", (args.fundamento,))
+            # SET LOCAL nao aceita parametros prepared — usar Literal pra escape.
+            cur.execute(
+                psycopg_sql.SQL("SET LOCAL app.audit_actor = {}").format(
+                    psycopg_sql.Literal(args.ator)
+                )
+            )
+            cur.execute(
+                psycopg_sql.SQL("SET LOCAL app.audit_base_legal = {}").format(
+                    psycopg_sql.Literal(args.fundamento)
+                )
+            )
 
             # Insere — trigger sincroniza item_canonical.eliminada_em
             cur.execute(
