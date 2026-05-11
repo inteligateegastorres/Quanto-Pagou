@@ -19,6 +19,7 @@ Decisoes:
 
 from __future__ import annotations
 
+import os
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, Literal
@@ -32,6 +33,26 @@ from pydantic import BaseModel, Field
 # Endpoints e modelos serao movidos pra routers/schemas em fase 2.
 from api.deps import FORNECEDOR_THRESHOLD as _FORNECEDOR_THRESHOLD
 from api.deps import ConnDep, lifespan
+
+
+# Sentry — observabilidade opcional. Inicializa SO se SENTRY_DSN_API
+# estiver setado e o pacote estiver instalado. Sem DSN = no-op.
+# (DEPLOY.md / .env.production.example documentam a chave.)
+_sentry_dsn = os.environ.get("SENTRY_DSN_API")
+if _sentry_dsn:
+    try:
+        import sentry_sdk  # type: ignore[import-untyped]
+
+        sentry_sdk.init(
+            dsn=_sentry_dsn,
+            traces_sample_rate=float(
+                os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.05")
+            ),
+            send_default_pii=False,
+        )
+    except ImportError:
+        # sentry-sdk nao instalado — silencioso, ambiente dev tipico.
+        pass
 
 # ----------------------------- modelos --------------------------------
 

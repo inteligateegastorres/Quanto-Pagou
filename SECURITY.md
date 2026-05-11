@@ -44,6 +44,26 @@ oficial existir):
 **Não abra issue pública** para vulnerabilidades de segurança. Use o
 canal acima primeiro.
 
+## Defesas em profundidade já no lugar
+
+Para reduzir risco, o repo aplica:
+
+- **GitHub Actions CI** (`.github/workflows/ci.yml`): ruff + mypy +
+  pytest no backend; lint + tsc no frontend. Status checks
+  obrigatórios em PR.
+- **Gitleaks** (`.github/workflows/gitleaks.yml`): varre PR e push em
+  `main` em busca de secrets versionados. Complementa o **GitHub
+  Secret Scanning** ativado em Settings > Code security and analysis
+  (ação manual do mantenedor — recomendado também ativar push
+  protection).
+- **Dependabot** (`.github/dependabot.yml`): atualizações semanais
+  agrupadas (minor + patch) para Python, npm e GitHub Actions.
+- **`SET LOCAL app.audit_actor`** em todos os writes regulados →
+  `analytics.audit_log` (Wave LGPD L.10). Ator e base legal de cada
+  operação ficam registrados.
+- **Tombstones** preservam snapshot bruto contra falsificação (Wave
+  LGPD L.1).
+
 ## SLA
 
 - **Acuso de recebimento:** até **5 dias úteis**.

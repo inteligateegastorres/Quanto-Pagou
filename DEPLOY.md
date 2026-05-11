@@ -42,6 +42,10 @@ em provedor externo, cartão de crédito, ou decisão de domínio:
 6. **App de e-mail (Buttondown ou Resend)** para o formulário de boletim.
    Anotar API key + endpoint do formulário público.
 7. **Conta Sentry** + DSN para frontend e backend.
+   Backend já tem integração condicional em `src/api/main.py` —
+   instale `sentry-sdk` (`python -m uv add sentry-sdk`) e exporte
+   `SENTRY_DSN_API` para ativar. Sem DSN = no-op (não quebra dev).
+   Sample rate via `SENTRY_TRACES_SAMPLE_RATE` (default 0.05).
 8. **Conta Fly.io** ou **Railway** para o worker FastAPI.
 9. **Revisão jurídica externa do pacote Wave LGPD** (PLANO §18 L.15).
    Pacote técnico fechado em 2026-05-11: tombstones (L.1),

@@ -1,0 +1,63 @@
+# Dependabot — atualizacoes automaticas de dependencias.
+# Atende crítica 2.3 da análise externa de 2026-05-11.
+#
+# Estrategia:
+#   - python (raiz, pyproject.toml + uv.lock) — weekly
+#   - npm (frontend/package.json) — weekly
+#   - github-actions (.github/workflows/*) — weekly
+#
+# Limite de PRs abertos: 5 por ecossistema, pra nao inundar.
+# Grupo de "minor + patch" — reduz volume; major continua PR separado
+# (geralmente exige revisao manual).
+#
+# Janela: segunda 06:00 BRT (= 09:00 UTC) — coincide com inicio da
+# semana de revisao do mantenedor.
+
+version: 2
+
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Sao_Paulo"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "python"
+    groups:
+      python-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Sao_Paulo"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "frontend"
+    groups:
+      npm-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Sao_Paulo"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "ci"

@@ -1,0 +1,44 @@
+# Gitleaks — detecta secrets versionados acidentalmente.
+# Atende crítica 2.2 da análise externa de 2026-05-11.
+#
+# Complementa o GitHub Secret Scanning (ativado no painel Settings >
+# Security and analysis), que cobre tokens com formato conhecido
+# (GitHub, AWS, etc.). Gitleaks cobre regex customizado (chaves DB,
+# JWT secrets, .env.local versionado).
+#
+# Executa em:
+#   - pull_request (todos)
+#   - push em main (defesa em profundidade — se algo passar via merge
+#     direto ou bypass)
+#
+# Nao bloqueia em fork de outras pessoas (pra nao quebrar contribuicoes
+# externas em CI publico).
+
+name: gitleaks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # gitleaks precisa do historico
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GITLEAKS_LICENSE so e' necessario pra orgs (pago).
+          # Repo pessoal/publico nao precisa.
