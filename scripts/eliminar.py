@@ -82,6 +82,12 @@ def main(argv: list[str] | None = None) -> int:
             console.print(f"  fundamento: {args.fundamento}")
             console.print(f"  ator: {args.ator}")
 
+            # Setting de sessao capturado pelo trigger analytics.fn_audit_log
+            # (L.10). Trigger tem fallback pra coluna ator do INSERT, mas
+            # explicitar aqui mantem o padrao pra futuros writes.
+            cur.execute("SET LOCAL app.audit_actor = %s", (args.ator,))
+            cur.execute("SET LOCAL app.audit_base_legal = %s", (args.fundamento,))
+
             # Insere — trigger sincroniza item_canonical.eliminada_em
             cur.execute(
                 """

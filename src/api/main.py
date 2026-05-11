@@ -1829,8 +1829,11 @@ def fornecedor_perfil(conn: ConnDep, cnpj: str) -> FornecedorPerfilOut:
             COUNT(DISTINCT rc.orgao_codigo) AS n_orgaos_distintos,
             COUNT(DISTINCT rc.raw_payload->>'cd_tce') AS n_municipios_distintos,
             MIN(rc.contract_date)::text AS primeiro_contrato,
-            MAX(rc.contract_date)::text AS ultimo_contrato
+            MAX(rc.contract_date)::text AS ultimo_contrato,
+            MAX(f.tipo_juridico) AS tipo_juridico,
+            MAX(f.fonte) AS classificacao_fonte
         FROM raw.compras rc
+        LEFT JOIN analytics.fornecedor f ON f.cnpj = rc.fornecedor_cnpj
         WHERE rc.fornecedor_cnpj = %s
         GROUP BY rc.fornecedor_cnpj
     """
@@ -1841,6 +1844,14 @@ def fornecedor_perfil(conn: ConnDep, cnpj: str) -> FornecedorPerfilOut:
         raise HTTPException(
             404,
             f"fornecedor {cnpj_normalizado} sem perfil público (mínimo {_FORNECEDOR_THRESHOLD} contratos)",
+        )
+    # LGPD L.2 — default deny: so PJ confirmado tem perfil publico.
+    # tipo_juridico NULL ou != 'PJ' = potencial MEI/EI/PF, dado pessoal.
+    if row.get("tipo_juridico") != "PJ":
+        raise HTTPException(
+            404,
+            "perfil público indisponível: tipo jurídico não confirmado como pessoa jurídica "
+            "(defesa LGPD para MEI/EI/PF). Solicite verificação em /correcoes.",
         )
     return FornecedorPerfilOut(
         fornecedor_cnpj=row["fornecedor_cnpj"],
