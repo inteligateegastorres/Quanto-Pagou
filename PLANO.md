@@ -2,14 +2,13 @@
 
 > Plataforma cívica para monitorar gastos públicos brasileiros e identificar possíveis desvios.
 
-**Versão:** v5.6 (2026-05-11)
+**Versão:** v5.7 (2026-05-11)
 **Status:** v5 + manchetes algorítmicas + Wave A (higiene) completa +
 Wave B (estrutura) parcial + Wave LGPD avançada (§18): L.1, L.2 (v1 +
-2.b), L.5, L.6, L.7, L.9.a, L.10, L.11 implementados. **Não pronto
-para go-live público** — restam L.3 (LIA), L.4 (RIPD), L.8
-(subprocessadores), L.12 (correções formal), L.13 (contestar ranking),
-L.9.b/c (CLI/cron), L.14 (instituição-âncora) e L.15 (revisor
-jurídico). Ver §18.3.
+2.b), L.5, L.6, L.7, L.9.a, L.10, L.11, L.12 implementados. **Não
+pronto para go-live público** — restam L.3 (LIA), L.4 (RIPD), L.8
+(subprocessadores), L.13 (contestar ranking), L.9.b/c (CLI/cron),
+L.14 (instituição-âncora) e L.15 (revisor jurídico). Ver §18.3.
 
 ---
 
@@ -1284,7 +1283,7 @@ paralelo com revisão jurídica humana.
 | **L.9** ✅⚠️ | Política de retenção em `docs/legal/RETENCAO.md` + job de expurgo do `raw_payload` redundante | Média | Documento define prazos por tipo (raw, canonical, mart, log); job mensal reduz `raw_payload` mantendo só campos não derivados nas colunas dedicadas. **L.9.b deferido:** `scripts/expurgar_raw_payload.py` com dry-run. **L.9.c deferido:** cron mensal após ≥1 ciclo validado. | 1d — documento implementado em `docs/legal/RETENCAO.md` |
 | **L.10** ✅ | `analytics.audit_log` (registro de operações art. 37 LGPD) via triggers | Média | Tabela append-only com schema/table/op/pk_text/raw_id_afetado/ator/base_legal/diff. Triggers em `analytics.eliminacao`, `item_canonical` (só quando `eliminada_em` muda) e `fornecedor`. Ator via `current_setting('app.audit_actor')` setado pelo psycopg, com fallback pra linha de `eliminacao`. Escopo cirúrgico: NÃO loga refresh de MV. | 1d — implementado em `sql/008_audit_log.sql` + `scripts/eliminar.py` |
 | **L.11** ✅ | Disclaimer de origem em `/comparar`, `/manchetes`, `/fornecedor/*`, `/municipio/*`, `/cluster/*` | Média | Componente reusável `frontend/lib/DisclaimerOrigem.tsx` integrado em 5 páginas. Aceita prop `fonte` (tce-pr/compras-gov-br/mista) + `atualizado_em`. | 2h — `frontend/lib/DisclaimerOrigem.tsx` |
-| **L.12** | `/correcoes` formal: ticket ID + fluxo auditável + SLA 15d | Média | Form gera ticket no banco (`analytics.correcao_ticket`); usuário recebe link público pra acompanhar; SLA 15d (LGPD) ou 48h (correção factual) com badge de prazo | 1d |
+| **L.12** ✅ | `/correcoes` formal: ticket ID + fluxo auditável + SLA 15d | Média | `analytics.correcao_ticket` com ticket_id público `QP-AAAA-XXXX`; 3 endpoints (`POST /correcoes/ticket`, `GET /correcoes/ticket/{id}`, `GET /correcoes/recentes`); frontend com Server Action + página pública por ticket; SLA `factual_48h` (erro de fato) ou `lgpd_15d` (art. 19); `publicar_descricao` flag deixa reportador controlar vitrine pública; audit_log (L.10) registra todo INSERT/UPDATE/DELETE com ator+base_legal; e-mail nunca sai do banco. | 1d — `sql/011_correcoes.sql` + 3 endpoints + 2 páginas Next |
 | **L.13** | Direito à revisão de ranking (art. 20 §1º): botão "contestar este ranking" em `/manchetes`, `/ranking/*` | Baixa | Form `/contestar?manchete_id=X` registra pedido de revisão; resposta humana documentada em `/correcoes` | 4h |
 | **L.14** | Buscar instituição-âncora (Open Knowledge BR / Transparência BR / Abraji) | **CRÍTICA não-técnica** | E-mail enviado a ≥2 instituições propondo parceria/co-mantenança; resposta documentada em `docs/PARCERIAS.md` | externo |
 | **L.15** | Submeter pacote (L.1-L.13) a revisor jurídico independente especializado em LGPD/cívico | **CRÍTICA não-técnica** | Parecer recebido + ajustes incorporados; documentado em `docs/legal/REVISAO_JURIDICA_v1.md` | externo |
@@ -1295,7 +1294,7 @@ paralelo com revisão jurídica humana.
 |---|---|---|---|
 | Técnica imediata | ~~L.1 (tombstones)~~ ✅ | dev | 1d |
 | Técnica próxima | ~~L.2 (PJ vs MEI/EI v1+v1.b)~~ ✅, ~~L.10 (audit_log)~~ ✅, ~~L.9.a (doc retenção)~~ ✅ | dev | 3d |
-| UI | ~~L.5~~ ✅, ~~L.6~~ ✅, ~~L.7~~ ✅, ~~L.11~~ ✅, L.12, L.13 | dev | 3d |
+| UI | ~~L.5~~ ✅, ~~L.6~~ ✅, ~~L.7~~ ✅, ~~L.11~~ ✅, ~~L.12~~ ✅, L.13 | dev | 3d |
 | Técnica próxima — pendente | L.9.b (CLI expurgo), L.9.c (cron) | dev | 1d |
 | Jurídica | L.3 (LIA), L.4 (RIPD), L.8 (subprocessadores) | jurídico humano | 5d |
 | Externa | L.14 (instituição), L.15 (revisor jurídico) | autor | 1-2 sem |
@@ -1407,18 +1406,31 @@ Não vamos abrir indexação Google enquanto:
 - ✅ L.7 (Canal LGPD + encarregado) implementado
 - ✅ L.10 (audit_log) implementado
 - ✅ L.11 (disclaimer de origem) implementado
+- ✅ L.12 (/correcoes formal com ticket) implementado
 - ✅⚠️ L.9 doc implementado; falta L.9.b (CLI expurgo)
 - ❌ L.3 (LIA), L.4 (RIPD) não estiverem prontos
 - ❌ L.15 (revisor jurídico) não tiver visto o pacote
 - ❌ A Wave C.4 (Cloudflare na frente, rate-limit, CORS) não estiver
   configurada
 
-São condições mínimas, não suficientes. Ideal: também L.8, L.12, L.13
+São condições mínimas, não suficientes. Ideal: também L.8, L.13
 + L.14 (instituição-âncora confirmada).
 
 ---
 
 ## 14. Changelog
+
+**v5.7 (2026-05-11)** — Wave LGPD: L.12 /correcoes formal com ticket+SLA+audit:
+- **L.12 ✅** `sql/011_correcoes.sql` cria `analytics.correcao_ticket` (id BIGSERIAL, ticket_id TEXT UNIQUE, tipo, sla_classe, url_afetada, raw_id_afetado, fornecedor_cnpj, descricao, fonte_correta, publicar_descricao BOOL DEFAULT FALSE, contato_email, status, resolvido_em, resolucao_publica, resolucao_delta JSONB) com CHECK constraints + 3 índices.
+- Função `analytics.fn_gerar_ticket_id()` gera `QP-AAAA-XXXX` (ano + 4 hex random) com retry contra colisão (10 tentativas).
+- 3 endpoints novos em `src/api/main.py`: `POST /correcoes/ticket` (cria + retorna), `GET /correcoes/ticket/{ticket_id}` (consulta sem cadastro), `GET /correcoes/recentes` (vitrine pública dos resolvidos).
+- Mapa `_SLA_POR_TIPO`: factual/outro → 48h; lgpd_*/classificacao_pj → 15d (art. 19).
+- Regra de privacidade: descrição só vai pra fora se `publicar_descricao=TRUE` OU ticket ainda ativo (reportador precisa ver o que reportou). E-mail NUNCA sai do banco (auditável só internamente via L.10).
+- Frontend refatorado: `frontend/app/correcoes/page.tsx` agora Server Component com Server Action `criarTicketAction` em `actions.ts` (substitui o `mailto:`). Form completo com 8 campos + checkbox de publicar_descricao + select de tipo. Lista de recentes via API. Após submit, redirect para `/correcoes/{ticket_id}`.
+- Nova rota `frontend/app/correcoes/[ticket_id]/page.tsx` — página pública do ticket com noindex, status colorido (aberto/em_analise/resolvido_*/rejeitado), prazo nominal com badge "Prazo vencido" se passou sem resposta, referências cruzadas (raw_id → /contrato/, cnpj → /fornecedor/).
+- Audit log (L.10) ajustado: branch para `correcao_ticket` em `fn_audit_log` adiciona `ticket_id` como `pk_text` e `raw_id_afetado` como `raw_id_afetado`. Trigger AFTER INSERT/UPDATE/DELETE.
+- Bug fix descoberto e corrigido: `SET LOCAL app.audit_actor = %s` não funciona em psycopg3 (Postgres recusa parameters em SET). Substituído por `psycopg.sql.SQL(...).format(Literal(...))` em `main.py` e `scripts/eliminar.py` (mesmo bug latente lá, agora corrigido).
+- Smoke test E2E passou: POST cria ticket QP-2026-XXXX com prazo +48h, GET devolve mesmo conteúdo, audit_log registra INSERT com ator `/correcoes/ticket (public)` + base legal `LGPD art. 18 — direitos do titular / correcao` + pk_text = ticket_id.
 
 **v5.6 (2026-05-11)** — Wave LGPD avança ainda mais: L.2.b + L.5 + L.6 + L.7 + L.11:
 - **L.2.b ✅** `sql/010_l2b_mart_pj.sql` — MV `mart_fornecedores_municipio` agora JOIN com `analytics.fornecedor` filtrando `tipo_juridico='PJ'` (defesa em camadas na origem). Reduziu de ~120k para 81.3k linhas. Helper `_require_pj_or_404` em `src/api/main.py` aplicado a 5 endpoints derivados (`/por-orgao`, `/por-municipio`, `/por-categoria`, `/por-modalidade`, `/contratos`). Listagem `/fornecedores` agora JOIN com PJ. Frontend `/fornecedor/[cnpj]/page.tsx` substituiu `notFound()` por componente `PerfilIndisponivel` que distingue "menos de 5 contratos" vs "tipo jurídico não confirmado" e dá gancho para `/correcoes`.

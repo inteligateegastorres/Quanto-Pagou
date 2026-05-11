@@ -148,6 +148,17 @@ Pronto:
   `/municipio/[cd_tce]`, `/cluster/[cluster_id]`. Banner discreto:
   "Dados extraídos de [fonte] em [data]. Possíveis erros — reportar
   correção."
+- **`/correcoes` formal com ticket auditável** (PLANO §18 L.12):
+  `analytics.correcao_ticket` com `ticket_id` público
+  `QP-AAAA-XXXX`. 3 endpoints (`POST /correcoes/ticket`,
+  `GET /correcoes/ticket/{id}`, `GET /correcoes/recentes`). Frontend
+  com Server Action substitui o `mailto:` antigo; após submit,
+  redireciona para `/correcoes/{ticket_id}` (página pública sem
+  cadastro, noindex). SLA `factual_48h` (erro de fato) ou
+  `lgpd_15d` (art. 19) calculado a partir do tipo. Flag
+  `publicar_descricao` deixa o reportador controlar se a descrição
+  aparece na vitrine pública dos resolvidos. E-mail do reportador
+  nunca sai do banco (auditável internamente via audit_log L.10).
 - **Política de retenção** (PLANO §18 L.9.a): `docs/legal/RETENCAO.md`
   v1 com prazos por camada (raw imutável, audit_log 5 anos,
   manchetes 2 anos, MVs sem retenção, raw_payload 90d após
@@ -163,7 +174,8 @@ Em andamento — Wave LGPD (PLANO §18, bloqueante para go-live público):
 - **L.9 ✅⚠️** doc retenção (acima); L.9.b/c deferidos (CLI + cron)
 - **L.10 ✅** audit log (acima)
 - **L.11 ✅** disclaimer de origem (acima)
-- **L.3, L.4, L.8, L.12, L.13** LIA + RIPD + subprocessadores + UI (pendente)
+- **L.12 ✅** /correcoes formal com ticket+SLA+audit (acima)
+- **L.3, L.4, L.8, L.13** LIA + RIPD + subprocessadores + UI contestar (pendente)
 - **L.14-L.15** instituição-âncora + revisão jurídica externa (pendente)
 
 Não pronto (depende do usuário humano para destravar):
