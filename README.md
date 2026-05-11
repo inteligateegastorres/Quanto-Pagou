@@ -159,6 +159,21 @@ Pronto:
   `publicar_descricao` deixa o reportador controlar se a descrição
   aparece na vitrine pública dos resolvidos. E-mail do reportador
   nunca sai do banco (auditável internamente via audit_log L.10).
+- **Contestar decisão automatizada** (PLANO §18 L.13, LGPD art. 20):
+  Tipo `revisao_ranking` adicionado em `correcao_ticket` (SLA 15d).
+  Componente `BotaoContestarRanking` gera link pré-preenchido para
+  `/correcoes?tipo=revisao_ranking&url=…&descricao=…`. Form de
+  `/correcoes` aceita `searchParams` e pré-preenche. Inserido em
+  `/manchetes` (cada card), `/cluster/[id]` (header do ranking de
+  órgãos), `/fornecedor/[cnpj]` (após distribuição por órgão).
+- **Expurgo de `raw_payload` redundante** (PLANO §18 L.9.b + L.9.c):
+  `scripts/expurgar_raw_payload.py` com `--dry-run` default seguro
+  + `--apply`/`--days N`/`--batch-size`. Critério: idade > N dias
+  AND canonicalização validada (`item_canonical` populado) AND
+  ainda não expurgado. Workflow `.github/workflows/expurgar-mensal.yml`
+  roda dia 1 de cada mês 06:00 UTC sempre em dry-run (Job Summary
+  com relatório); apply só via `workflow_dispatch` manual até
+  ≥1 ciclo humano validado.
 - **Política de retenção** (PLANO §18 L.9.a): `docs/legal/RETENCAO.md`
   v1 com prazos por camada (raw imutável, audit_log 5 anos,
   manchetes 2 anos, MVs sem retenção, raw_payload 90d após
@@ -171,11 +186,12 @@ Em andamento — Wave LGPD (PLANO §18, bloqueante para go-live público):
 - **L.5 ✅** Política de Privacidade (acima)
 - **L.6 ✅** Termos de Uso + LICENSE-DATA CC-BY 4.0 (acima)
 - **L.7 ✅** Canal LGPD + encarregado (acima)
-- **L.9 ✅⚠️** doc retenção (acima); L.9.b/c deferidos (CLI + cron)
+- **L.9 ✅** retenção completa (doc + CLI dry-run + workflow mensal)
 - **L.10 ✅** audit log (acima)
 - **L.11 ✅** disclaimer de origem (acima)
 - **L.12 ✅** /correcoes formal com ticket+SLA+audit (acima)
-- **L.3, L.4, L.8, L.13** LIA + RIPD + subprocessadores + UI contestar (pendente)
+- **L.13 ✅** contestar decisão automatizada (acima)
+- **L.3, L.4, L.8** LIA + RIPD + subprocessadores (jurídico humano, pendente)
 - **L.14-L.15** instituição-âncora + revisão jurídica externa (pendente)
 
 Não pronto (depende do usuário humano para destravar):

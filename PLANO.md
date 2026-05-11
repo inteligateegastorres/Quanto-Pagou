@@ -2,13 +2,13 @@
 
 > Plataforma cívica para monitorar gastos públicos brasileiros e identificar possíveis desvios.
 
-**Versão:** v5.7 (2026-05-11)
+**Versão:** v5.8 (2026-05-11)
 **Status:** v5 + manchetes algorítmicas + Wave A (higiene) completa +
 Wave B (estrutura) parcial + Wave LGPD avançada (§18): L.1, L.2 (v1 +
-2.b), L.5, L.6, L.7, L.9.a, L.10, L.11, L.12 implementados. **Não
-pronto para go-live público** — restam L.3 (LIA), L.4 (RIPD), L.8
-(subprocessadores), L.13 (contestar ranking), L.9.b/c (CLI/cron),
-L.14 (instituição-âncora) e L.15 (revisor jurídico). Ver §18.3.
+2.b), L.5, L.6, L.7, L.9 (a + b + c), L.10, L.11, L.12, L.13 todos
+implementados. **Restam para go-live público:** L.3 (LIA), L.4 (RIPD),
+L.8 (subprocessadores), L.14 (instituição-âncora), L.15 (revisor
+jurídico). Ver §18.3.
 
 ---
 
@@ -1280,11 +1280,11 @@ paralelo com revisão jurídica humana.
 | **L.6** ✅ | Termos de Uso em `/termos` + licença de dados (CC-BY 4.0) | Alta | Rota pública; cobre: uso pessoal/comercial, atribuição, garantias, limitação de responsabilidade, foro Curitiba/PR. Arquivo canônico `LICENSE-DATA` na raiz. | 4h — `frontend/app/termos/page.tsx` + `LICENSE-DATA` |
 | **L.7** ✅ | Encarregado nomeado + canal `/lgpd` + e-mail dedicado (autodeclaração de pequeno porte) | Alta | Rota `/lgpd` documenta direitos do art. 18 + canal `lgpd@quantopagou.org` + SLA 15d (art. 19). Footer global cita encarregado + autodeclaração CD/ANPD 2/2022. | 4h — `frontend/app/lgpd/page.tsx` + `frontend/app/layout.tsx` |
 | **L.8** | Catálogo de subprocessadores em `docs/legal/SUBPROCESSADORES.md` | Alta | Lista: Vercel, Supabase, Cloudflare R2, Fly.io, Resend (futuro). Cada um com: razão social, finalidade, jurisdição, base legal de transferência internacional (Resolução CD/ANPD 19/2024) | 2h |
-| **L.9** ✅⚠️ | Política de retenção em `docs/legal/RETENCAO.md` + job de expurgo do `raw_payload` redundante | Média | Documento define prazos por tipo (raw, canonical, mart, log); job mensal reduz `raw_payload` mantendo só campos não derivados nas colunas dedicadas. **L.9.b deferido:** `scripts/expurgar_raw_payload.py` com dry-run. **L.9.c deferido:** cron mensal após ≥1 ciclo validado. | 1d — documento implementado em `docs/legal/RETENCAO.md` |
+| **L.9** ✅ | Política de retenção em `docs/legal/RETENCAO.md` + job de expurgo do `raw_payload` redundante | Média | Documento (L.9.a) + CLI `scripts/expurgar_raw_payload.py` com `--dry-run` default seguro + `--apply` (L.9.b) + workflow GH Actions `expurgar-mensal.yml` cron 1º do mês 06:00 UTC sempre dry-run, apply só via manual dispatch (L.9.c). Smoke test E2E em banco local: 156.769 candidatos / ~85 MiB. | 1d — `docs/legal/RETENCAO.md` + `scripts/expurgar_raw_payload.py` + `.github/workflows/expurgar-mensal.yml` |
 | **L.10** ✅ | `analytics.audit_log` (registro de operações art. 37 LGPD) via triggers | Média | Tabela append-only com schema/table/op/pk_text/raw_id_afetado/ator/base_legal/diff. Triggers em `analytics.eliminacao`, `item_canonical` (só quando `eliminada_em` muda) e `fornecedor`. Ator via `current_setting('app.audit_actor')` setado pelo psycopg, com fallback pra linha de `eliminacao`. Escopo cirúrgico: NÃO loga refresh de MV. | 1d — implementado em `sql/008_audit_log.sql` + `scripts/eliminar.py` |
 | **L.11** ✅ | Disclaimer de origem em `/comparar`, `/manchetes`, `/fornecedor/*`, `/municipio/*`, `/cluster/*` | Média | Componente reusável `frontend/lib/DisclaimerOrigem.tsx` integrado em 5 páginas. Aceita prop `fonte` (tce-pr/compras-gov-br/mista) + `atualizado_em`. | 2h — `frontend/lib/DisclaimerOrigem.tsx` |
 | **L.12** ✅ | `/correcoes` formal: ticket ID + fluxo auditável + SLA 15d | Média | `analytics.correcao_ticket` com ticket_id público `QP-AAAA-XXXX`; 3 endpoints (`POST /correcoes/ticket`, `GET /correcoes/ticket/{id}`, `GET /correcoes/recentes`); frontend com Server Action + página pública por ticket; SLA `factual_48h` (erro de fato) ou `lgpd_15d` (art. 19); `publicar_descricao` flag deixa reportador controlar vitrine pública; audit_log (L.10) registra todo INSERT/UPDATE/DELETE com ator+base_legal; e-mail nunca sai do banco. | 1d — `sql/011_correcoes.sql` + 3 endpoints + 2 páginas Next |
-| **L.13** | Direito à revisão de ranking (art. 20 §1º): botão "contestar este ranking" em `/manchetes`, `/ranking/*` | Baixa | Form `/contestar?manchete_id=X` registra pedido de revisão; resposta humana documentada em `/correcoes` | 4h |
+| **L.13** ✅ | Direito à revisão de ranking (art. 20 §1º): botão "contestar este ranking" em `/manchetes`, `/cluster/*`, `/fornecedor/*` | Baixa | Tipo `revisao_ranking` adicionado em `correcao_ticket` (ALTER CHECK em `sql/012`) + SLA `lgpd_15d`. Componente `BotaoContestarRanking` reusa pipeline L.12 com querystring pré-preenchida. Form de `/correcoes` aceita `?tipo&url&descricao` para pré-preencher. Inserido em 3 páginas (manchete card, ranking de órgãos por cluster, distribuição por órgão em /fornecedor). | 4h — `sql/012_correcao_revisao_ranking.sql` + `frontend/lib/BotaoContestarRanking.tsx` + 4 páginas |
 | **L.14** | Buscar instituição-âncora (Open Knowledge BR / Transparência BR / Abraji) | **CRÍTICA não-técnica** | E-mail enviado a ≥2 instituições propondo parceria/co-mantenança; resposta documentada em `docs/PARCERIAS.md` | externo |
 | **L.15** | Submeter pacote (L.1-L.13) a revisor jurídico independente especializado em LGPD/cívico | **CRÍTICA não-técnica** | Parecer recebido + ajustes incorporados; documentado em `docs/legal/REVISAO_JURIDICA_v1.md` | externo |
 
@@ -1294,8 +1294,8 @@ paralelo com revisão jurídica humana.
 |---|---|---|---|
 | Técnica imediata | ~~L.1 (tombstones)~~ ✅ | dev | 1d |
 | Técnica próxima | ~~L.2 (PJ vs MEI/EI v1+v1.b)~~ ✅, ~~L.10 (audit_log)~~ ✅, ~~L.9.a (doc retenção)~~ ✅ | dev | 3d |
-| UI | ~~L.5~~ ✅, ~~L.6~~ ✅, ~~L.7~~ ✅, ~~L.11~~ ✅, ~~L.12~~ ✅, L.13 | dev | 3d |
-| Técnica próxima — pendente | L.9.b (CLI expurgo), L.9.c (cron) | dev | 1d |
+| UI | ~~L.5~~ ✅, ~~L.6~~ ✅, ~~L.7~~ ✅, ~~L.11~~ ✅, ~~L.12~~ ✅, ~~L.13~~ ✅ | dev | 3d |
+| Técnica final | ~~L.9.b (CLI expurgo)~~ ✅, ~~L.9.c (cron mensal dry-run)~~ ✅ | dev | 1d |
 | Jurídica | L.3 (LIA), L.4 (RIPD), L.8 (subprocessadores) | jurídico humano | 5d |
 | Externa | L.14 (instituição), L.15 (revisor jurídico) | autor | 1-2 sem |
 
@@ -1407,18 +1407,24 @@ Não vamos abrir indexação Google enquanto:
 - ✅ L.10 (audit_log) implementado
 - ✅ L.11 (disclaimer de origem) implementado
 - ✅ L.12 (/correcoes formal com ticket) implementado
-- ✅⚠️ L.9 doc implementado; falta L.9.b (CLI expurgo)
+- ✅ L.13 (contestar ranking — art. 20) implementado
+- ✅ L.9 completo (doc + CLI + workflow mensal dry-run) implementado
 - ❌ L.3 (LIA), L.4 (RIPD) não estiverem prontos
 - ❌ L.15 (revisor jurídico) não tiver visto o pacote
 - ❌ A Wave C.4 (Cloudflare na frente, rate-limit, CORS) não estiver
   configurada
 
-São condições mínimas, não suficientes. Ideal: também L.8, L.13
-+ L.14 (instituição-âncora confirmada).
+**Restam apenas itens não-técnicos:** L.3, L.4, L.8 (jurídico humano);
+L.14 (instituição-âncora); L.15 (revisor jurídico).
 
 ---
 
 ## 14. Changelog
+
+**v5.8 (2026-05-11)** — Wave LGPD: L.13 contestar ranking + L.9.b/c expurgo:
+- **L.13 ✅** `sql/012_correcao_revisao_ranking.sql` adiciona tipo `revisao_ranking` em `analytics.correcao_ticket` (ALTER CHECK ampliado) + mapeamento `_SLA_POR_TIPO['revisao_ranking'] = 'lgpd_15d'` em `main.py` + enum/label correspondente em `frontend/lib/correcoes.ts`. Novo componente `frontend/lib/BotaoContestarRanking.tsx` gera link com querystring pré-preenchida (`tipo=revisao_ranking&url=...&descricao=...`) para `/correcoes#form`. Refatorei `/correcoes/page.tsx` para aceitar `searchParams` e usar `defaultValue` em select/textarea/input. Inserido em 3 páginas: `frontend/app/manchetes/page.tsx` (em cada `ManchteCard`), `frontend/app/cluster/[cluster_id]/page.tsx` (header do ranking de órgãos), `frontend/app/fornecedor/[cnpj]/page.tsx` (após "Distribuição por órgão"). Smoke test E2E: POST cria QP-2026-XXXX com SLA `lgpd_15d` e prazo +15d.
+- **L.9.b ✅** `scripts/expurgar_raw_payload.py` — CLI com `--dry-run` default seguro + `--apply`/`--days N`/`--batch-size N`/`--ator`. Critério de elegibilidade: `raw.compras.ingested_at < NOW() - N days` AND JOIN com `analytics.item_canonical` (canonicalização validada) AND `raw_payload <> '{}'::jsonb` (ainda não expurgado). Relatório dry-run mostra contagem + bytes liberáveis + distribuição por (source, ano). Apply em batches com `SET LOCAL app.audit_actor` (via `psycopg.sql.Literal` por causa do bug L.12). Smoke test em banco local: 156.769 candidatos, ~85 MiB.
+- **L.9.c ✅** `.github/workflows/expurgar-mensal.yml` — cron `'0 6 1 * *'` (1º dia de cada mês 06:00 UTC) sempre em **dry-run** (Job Summary com relatório). `workflow_dispatch` permite `apply=true` manual. Defesa de progressive correctness: cron NÃO destrutivo até humano validar >=1 ciclo; depois, editar o workflow trocando ou criando agendamento com apply. Concorrência guardada por `group: expurgar-mensal`.
 
 **v5.7 (2026-05-11)** — Wave LGPD: L.12 /correcoes formal com ticket+SLA+audit:
 - **L.12 ✅** `sql/011_correcoes.sql` cria `analytics.correcao_ticket` (id BIGSERIAL, ticket_id TEXT UNIQUE, tipo, sla_classe, url_afetada, raw_id_afetado, fornecedor_cnpj, descricao, fonte_correta, publicar_descricao BOOL DEFAULT FALSE, contato_email, status, resolvido_em, resolucao_publica, resolucao_delta JSONB) com CHECK constraints + 3 índices.
