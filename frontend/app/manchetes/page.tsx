@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { fmtBRL, fmtBRLCompact } from "@/lib/api";
 import { DisclaimerOrigem } from "@/lib/DisclaimerOrigem";
+import { BotaoContestarRanking } from "@/lib/BotaoContestarRanking";
 import {
   manchetes as manchetesApi,
   type Manchete,
@@ -306,13 +307,24 @@ function ManchteCard({ m }: { m: Manchete }) {
         )}
       </div>
 
-      <div className="pt-1">
+      <div className="pt-1 flex items-baseline gap-4 flex-wrap">
         <Link
           href={drillHref}
           className="text-sm border border-line rounded-md px-3 py-1.5 no-underline hover:border-ink"
         >
           Ver os {m.n_sujeito} contratos →
         </Link>
+        <BotaoContestarRanking
+          url={`/manchetes#${m.cluster_id}-${m.cd_tce}`}
+          contexto={
+            `Contestação de decisão automatizada (LGPD art. 20). ` +
+            `Manchete: ${clusterLabel} em ` +
+            `${m.municipio_nome ?? m.cd_tce} (cd_tce ${m.cd_tce}, ` +
+            `cluster ${m.cluster_id}). ` +
+            `Spread ${spread.toFixed(1)}× a mediana do cluster no PR. ` +
+            `Motivo da contestação: [descreva por que o ranking não deveria incluir este caso].`
+          }
+        />
       </div>
     </li>
   );

@@ -11,6 +11,7 @@ export type CorrecaoTipo =
   | "lgpd_correcao"
   | "lgpd_eliminacao"
   | "classificacao_pj"
+  | "revisao_ranking"
   | "outro";
 
 export type CorrecaoStatus =
@@ -81,6 +82,8 @@ export const TIPO_LABEL: Record<CorrecaoTipo, string> = {
   lgpd_eliminacao: "LGPD — eliminação / tombstone (art. 18 IV)",
   classificacao_pj:
     "Classificação PJ — perfil indevidamente bloqueado ou exposto",
+  revisao_ranking:
+    "Revisão de decisão automatizada — ranking / manchete (art. 20)",
   outro: "Outro",
 };
 

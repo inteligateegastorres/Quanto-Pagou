@@ -5,6 +5,7 @@ import {
   TIPO_LABEL,
   STATUS_LABEL,
   type CorrecaoTicket,
+  type CorrecaoTipo,
 } from "@/lib/correcoes";
 import { criarTicketAction } from "./actions";
 
@@ -16,7 +17,37 @@ export const metadata: Metadata = {
     "Toda correção feita após um relato é registrada aqui — data, item, delta antes → depois. SLA: 48h (correção factual) ou 15 dias (LGPD art. 19).",
 };
 
-export default async function CorrecoesPage() {
+type SearchParams = {
+  tipo?: string;
+  url?: string;
+  descricao?: string;
+};
+
+const TIPOS_VALIDOS: CorrecaoTipo[] = [
+  "factual",
+  "lgpd_acesso",
+  "lgpd_correcao",
+  "lgpd_eliminacao",
+  "classificacao_pj",
+  "revisao_ranking",
+  "outro",
+];
+
+export default async function CorrecoesPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const sp = await searchParams;
+  const defaultTipo: CorrecaoTipo = TIPOS_VALIDOS.includes(sp.tipo as CorrecaoTipo)
+    ? (sp.tipo as CorrecaoTipo)
+    : "factual";
+  const defaultUrl = (sp.url ?? "").slice(0, 500);
+  const defaultDescricao = (sp.descricao ?? "").slice(0, 4000);
+  // Pré-preenchimento via querystring sinaliza chegada por BotaoContestarRanking
+  // (L.13) ou similar. Mostra aviso no topo do form.
+  const preenchido = Boolean(sp.tipo || sp.url || sp.descricao);
+
   let recentes: CorrecaoTicket[] = [];
   let recentesErr: string | null = null;
   try {
@@ -64,13 +95,19 @@ export default async function CorrecoesPage() {
         </ol>
       </section>
 
-      <section className="space-y-3">
+      <section className="space-y-3" id="form">
         <h2 className="text-base font-semibold">Reportar erro</h2>
         <p className="text-sm text-muted">
           Encontrou um número que parece errado, um cluster mal-classificado,
           uma escola atribuída ao município errado, ou quer exercer um
           direito do art. 18 LGPD? Conte abaixo.
         </p>
+        {preenchido && (
+          <div className="border border-attention/40 bg-attention/5 rounded-md p-3 text-sm text-attention">
+            Form pré-preenchido a partir de outra página. Revise antes de
+            enviar e ajuste a descrição se precisar.
+          </div>
+        )}
         <form
           action={criarTicketAction}
           className="border border-line rounded-md p-4 bg-white space-y-3 text-sm"
@@ -86,7 +123,7 @@ export default async function CorrecoesPage() {
               id="tipo"
               name="tipo"
               required
-              defaultValue="factual"
+              defaultValue={defaultTipo}
               className="w-full border border-line rounded-md px-3 py-2 bg-paper"
             >
               {(
@@ -117,6 +154,7 @@ export default async function CorrecoesPage() {
               minLength={20}
               maxLength={4000}
               rows={5}
+              defaultValue={defaultDescricao}
               placeholder='ex: "cluster diz medicamentos mas é claramente material hospitalar — ver contrato 279460"'
               className="w-full border border-line rounded-md px-3 py-2 bg-paper"
             />
@@ -138,6 +176,7 @@ export default async function CorrecoesPage() {
                 id="url_afetada"
                 name="url_afetada"
                 maxLength={500}
+                defaultValue={defaultUrl}
                 placeholder="https://quantopagou.org/contrato/279460"
                 className="w-full border border-line rounded-md px-3 py-2 bg-paper"
               />

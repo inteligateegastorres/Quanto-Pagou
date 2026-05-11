@@ -4,6 +4,7 @@ import { fmtBRL, fmtBRLCompact } from "@/lib/api";
 import { Stat } from "@/lib/Stat";
 import { GuardrailFornecedorBadge } from "@/lib/Badge";
 import { DisclaimerOrigem } from "@/lib/DisclaimerOrigem";
+import { BotaoContestarRanking } from "@/lib/BotaoContestarRanking";
 import {
   fornecedor as fornecedorApi,
   type FornecedorPerfil,
@@ -161,6 +162,21 @@ export default async function FornecedorPage({
           tipo="orgao"
         />
       )}
+
+      <div className="flex justify-end -mt-6">
+        <BotaoContestarRanking
+          url={`/fornecedor/${encodeURIComponent(cnpj)}`}
+          contexto={
+            `Contestação de decisão automatizada (LGPD art. 20). ` +
+            `Perfil de fornecedor CNPJ ${cnpj}` +
+            (perfil.fornecedor_nome ? ` (${perfil.fornecedor_nome})` : "") +
+            `. Motivo da contestação: [descreva por que a distribuição agregada ` +
+            `apresentada não é representativa / por que este perfil ` +
+            `não deveria ser público].`
+          }
+        />
+      </div>
+
 
       {municipios.length > 0 && (
         <Block

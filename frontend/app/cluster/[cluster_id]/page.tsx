@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { api, fmtBRL } from "@/lib/api";
 import { ManchteContextBox } from "@/lib/ManchteContext";
 import { DisclaimerOrigem } from "@/lib/DisclaimerOrigem";
+import { BotaoContestarRanking } from "@/lib/BotaoContestarRanking";
 
 export const dynamic = "force-dynamic";
 
@@ -65,9 +66,22 @@ export default async function ClusterPage({
       )}
 
       <section>
-        <h2 className="text-lg font-semibold mb-3">
-          Ranking de órgãos por mediana
-        </h2>
+        <div className="flex items-baseline justify-between gap-3 flex-wrap mb-3">
+          <h2 className="text-lg font-semibold">
+            Ranking de órgãos por mediana
+          </h2>
+          {ranking.length > 0 && (
+            <BotaoContestarRanking
+              url={`/cluster/${cluster_id}`}
+              contexto={
+                `Contestação de decisão automatizada (LGPD art. 20). ` +
+                `Cluster ${cluster.cluster_id} (${cluster.descricao_canonica}) — ` +
+                `ranking de órgãos por mediana. ` +
+                `Motivo da contestação: [descreva por que este ranking não é justo / órgão indevidamente posicionado].`
+              }
+            />
+          )}
+        </div>
         {ranking.length === 0 && (
           <p className="text-sm text-muted">Sem ranking disponível para este cluster.</p>
         )}

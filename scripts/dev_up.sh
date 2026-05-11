@@ -78,7 +78,7 @@ until docker exec quantopagou-postgres pg_isready -U quantopagou -d quantopagou 
     sleep 1
 done
 
-for sql_file in sql/001_analytics.sql sql/002_resilience.sql sql/003_tce_pr.sql sql/004_escolas.sql sql/005_manchetes.sql sql/006_perf_indexes.sql sql/007_eliminacao.sql sql/008_audit_log.sql sql/009_fornecedor.sql sql/010_l2b_mart_pj.sql sql/011_correcoes.sql; do
+for sql_file in sql/001_analytics.sql sql/002_resilience.sql sql/003_tce_pr.sql sql/004_escolas.sql sql/005_manchetes.sql sql/006_perf_indexes.sql sql/007_eliminacao.sql sql/008_audit_log.sql sql/009_fornecedor.sql sql/010_l2b_mart_pj.sql sql/011_correcoes.sql sql/012_correcao_revisao_ranking.sql; do
     say "aplicando $sql_file (idempotente)..."
     docker exec -i quantopagou-postgres psql -U quantopagou -d quantopagou -q < "$sql_file" >/dev/null
 done

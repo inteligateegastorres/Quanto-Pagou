@@ -1,0 +1,110 @@
+# Expurgo mensal de raw_payload redundante — LGPD L.9.c
+#
+# Politica de retencao em docs/legal/RETENCAO.md: `raw.compras.raw_payload`
+# (JSONB) e redundante com colunas dedicadas apos canonicalizacao validada.
+# Apos 90 dias, substituimos por `'{}'::jsonb` (coluna e NOT NULL) — o
+# snapshot original em `raw.snapshots` permanece para auditoria.
+#
+# Cadencia: dia 1 de cada mes, 06:00 UTC (03:00 BRT). Roda em DRY-RUN por
+# default — gera relatorio no Job Summary com candidatos + impacto. SO
+# executa expurgo real quando `apply=true` for passado via workflow_dispatch.
+#
+# Progressive correctness: cron automatico nao deve aplicar destrutivo
+# antes de >=1 ciclo manual validado. Por isso o cron mensal so faz
+# dry-run; apos N ciclos com humano confirmando o relatorio, edite o
+# workflow para passar `apply: true` no agendamento (ou crie um cron
+# separado pra apply).
+#
+# Pode rodar manual:
+#   gh workflow run expurgar-mensal.yml                       # dry-run
+#   gh workflow run expurgar-mensal.yml -f apply=true         # APPLY
+#   gh workflow run expurgar-mensal.yml -f days=180           # custom retencao
+
+name: expurgar-mensal
+
+on:
+  schedule:
+    # Dia 1 de cada mes, 06:00 UTC.
+    - cron: "0 6 1 * *"
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Aplicar expurgo de verdade (default: dry-run)"
+        required: false
+        type: boolean
+        default: false
+      days:
+        description: "Idade minima em dias para o registro ser expurgado"
+        required: false
+        type: string
+        default: "90"
+
+concurrency:
+  group: expurgar-mensal
+  cancel-in-progress: false
+
+jobs:
+  expurgar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DAYS: ${{ inputs.days || '90' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: pip install --quiet uv
+
+      - name: uv sync (dependencies)
+        run: python -m uv sync
+
+      - name: Dry-run — relatorio de impacto
+        # SEMPRE roda dry-run primeiro (mesmo quando apply=true) — relatorio
+        # vai pro Job Summary e fica auditavel no historial de workflows.
+        run: |
+          python -m uv run python scripts/expurgar_raw_payload.py \
+            --days "$DAYS" \
+            | tee /tmp/expurgar_dryrun.log
+
+      - name: APPLY (se solicitado via workflow_dispatch)
+        if: ${{ inputs.apply == true }}
+        run: |
+          python -m uv run python scripts/expurgar_raw_payload.py \
+            --days "$DAYS" \
+            --apply \
+            --ator "github-actions:expurgar-mensal" \
+            | tee /tmp/expurgar_apply.log
+
+      - name: Sumario no GH Actions
+        if: always()
+        run: |
+          {
+            echo "## Expurgo mensal — raw_payload"
+            echo ""
+            echo "**Modo:** ${{ inputs.apply == true && 'APPLY' || 'DRY-RUN' }}"
+            echo "**Retencao:** $DAYS dias"
+            echo "**Politica:** docs/legal/RETENCAO.md (LGPD L.9.a)"
+            echo ""
+            echo "### Relatorio (dry-run)"
+            tail -40 /tmp/expurgar_dryrun.log 2>/dev/null || echo "(sem log)"
+            if [ "${{ inputs.apply }}" = "true" ]; then
+              echo ""
+              echo "### Apply"
+              tail -20 /tmp/expurgar_apply.log 2>/dev/null || echo "(sem log)"
+            fi
+            echo ""
+            echo "---"
+            echo ""
+            echo "Cron automatico: dia 1 de cada mes 06:00 UTC (sempre dry-run)."
+            echo "Apply manual via:"
+            echo '`gh workflow run expurgar-mensal.yml -f apply=true`'
+          } >> "$GITHUB_STEP_SUMMARY"

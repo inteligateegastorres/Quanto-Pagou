@@ -403,8 +403,9 @@ class CorrecaoTicketIn(BaseModel):
         "lgpd_correcao",
         "lgpd_eliminacao",
         "classificacao_pj",
+        "revisao_ranking",
         "outro",
-    ] = Field(description="Natureza do pedido. Define SLA (factual=48h, lgpd_*=15d).")
+    ] = Field(description="Natureza do pedido. Define SLA (factual=48h, lgpd_*=15d, revisao_ranking=15d art. 20).")
     descricao: str = Field(min_length=20, max_length=4000)
     url_afetada: str | None = Field(default=None, max_length=500)
     raw_id_afetado: int | None = None
@@ -2321,6 +2322,7 @@ _SLA_POR_TIPO = {
     "lgpd_correcao": "lgpd_15d",
     "lgpd_eliminacao": "lgpd_15d",
     "classificacao_pj": "lgpd_15d",
+    "revisao_ranking": "lgpd_15d",
 }
 
 _STATUS_TERMINAL = {"resolvido_corrigido", "resolvido_sem_correcao", "rejeitado"}
