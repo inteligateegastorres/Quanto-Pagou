@@ -43,8 +43,17 @@ em provedor externo, cartão de crédito, ou decisão de domínio:
    Anotar API key + endpoint do formulário público.
 7. **Conta Sentry** + DSN para frontend e backend.
 8. **Conta Fly.io** ou **Railway** para o worker FastAPI.
-9. **Revisão jurídica preliminar** do manifesto + página de fornecedor
-   antes de o site ir ao ar com SEO. Para Fase 0.5 pode rodar `noindex`.
+9. **Revisão jurídica externa do pacote Wave LGPD** (PLANO §18 L.15).
+   Pacote técnico fechado em 2026-05-11: tombstones (L.1),
+   distinção PJ vs MEI/EI (L.2), Política em `/politica-privacidade`
+   (L.5), Termos + CC-BY 4.0 em `/termos` (L.6), Canal `/lgpd` (L.7),
+   retenção `docs/legal/RETENCAO.md` + CLI/cron expurgo (L.9),
+   `analytics.audit_log` (L.10), disclaimer de origem (L.11),
+   `/correcoes` com ticket QP-AAAA-XXXX (L.12), contestar ranking
+   art. 20 (L.13). Pendentes para go-live público: L.3 (LIA), L.4
+   (RIPD/DPIA), L.8 (subprocessadores), L.14 (instituição-âncora) e
+   L.15 (parecer do advogado especializado). Sem L.3-L.4-L.8-L.15
+   o site segue rodando com `noindex` (Fase 0.5).
 
 ## Variáveis de ambiente (produção)
 
@@ -199,9 +208,13 @@ GH Actions cron: pausar via `gh workflow disable ingest-weekly.yml`.
 
 ## O que NÃO fazer no go-live da Fase 0.5
 
-- **Não habilitar SEO público** (`noindex` no `/fornecedor/*` no mínimo) até
-  revisão jurídica confirmar que a linguagem factual + modal "como
-  interpretar" cobrem o risco de difamação.
+- **Não habilitar SEO público** (`noindex` no `/fornecedor/*` no mínimo)
+  até L.3 (LIA), L.4 (RIPD), L.8 (subprocessadores) e L.15 (revisor
+  jurídico) estarem fechados (PLANO §18.3). Defesa em camadas técnica
+  já no lugar; falta cobertura documental jurídica + revisão externa.
+- **Não trocar `expurgar-mensal.yml` para apply automático** sem ≥1
+  ciclo de dry-run validado humano (PLANO §18 L.9.c, progressive
+  correctness).
 - **Não prometer cadência editorial.** A esteira automática é semanal,
   irregular. Manifesto e formulário do boletim já refletem isso.
 - **Não esconder o status de demonstração** enquanto a fixture sintética

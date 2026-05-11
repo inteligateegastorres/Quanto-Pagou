@@ -212,6 +212,67 @@ docker exec -i pg-quanto-pagou psql -U postgres -d gov -c "<SQL>"
 - [ ] `time curl "$API/contratos/search?limit=50"` → < 3 s
 - [ ] `time curl $API/fornecedores?limit=100` → < 5 s
 
+## A.10. Guardrails LGPD (Wave §18 — bloqueante para go-live)
+
+**L.1 tombstones (art. 18 IV):**
+
+- [ ] `GET /eliminacoes/publicas` → 200, array com ID + motivo +
+      fundamento (sem conteúdo do contrato eliminado). Tamanho pode
+      ser 0 (banco limpo).
+- [ ] `GET /contrato/<raw_id_eliminado>` → 410 Gone com payload
+      `{eliminada_em, motivo, fundamento_legal}` (se houver registro
+      em `analytics.eliminacao`).
+
+**L.2 distinção PJ vs MEI/EI:**
+
+- [ ] Pegue um CNPJ com `tipo_juridico IS NULL` em
+      `analytics.fornecedor` (`docker exec ... psql -c "SELECT cnpj FROM
+      analytics.fornecedor WHERE tipo_juridico IS NULL LIMIT 1"`).
+      `GET /fornecedor/<cnpj>` → 404 com mensagem mencionando "tipo
+      jurídico não confirmado".
+- [ ] Mesmo CNPJ em `/fornecedor/<cnpj>/por-orgao` → 404 (helper
+      `_require_pj_or_404` aplicado nos endpoints derivados).
+- [ ] `GET /fornecedores?limit=10` → todos têm sufixo PJ no nome
+      (LTDA, S.A., EIRELI, etc) OR vêm de `analytics.fornecedor`
+      com `tipo_juridico='PJ'`.
+- [ ] `SELECT COUNT(*) FROM analytics.mart_fornecedores_municipio`
+      ≤ `SELECT COUNT(*) FROM raw.compras WHERE source='tce_pr/contrato'`
+      (MV filtra PJ na origem; nunca mais linhas que o raw).
+
+**L.10 audit_log:**
+
+- [ ] `SELECT COUNT(*) FROM analytics.audit_log WHERE table_name='eliminacao'`
+      = `SELECT COUNT(*) FROM analytics.eliminacao` (1 audit row por
+      INSERT no fluxo de tombstone).
+- [ ] Inserir ticket via `POST /correcoes/ticket` → `SELECT * FROM
+      analytics.audit_log WHERE table_name='correcao_ticket' ORDER BY id
+      DESC LIMIT 1` mostra `ator='/correcoes/ticket (public)'` e
+      `pk_text=<ticket_id>`.
+
+**L.12 /correcoes formal:**
+
+- [ ] `POST /correcoes/ticket` com `{tipo:"factual", descricao:"..."}`
+      válido → 201 com `ticket_id` formato `QP-YYYY-XXXX` (4 hex
+      maiúsculo) e `prazo_iso` = criado_em + 48h.
+- [ ] `POST /correcoes/ticket` com `{tipo:"lgpd_correcao", ...}` →
+      `sla_classe="lgpd_15d"`, `prazo_iso` = criado_em + 15d.
+- [ ] `POST` sem descrição ou < 20 chars → 422.
+- [ ] `GET /correcoes/ticket/<id>` → 200 mesmo estado. Email não
+      aparece no payload mesmo que tenha sido enviado.
+- [ ] `GET /correcoes/recentes` → 200 (array; pode ser vazio).
+
+**L.13 contestar ranking:**
+
+- [ ] `POST /correcoes/ticket` com `{tipo:"revisao_ranking", ...}` →
+      `sla_classe="lgpd_15d"`, criação OK.
+
+## A.11. Edge cases LGPD (negação esperada)
+
+- [ ] `GET /fornecedor/00000000000191` (Banco do Brasil, PJ
+      confirmado) → 200 normal.
+- [ ] `POST /correcoes/ticket` com `tipo` desconhecido (ex:
+      `"x"`) → 422.
+
 ---
 
 # Parte B — Frontend (páginas + interações)
@@ -387,6 +448,36 @@ atualiza com os params **e** o resultado muda.
       depende dela)
 - [ ] `/contratos` (sem filtro) carrega < 3 s
 - [ ] Sem `console.error` no DevTools em nenhuma página visitada
+
+## B.10. Páginas LGPD (Wave §18)
+
+- [ ] `/politica-privacidade` (L.5) → 200, 10 seções, link para
+      `/lgpd`, `/termos`, `/correcoes`.
+- [ ] `/termos` (L.6) → 200, menciona CC-BY 4.0 e foro Curitiba/PR.
+- [ ] `/lgpd` (L.7) → 200, tabela dos 9 direitos do art. 18 +
+      e-mail `lgpd@quantopagou.org` + autodeclaração de pequeno porte.
+- [ ] Footer global em qualquer página tem links para
+      `/politica-privacidade`, `/termos`, `/lgpd`, `/eliminacoes/publicas`
+      + linha do encarregado + nota CC-BY 4.0/AGPL-3.0.
+- [ ] `/correcoes` (L.12) → 200, form com select de tipo, textarea,
+      checkbox `publicar_descricao`, lista de recentes resolvidos.
+- [ ] Submit do form via `/correcoes` → redireciona para
+      `/correcoes/<ticket_id>` mostrando status "aberto", prazo
+      nominal calculado, badge de status colorido.
+- [ ] `/correcoes/<ticket_id_inexistente>` → 404 do Next (notFound).
+- [ ] Disclaimer de origem (L.11) visível em `/manchetes`,
+      `/comparar`, `/fornecedor/<cnpj>`, `/municipio/<cd_tce>`,
+      `/cluster/<id>` — texto "Dados extraídos de TCE-PR…".
+- [ ] Botão "Contestar este ranking" (L.13) presente em:
+      - cada card de `/manchetes`
+      - cabeçalho do ranking de órgãos em `/cluster/<id>`
+      - bloco "Distribuição por órgão" em `/fornecedor/<cnpj>`
+      Click leva para `/correcoes?tipo=revisao_ranking&url=...&descricao=...`
+      com form pré-preenchido e aviso amarelo no topo.
+- [ ] `/fornecedor/<cnpj_NULL_em_analytics_fornecedor>` → 200 com
+      página `PerfilIndisponivel` (não notFound) com mensagem
+      explicando "tipo jurídico não confirmado" + link para
+      `/correcoes`.
 
 ---
 
