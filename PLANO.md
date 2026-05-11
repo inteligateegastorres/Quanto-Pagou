@@ -2,12 +2,14 @@
 
 > Plataforma cívica para monitorar gastos públicos brasileiros e identificar possíveis desvios.
 
-**Versão:** v5.5 (2026-05-11)
+**Versão:** v5.6 (2026-05-11)
 **Status:** v5 + manchetes algorítmicas + Wave A (higiene) completa +
-Wave B (estrutura) parcial + Wave LGPD documentada (§18) com L.1, L.2
-(heurística v1), L.9 (doc) e L.10 implementados. **Não pronto para
-go-live público** — restam L.3-L.8, L.11-L.15 + ajustes em L.2.b
-(MV/frontend) e L.9.b/c (CLI/cron). Ver §18.3.
+Wave B (estrutura) parcial + Wave LGPD avançada (§18): L.1, L.2 (v1 +
+2.b), L.5, L.6, L.7, L.9.a, L.10, L.11 implementados. **Não pronto
+para go-live público** — restam L.3 (LIA), L.4 (RIPD), L.8
+(subprocessadores), L.12 (correções formal), L.13 (contestar ranking),
+L.9.b/c (CLI/cron), L.14 (instituição-âncora) e L.15 (revisor
+jurídico). Ver §18.3.
 
 ---
 
@@ -1272,16 +1274,16 @@ paralelo com revisão jurídica humana.
 | # | Item | Prioridade | Aceite | Tempo |
 |---|---|---|---|---|
 | **L.1** ✅ | `analytics.eliminacao` + tombstones + filtro MVs + CLI `eliminar.py` + endpoint `/contrato` 410 Gone | **CRÍTICA** | Solicitação de eliminação atendida em ≤15d via art. 18 IV LGPD; raw permanece em `raw.snapshots` com hash; conteúdo desaparece da vitrine; `/eliminacoes/publicas` lista IDs eliminados sem reproduzir conteúdo | 1d — implementado em `af20e47` (`sql/007_eliminacao.sql` + `scripts/eliminar.py`) |
-| **L.2** ✅⚠️ | `analytics.fornecedor(cnpj, tipo_juridico, fonte)` + classificador `fn_classificar_tipo_juridico` (heurística por sufixo: LTDA, S.A., EIRELI, COOPERATIVA, etc) + default deny em `/fornecedor/{cnpj}` | **CRÍTICA** | Endpoint retorna 404 quando `tipo_juridico != 'PJ'` (inclui NULL = não classificado). Primeira carga: 22.4k PJ confirmado / 16.3k mascarado (42%). Dump RFB sobrescreverá heurística no futuro (fonte versionada). **L.2.b deferido:** MV `mart_fornecedores_municipio` filtrar PJ + frontend `/fornecedor/[cnpj]` 404 elegante + mascarar `/fornecedores` listagem. | 2d — implementado parcial em `sql/009_fornecedor.sql` + `src/api/main.py` |
+| **L.2** ✅ | `analytics.fornecedor(cnpj, tipo_juridico, fonte)` + classificador `fn_classificar_tipo_juridico` (heurística por sufixo: LTDA, S.A., EIRELI, COOPERATIVA, etc) + helper `_require_pj_or_404` aplicado em todos os endpoints derivados + MV `mart_fornecedores_municipio` filtrando PJ + frontend 404 elegante + listagem `/fornecedores` filtrada | **CRÍTICA** | Todos os endpoints `/fornecedor/{cnpj}/*` retornam 404 quando `tipo_juridico != 'PJ'`. MV reduzida de ~120k → 81.3k linhas (PJ confirmado + sem tombstone). 22.4k PJ confirmado / 16.3k mascarado (42%). Dump RFB sobrescreverá heurística no futuro (fonte versionada). | 2d — `sql/009_fornecedor.sql` + `sql/010_l2b_mart_pj.sql` + `src/api/main.py` + frontend |
 | **L.3** | LIA estruturada (Guia ANPD "Legítimo Interesse") em `docs/legal/LIA.md` | **CRÍTICA** | Cobre: identificação do tratamento, finalidade legítima, necessidade, balanceamento (interesse vs direitos do titular), salvaguardas implementadas | 1d (humano jurídico) |
 | **L.4** | RIPD em `docs/legal/RIPD.md` (Resolução CD/ANPD nº 4/2023) | **CRÍTICA** | Cobre: descrição, finalidade, legitimação, ciclo de vida, riscos, medidas mitigadoras | 1d (humano jurídico) |
-| **L.5** | Política de Privacidade em rota `/politica-privacidade` + footer global | Alta | Rota pública renderiza política completa (art. 9º LGPD); link no footer de toda página; refletir `data/PRIVACY.md` v2 | 4h |
-| **L.6** | Termos de Uso em `/termos` + licença de dados (CC-BY 4.0 ou ODbL) | Alta | Rota pública; cobre: uso pessoal/comercial, atribuição, garantias, limitação de responsabilidade, foro | 4h |
-| **L.7** | Encarregado nomeado + canal `/lgpd` + e-mail dedicado (ou autodeclaração de pequeno porte) | Alta | Rodapé global cita encarregado; rota `/lgpd` documenta direitos do art. 18 + canal; ticket ID + SLA 15d | 4h |
+| **L.5** ✅ | Política de Privacidade em rota `/politica-privacidade` + footer global | Alta | Rota pública renderiza política completa (art. 9º LGPD); link no footer de toda página; espelha `data/PRIVACY.md` v1 com atualizações L.1/L.2/L.10. | 4h — `frontend/app/politica-privacidade/page.tsx` |
+| **L.6** ✅ | Termos de Uso em `/termos` + licença de dados (CC-BY 4.0) | Alta | Rota pública; cobre: uso pessoal/comercial, atribuição, garantias, limitação de responsabilidade, foro Curitiba/PR. Arquivo canônico `LICENSE-DATA` na raiz. | 4h — `frontend/app/termos/page.tsx` + `LICENSE-DATA` |
+| **L.7** ✅ | Encarregado nomeado + canal `/lgpd` + e-mail dedicado (autodeclaração de pequeno porte) | Alta | Rota `/lgpd` documenta direitos do art. 18 + canal `lgpd@quantopagou.org` + SLA 15d (art. 19). Footer global cita encarregado + autodeclaração CD/ANPD 2/2022. | 4h — `frontend/app/lgpd/page.tsx` + `frontend/app/layout.tsx` |
 | **L.8** | Catálogo de subprocessadores em `docs/legal/SUBPROCESSADORES.md` | Alta | Lista: Vercel, Supabase, Cloudflare R2, Fly.io, Resend (futuro). Cada um com: razão social, finalidade, jurisdição, base legal de transferência internacional (Resolução CD/ANPD 19/2024) | 2h |
 | **L.9** ✅⚠️ | Política de retenção em `docs/legal/RETENCAO.md` + job de expurgo do `raw_payload` redundante | Média | Documento define prazos por tipo (raw, canonical, mart, log); job mensal reduz `raw_payload` mantendo só campos não derivados nas colunas dedicadas. **L.9.b deferido:** `scripts/expurgar_raw_payload.py` com dry-run. **L.9.c deferido:** cron mensal após ≥1 ciclo validado. | 1d — documento implementado em `docs/legal/RETENCAO.md` |
 | **L.10** ✅ | `analytics.audit_log` (registro de operações art. 37 LGPD) via triggers | Média | Tabela append-only com schema/table/op/pk_text/raw_id_afetado/ator/base_legal/diff. Triggers em `analytics.eliminacao`, `item_canonical` (só quando `eliminada_em` muda) e `fornecedor`. Ator via `current_setting('app.audit_actor')` setado pelo psycopg, com fallback pra linha de `eliminacao`. Escopo cirúrgico: NÃO loga refresh de MV. | 1d — implementado em `sql/008_audit_log.sql` + `scripts/eliminar.py` |
-| **L.11** | Disclaimer de origem em `/comparar`, `/manchetes`, `/fornecedor/*`, `/municipio/*`, `/cluster/*` | Média | Banner discreto: "Dado extraído de TCE-PR/Compras.gov.br em DD/MM. Possíveis erros — [reportar correção]". Componente reusável `<DisclaimerOrigem>` | 2h |
+| **L.11** ✅ | Disclaimer de origem em `/comparar`, `/manchetes`, `/fornecedor/*`, `/municipio/*`, `/cluster/*` | Média | Componente reusável `frontend/lib/DisclaimerOrigem.tsx` integrado em 5 páginas. Aceita prop `fonte` (tce-pr/compras-gov-br/mista) + `atualizado_em`. | 2h — `frontend/lib/DisclaimerOrigem.tsx` |
 | **L.12** | `/correcoes` formal: ticket ID + fluxo auditável + SLA 15d | Média | Form gera ticket no banco (`analytics.correcao_ticket`); usuário recebe link público pra acompanhar; SLA 15d (LGPD) ou 48h (correção factual) com badge de prazo | 1d |
 | **L.13** | Direito à revisão de ranking (art. 20 §1º): botão "contestar este ranking" em `/manchetes`, `/ranking/*` | Baixa | Form `/contestar?manchete_id=X` registra pedido de revisão; resposta humana documentada em `/correcoes` | 4h |
 | **L.14** | Buscar instituição-âncora (Open Knowledge BR / Transparência BR / Abraji) | **CRÍTICA não-técnica** | E-mail enviado a ≥2 instituições propondo parceria/co-mantenança; resposta documentada em `docs/PARCERIAS.md` | externo |
@@ -1292,9 +1294,9 @@ paralelo com revisão jurídica humana.
 | Fase | Itens | Atores | Tempo |
 |---|---|---|---|
 | Técnica imediata | ~~L.1 (tombstones)~~ ✅ | dev | 1d |
-| Técnica próxima | ~~L.2 (PJ vs MEI/EI v1)~~ ✅⚠️, ~~L.10 (audit_log)~~ ✅, ~~L.9.a (doc retenção)~~ ✅ | dev | 3d |
-| Técnica próxima — ajustes | L.2.b (MV/frontend), L.9.b (CLI expurgo), L.9.c (cron) | dev | 1d |
-| UI | L.5, L.6, L.7, L.11, L.12, L.13 | dev | 3d |
+| Técnica próxima | ~~L.2 (PJ vs MEI/EI v1+v1.b)~~ ✅, ~~L.10 (audit_log)~~ ✅, ~~L.9.a (doc retenção)~~ ✅ | dev | 3d |
+| UI | ~~L.5~~ ✅, ~~L.6~~ ✅, ~~L.7~~ ✅, ~~L.11~~ ✅, L.12, L.13 | dev | 3d |
+| Técnica próxima — pendente | L.9.b (CLI expurgo), L.9.c (cron) | dev | 1d |
 | Jurídica | L.3 (LIA), L.4 (RIPD), L.8 (subprocessadores) | jurídico humano | 5d |
 | Externa | L.14 (instituição), L.15 (revisor jurídico) | autor | 1-2 sem |
 
@@ -1399,20 +1401,31 @@ ajudam validar mascaramento PJ/MEI sem regressão.
 Não vamos abrir indexação Google enquanto:
 
 - ✅ L.1 (tombstones) implementado
-- ✅⚠️ L.2 implementado (v1 heurístico); falta L.2.b (MV + frontend + listagem)
+- ✅ L.2 (PJ vs MEI v1 + 2.b) implementado
+- ✅ L.5 (Política de Privacidade) implementada
+- ✅ L.6 (Termos de Uso + LICENSE-DATA) implementado
+- ✅ L.7 (Canal LGPD + encarregado) implementado
 - ✅ L.10 (audit_log) implementado
+- ✅ L.11 (disclaimer de origem) implementado
 - ✅⚠️ L.9 doc implementado; falta L.9.b (CLI expurgo)
-- ❌ L.3, L.4, L.5, L.6, L.7 não estiverem prontos
+- ❌ L.3 (LIA), L.4 (RIPD) não estiverem prontos
 - ❌ L.15 (revisor jurídico) não tiver visto o pacote
 - ❌ A Wave C.4 (Cloudflare na frente, rate-limit, CORS) não estiver
   configurada
 
-São condições mínimas, não suficientes. Ideal: também L.8, L.11, L.12
+São condições mínimas, não suficientes. Ideal: também L.8, L.12, L.13
 + L.14 (instituição-âncora confirmada).
 
 ---
 
 ## 14. Changelog
+
+**v5.6 (2026-05-11)** — Wave LGPD avança ainda mais: L.2.b + L.5 + L.6 + L.7 + L.11:
+- **L.2.b ✅** `sql/010_l2b_mart_pj.sql` — MV `mart_fornecedores_municipio` agora JOIN com `analytics.fornecedor` filtrando `tipo_juridico='PJ'` (defesa em camadas na origem). Reduziu de ~120k para 81.3k linhas. Helper `_require_pj_or_404` em `src/api/main.py` aplicado a 5 endpoints derivados (`/por-orgao`, `/por-municipio`, `/por-categoria`, `/por-modalidade`, `/contratos`). Listagem `/fornecedores` agora JOIN com PJ. Frontend `/fornecedor/[cnpj]/page.tsx` substituiu `notFound()` por componente `PerfilIndisponivel` que distingue "menos de 5 contratos" vs "tipo jurídico não confirmado" e dá gancho para `/correcoes`.
+- **L.5 ✅** `frontend/app/politica-privacidade/page.tsx` — política completa (10 seções) espelhando `data/PRIVACY.md` v1 + referência a L.1/L.2/L.10 implementados. Force-static.
+- **L.6 ✅** `frontend/app/termos/page.tsx` + `LICENSE-DATA` (CC-BY 4.0) na raiz. Cobre: aceitação, escopo do serviço, licença CC-BY 4.0 dos dados derivados (PJ confirmado), distinção dados primários (domínio público) vs derivados, código AGPL-3.0, sem garantias, direitos LGPD, conduta do usuário, foro Curitiba/PR.
+- **L.7 ✅** `frontend/app/lgpd/page.tsx` — canal LGPD com tabela completa dos 9 direitos do art. 18 + autodeclaração de pequeno porte (Resolução CD/ANPD 2/2022 art. 11 II) + e-mail `lgpd@quantopagou.org` + SLA 15 dias + ANPD como instância recursal. Footer global em `frontend/app/layout.tsx` cita encarregado.
+- **L.11 ✅** `frontend/lib/DisclaimerOrigem.tsx` — componente reusável com props `fonte` (tce-pr/compras-gov-br/mista) e `atualizado_em` opcional. Integrado em `/comparar`, `/manchetes`, `/fornecedor/[cnpj]`, `/municipio/[cd_tce]`, `/cluster/[cluster_id]`.
 
 **v5.5 (2026-05-11)** — Wave LGPD avança: L.10 + L.2 (v1) + L.9 (doc):
 - **L.10 ✅** `sql/008_audit_log.sql` — `analytics.audit_log` append-only + função trigger genérica + triggers cirúrgicos em `eliminacao`, `item_canonical` (só `eliminada_em`) e `fornecedor`. Ator via `current_setting('app.audit_actor')` (SET LOCAL no psycopg) com fallback pra coluna `ator` de `eliminacao`. Testado end-to-end: INSERT em eliminacao gera 2 audit_log rows (eliminacao + cascata).

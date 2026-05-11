@@ -120,14 +120,34 @@ Pronto:
   `current_setting('app.audit_actor')` (psycopg seta `SET LOCAL`
   antes do write). NÃO loga refresh de MV (volume sem ganho
   probatório).
-- **Distinção PJ vs MEI/EI** (PLANO §18 L.2 v1):
+- **Distinção PJ vs MEI/EI** (PLANO §18 L.2 + L.2.b):
   `analytics.fornecedor(cnpj, tipo_juridico, fonte)` + classificador
   heurístico por sufixo (LTDA, S.A., EIRELI, COOPERATIVA, etc).
-  Endpoint `/fornecedor/{cnpj}` retorna 404 quando
-  `tipo_juridico != 'PJ'` — defesa em camadas contra exposição de
-  MEI/EI/PF. Primeira carga: 22.4k PJ confirmado, 16.3k mascarado
-  (42%). Fonte versionada permite dump RFB substituir heurística
-  depois sem refazer schema.
+  Helper `_require_pj_or_404` aplicado em **todos** os endpoints
+  derivados (`/fornecedor/{cnpj}`, `/por-orgao`, `/por-municipio`,
+  `/por-categoria`, `/por-modalidade`, `/contratos`). MV
+  `mart_fornecedores_municipio` filtra `tipo_juridico='PJ'` na origem
+  (defesa em camadas). Listagem `/fornecedores` filtra PJ. Frontend
+  `/fornecedor/[cnpj]` mostra página explicativa de 404 com gancho
+  para `/correcoes` em vez de erro genérico. Primeira carga: 22.4k
+  PJ confirmado, 16.3k mascarado (42%). Fonte versionada permite
+  dump RFB substituir heurística depois.
+- **Rotas LGPD públicas** (PLANO §18 L.5, L.6, L.7):
+  `/politica-privacidade` (política completa em 10 seções,
+  força-static), `/termos` (Termos de Uso + licença CC-BY 4.0 dos
+  dados derivados, foro Curitiba/PR, distinção dados primários vs
+  derivados), `/lgpd` (tabela dos 9 direitos do art. 18 +
+  autodeclaração de pequeno porte CD/ANPD 2/2022 + e-mail
+  `lgpd@quantopagou.org` + SLA 15d). Footer global cita encarregado +
+  links pras 3 páginas + página de eliminações públicas. Arquivo
+  `LICENSE-DATA` na raiz documenta a licença dos dados derivados.
+- **Disclaimer de origem** (PLANO §18 L.11):
+  Componente `frontend/lib/DisclaimerOrigem.tsx` aceita prop `fonte`
+  (tce-pr/compras-gov-br/mista) + `atualizado_em` opcional. Integrado
+  em `/comparar`, `/manchetes`, `/fornecedor/[cnpj]`,
+  `/municipio/[cd_tce]`, `/cluster/[cluster_id]`. Banner discreto:
+  "Dados extraídos de [fonte] em [data]. Possíveis erros — reportar
+  correção."
 - **Política de retenção** (PLANO §18 L.9.a): `docs/legal/RETENCAO.md`
   v1 com prazos por camada (raw imutável, audit_log 5 anos,
   manchetes 2 anos, MVs sem retenção, raw_payload 90d após
@@ -136,12 +156,14 @@ Pronto:
 
 Em andamento — Wave LGPD (PLANO §18, bloqueante para go-live público):
 - **L.1 ✅** tombstones (acima)
-- **L.2 ✅⚠️** v1 heurístico (acima); L.2.b deferido (MV
-  `mart_fornecedores_municipio` filtrar PJ + frontend 404 elegante +
-  máscara em `/fornecedores`)
+- **L.2 ✅** PJ vs MEI v1 + 2.b (acima)
+- **L.5 ✅** Política de Privacidade (acima)
+- **L.6 ✅** Termos de Uso + LICENSE-DATA CC-BY 4.0 (acima)
+- **L.7 ✅** Canal LGPD + encarregado (acima)
 - **L.9 ✅⚠️** doc retenção (acima); L.9.b/c deferidos (CLI + cron)
 - **L.10 ✅** audit log (acima)
-- **L.3-L.8, L.11-L.13** documentos jurídicos + UI (pendente)
+- **L.11 ✅** disclaimer de origem (acima)
+- **L.3, L.4, L.8, L.12, L.13** LIA + RIPD + subprocessadores + UI (pendente)
 - **L.14-L.15** instituição-âncora + revisão jurídica externa (pendente)
 
 Não pronto (depende do usuário humano para destravar):
