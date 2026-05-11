@@ -2,10 +2,12 @@
 
 > Plataforma cívica para monitorar gastos públicos brasileiros e identificar possíveis desvios.
 
-**Versão:** v5.4 (2026-05-09)
+**Versão:** v5.5 (2026-05-11)
 **Status:** v5 + manchetes algorítmicas + Wave A (higiene) completa +
-Wave B (estrutura) parcial + Wave LGPD documentada (§18) com L.1
-implementado. **Não pronto para go-live público** — ver §18.3.
+Wave B (estrutura) parcial + Wave LGPD documentada (§18) com L.1, L.2
+(heurística v1), L.9 (doc) e L.10 implementados. **Não pronto para
+go-live público** — restam L.3-L.8, L.11-L.15 + ajustes em L.2.b
+(MV/frontend) e L.9.b/c (CLI/cron). Ver §18.3.
 
 ---
 
@@ -1269,16 +1271,16 @@ paralelo com revisão jurídica humana.
 
 | # | Item | Prioridade | Aceite | Tempo |
 |---|---|---|---|---|
-| **L.1** | `analytics.eliminacao` + tombstones + filtro MVs + CLI `eliminar.py` + endpoint `/contrato` 410 Gone | **CRÍTICA** | Solicitação de eliminação atendida em ≤15d via art. 18 IV LGPD; raw permanece em `raw.snapshots` com hash; conteúdo desaparece da vitrine; `/eliminacoes/publicas` lista IDs eliminados sem reproduzir conteúdo | 1d |
-| **L.2** | Enriquecer `analytics.fornecedor` com `tipo_juridico` (RFB CNPJ aberto) + mascarar MEI/EI por padrão | **CRÍTICA** | Perfil `/fornecedor/{cnpj}` retorna 404 ou shape mascarado quando `tipo_juridico IN ('MEI','EI')` por default; flag explícita pra exibir requer base legal documentada por caso | 2d |
+| **L.1** ✅ | `analytics.eliminacao` + tombstones + filtro MVs + CLI `eliminar.py` + endpoint `/contrato` 410 Gone | **CRÍTICA** | Solicitação de eliminação atendida em ≤15d via art. 18 IV LGPD; raw permanece em `raw.snapshots` com hash; conteúdo desaparece da vitrine; `/eliminacoes/publicas` lista IDs eliminados sem reproduzir conteúdo | 1d — implementado em `af20e47` (`sql/007_eliminacao.sql` + `scripts/eliminar.py`) |
+| **L.2** ✅⚠️ | `analytics.fornecedor(cnpj, tipo_juridico, fonte)` + classificador `fn_classificar_tipo_juridico` (heurística por sufixo: LTDA, S.A., EIRELI, COOPERATIVA, etc) + default deny em `/fornecedor/{cnpj}` | **CRÍTICA** | Endpoint retorna 404 quando `tipo_juridico != 'PJ'` (inclui NULL = não classificado). Primeira carga: 22.4k PJ confirmado / 16.3k mascarado (42%). Dump RFB sobrescreverá heurística no futuro (fonte versionada). **L.2.b deferido:** MV `mart_fornecedores_municipio` filtrar PJ + frontend `/fornecedor/[cnpj]` 404 elegante + mascarar `/fornecedores` listagem. | 2d — implementado parcial em `sql/009_fornecedor.sql` + `src/api/main.py` |
 | **L.3** | LIA estruturada (Guia ANPD "Legítimo Interesse") em `docs/legal/LIA.md` | **CRÍTICA** | Cobre: identificação do tratamento, finalidade legítima, necessidade, balanceamento (interesse vs direitos do titular), salvaguardas implementadas | 1d (humano jurídico) |
 | **L.4** | RIPD em `docs/legal/RIPD.md` (Resolução CD/ANPD nº 4/2023) | **CRÍTICA** | Cobre: descrição, finalidade, legitimação, ciclo de vida, riscos, medidas mitigadoras | 1d (humano jurídico) |
 | **L.5** | Política de Privacidade em rota `/politica-privacidade` + footer global | Alta | Rota pública renderiza política completa (art. 9º LGPD); link no footer de toda página; refletir `data/PRIVACY.md` v2 | 4h |
 | **L.6** | Termos de Uso em `/termos` + licença de dados (CC-BY 4.0 ou ODbL) | Alta | Rota pública; cobre: uso pessoal/comercial, atribuição, garantias, limitação de responsabilidade, foro | 4h |
 | **L.7** | Encarregado nomeado + canal `/lgpd` + e-mail dedicado (ou autodeclaração de pequeno porte) | Alta | Rodapé global cita encarregado; rota `/lgpd` documenta direitos do art. 18 + canal; ticket ID + SLA 15d | 4h |
 | **L.8** | Catálogo de subprocessadores em `docs/legal/SUBPROCESSADORES.md` | Alta | Lista: Vercel, Supabase, Cloudflare R2, Fly.io, Resend (futuro). Cada um com: razão social, finalidade, jurisdição, base legal de transferência internacional (Resolução CD/ANPD 19/2024) | 2h |
-| **L.9** | Política de retenção em `docs/legal/RETENCAO.md` + job de expurgo do `raw_payload` redundante | Média | Documento define prazos por tipo (raw, canonical, mart, log); job mensal reduz `raw_payload` mantendo só campos não derivados nas colunas dedicadas | 1d |
-| **L.10** | `analytics.audit_log` (registro de operações art. 37 LGPD) via triggers | Média | Tabela registra: operação (insert/update/delete/select), schema/tabela/raw_id, ator (lifespan ou ticket), data, base legal aplicada | 1d |
+| **L.9** ✅⚠️ | Política de retenção em `docs/legal/RETENCAO.md` + job de expurgo do `raw_payload` redundante | Média | Documento define prazos por tipo (raw, canonical, mart, log); job mensal reduz `raw_payload` mantendo só campos não derivados nas colunas dedicadas. **L.9.b deferido:** `scripts/expurgar_raw_payload.py` com dry-run. **L.9.c deferido:** cron mensal após ≥1 ciclo validado. | 1d — documento implementado em `docs/legal/RETENCAO.md` |
+| **L.10** ✅ | `analytics.audit_log` (registro de operações art. 37 LGPD) via triggers | Média | Tabela append-only com schema/table/op/pk_text/raw_id_afetado/ator/base_legal/diff. Triggers em `analytics.eliminacao`, `item_canonical` (só quando `eliminada_em` muda) e `fornecedor`. Ator via `current_setting('app.audit_actor')` setado pelo psycopg, com fallback pra linha de `eliminacao`. Escopo cirúrgico: NÃO loga refresh de MV. | 1d — implementado em `sql/008_audit_log.sql` + `scripts/eliminar.py` |
 | **L.11** | Disclaimer de origem em `/comparar`, `/manchetes`, `/fornecedor/*`, `/municipio/*`, `/cluster/*` | Média | Banner discreto: "Dado extraído de TCE-PR/Compras.gov.br em DD/MM. Possíveis erros — [reportar correção]". Componente reusável `<DisclaimerOrigem>` | 2h |
 | **L.12** | `/correcoes` formal: ticket ID + fluxo auditável + SLA 15d | Média | Form gera ticket no banco (`analytics.correcao_ticket`); usuário recebe link público pra acompanhar; SLA 15d (LGPD) ou 48h (correção factual) com badge de prazo | 1d |
 | **L.13** | Direito à revisão de ranking (art. 20 §1º): botão "contestar este ranking" em `/manchetes`, `/ranking/*` | Baixa | Form `/contestar?manchete_id=X` registra pedido de revisão; resposta humana documentada em `/correcoes` | 4h |
@@ -1289,10 +1291,11 @@ paralelo com revisão jurídica humana.
 
 | Fase | Itens | Atores | Tempo |
 |---|---|---|---|
-| Técnica imediata | L.1 (tombstones) | dev | 1d |
-| Técnica próxima | L.2 (PJ vs MEI/EI), L.10 (audit_log) | dev | 3d |
+| Técnica imediata | ~~L.1 (tombstones)~~ ✅ | dev | 1d |
+| Técnica próxima | ~~L.2 (PJ vs MEI/EI v1)~~ ✅⚠️, ~~L.10 (audit_log)~~ ✅, ~~L.9.a (doc retenção)~~ ✅ | dev | 3d |
+| Técnica próxima — ajustes | L.2.b (MV/frontend), L.9.b (CLI expurgo), L.9.c (cron) | dev | 1d |
 | UI | L.5, L.6, L.7, L.11, L.12, L.13 | dev | 3d |
-| Jurídica | L.3 (LIA), L.4 (RIPD), L.8 (subprocessadores), L.9 (retenção) | jurídico humano | 5d |
+| Jurídica | L.3 (LIA), L.4 (RIPD), L.8 (subprocessadores) | jurídico humano | 5d |
 | Externa | L.14 (instituição), L.15 (revisor jurídico) | autor | 1-2 sem |
 
 ### 18.C Pontos discordados da análise externa
@@ -1346,16 +1349,16 @@ gravidade jurídica + dependência técnica.
 
 | # | Item | Categoria | Tamanho |
 |---|---|---|---|
-| **L.1** | `analytics.eliminacao` (tombstones) + filtro 5 MVs + ALTER `item_canonical` + script CLI + endpoint `/eliminacoes/publicas` + `/contrato/{id}` retorna 410 Gone se eliminado | Tech crítico | 1d |
-| **L.2** | Enriquecer `analytics.fornecedor` com `tipo_juridico` (RFB CNPJ aberto). Mascarar MEI/EI por padrão. Perfil de PF/MEI exige base legal específica documentada | Tech crítico | 2d |
+| **L.1** ✅ | `analytics.eliminacao` (tombstones) + filtro 5 MVs + ALTER `item_canonical` + script CLI + endpoint `/eliminacoes/publicas` + `/contrato/{id}` retorna 410 Gone se eliminado | Tech crítico | 1d — `af20e47` |
+| **L.2** ✅⚠️ | `analytics.fornecedor(cnpj, tipo_juridico, fonte)` + classificador heurístico por sufixo (v1: LTDA, S.A., EIRELI, COOPERATIVA, etc) + default deny em `/fornecedor/{cnpj}`. **Deferido (L.2.b):** MV `mart_fornecedores_municipio` filtrar PJ, frontend lidar 404, mascarar `/fornecedores` listagem. Dump RFB substitui heurística depois (fonte versionada). | Tech crítico | 2d (parcial) — `sql/009_fornecedor.sql` |
 | **L.3** | LIA estruturada (Guia ANPD "Legítimo Interesse") em `docs/legal/LIA.md` — finalidade, necessidade, proporcionalidade, salvaguardas | Documental crítico | 1d |
 | **L.4** | RIPD/DPIA em `docs/legal/RIPD.md` (Resolução CD/ANPD 4/2023) — contexto, descrição, identificação de riscos, medidas de mitigação | Documental crítico | 1d |
 | **L.5** | Política de Privacidade em rota `/politica-privacidade` (espelha `data/PRIVACY.md` mas como página web). Link no footer global | UI documental | 4h |
 | **L.6** | Termos de Uso em `/termos` + licença de dados (`LICENSE-DATA` raiz, sugestão CC-BY 4.0). Link no footer | UI documental | 4h |
 | **L.7** | Encarregado nomeado (DPO ou autodeclaração de pequeno porte conforme Resolução CD/ANPD 2/2022) + canal `/lgpd` + e-mail dedicado | Documental | 4h |
 | **L.8** | Catálogo de subprocessadores em `docs/legal/SUBPROCESSADORES.md` (Supabase + Vercel + R2) com DPA referenciado | Documental | 2h |
-| **L.9** | Política de retenção em `docs/legal/RETENCAO.md` + job de expurgo do `raw_payload` após N dias (verificação de qualidade do parse) | Tech | 1d |
-| **L.10** | `analytics.audit_log` (registro de operações, art. 37) com triggers PostgreSQL ou middleware FastAPI logando ator/operação/dado | Tech | 1d |
+| **L.9** ✅⚠️ | Política de retenção em `docs/legal/RETENCAO.md` (entregue) + job de expurgo do `raw_payload` após N dias (verificação de qualidade do parse). **Deferido (L.9.b):** `scripts/expurgar_raw_payload.py` com dry-run. **L.9.c:** cron mensal após ≥1 ciclo validado. | Tech | 1d (doc) — `docs/legal/RETENCAO.md` |
+| **L.10** ✅ | `analytics.audit_log` (registro de operações, art. 37) com triggers PostgreSQL — tabela append-only + função genérica + triggers cirúrgicos em `eliminacao`, `item_canonical`, `fornecedor`. Ator via `current_setting('app.audit_actor')`. NÃO loga refresh de MV (volume sem ganho probatório). | Tech | 1d — `sql/008_audit_log.sql` |
 | **L.11** | Disclaimer de origem visível em `/comparar`, `/manchetes`, `/fornecedor/*` ("Dados extraídos de [fonte] em [data]. Possíveis erros — reportar em /correcoes") | UI cosmético | 2h |
 | **L.12** | `/correcoes` formal: ticket ID, SLA 15d, fluxo auditável (vai além do `mailto:` atual) | Tech | 1d |
 | **L.13** | Direito à revisão de ranking (art. 20 §1º): botão "contestar este ranking" em `/manchetes` e `/ranking/orgaos` | UI funcional | 4h |
@@ -1364,13 +1367,18 @@ gravidade jurídica + dependência técnica.
 
 ### 18.2 Sequência recomendada
 
-**Hoje (sessão técnica):**
-- §18 documentado + L.1 (tombstones) implementado
+**Sessão 2026-05-09:**
+- §18 documentado + L.1 (tombstones) implementado em `af20e47`
 
-**Próxima sessão técnica (1-2 dias):**
-- L.2 (PJ vs MEI/EI via RFB CNPJ aberto) — bloqueante arquitetural, mais delicado
-- L.10 (audit_log) — desbloqueia evidência de cumprimento art. 37
-- L.9 (retenção + expurgo)
+**Sessão 2026-05-11 (esta sessão):**
+- ✅ L.10 (audit_log) — `sql/008_audit_log.sql`, testado end-to-end
+- ✅⚠️ L.2 (PJ vs MEI/EI v1 heurístico) — `sql/009_fornecedor.sql`, 22.4k PJ / 16.3k mascarado; L.2.b deferido
+- ✅⚠️ L.9.a (doc retenção) — `docs/legal/RETENCAO.md`; L.9.b/c deferidos
+
+**Próxima sessão técnica:**
+- L.2.b — refactor MV `mart_fornecedores_municipio` (filtrar PJ), frontend `/fornecedor/[cnpj]` 404 elegante, mascarar `/fornecedores` listagem
+- L.9.b — `scripts/expurgar_raw_payload.py` com dry-run
+- (eventual) Ingestão dump RFB substituindo heurística sufixo_v1
 
 **Sessão jurídica/documental (paralela, humano não-dev):**
 - L.3 LIA, L.4 RIPD, L.5 Política, L.6 Termos, L.7 DPO, L.8 Subprocessadores
@@ -1383,24 +1391,34 @@ gravidade jurídica + dependência técnica.
 - L.14 contatar Open Knowledge BR / Transparência BR
 - L.15 contatar advogado LGPD
 
-**Wave C (qualidade) entra DEPOIS de L.1+L.2 prontos** — testes HTTP
-ajudam validar tombstones e mascaramento sem regressão.
+**Wave C (qualidade) entra DEPOIS de L.2.b** — testes HTTP
+ajudam validar mascaramento PJ/MEI sem regressão.
 
 ### 18.3 Criterio de "pronto para go-live público"
 
 Não vamos abrir indexação Google enquanto:
 
-- ❌ L.1, L.2, L.3, L.4, L.5, L.6, L.7 não estiverem prontos
+- ✅ L.1 (tombstones) implementado
+- ✅⚠️ L.2 implementado (v1 heurístico); falta L.2.b (MV + frontend + listagem)
+- ✅ L.10 (audit_log) implementado
+- ✅⚠️ L.9 doc implementado; falta L.9.b (CLI expurgo)
+- ❌ L.3, L.4, L.5, L.6, L.7 não estiverem prontos
 - ❌ L.15 (revisor jurídico) não tiver visto o pacote
 - ❌ A Wave C.4 (Cloudflare na frente, rate-limit, CORS) não estiver
   configurada
 
-São condições mínimas, não suficientes. Ideal: também L.8, L.9, L.10,
-L.11, L.12 + L.14 (instituição-âncora confirmada).
+São condições mínimas, não suficientes. Ideal: também L.8, L.11, L.12
++ L.14 (instituição-âncora confirmada).
 
 ---
 
 ## 14. Changelog
+
+**v5.5 (2026-05-11)** — Wave LGPD avança: L.10 + L.2 (v1) + L.9 (doc):
+- **L.10 ✅** `sql/008_audit_log.sql` — `analytics.audit_log` append-only + função trigger genérica + triggers cirúrgicos em `eliminacao`, `item_canonical` (só `eliminada_em`) e `fornecedor`. Ator via `current_setting('app.audit_actor')` (SET LOCAL no psycopg) com fallback pra coluna `ator` de `eliminacao`. Testado end-to-end: INSERT em eliminacao gera 2 audit_log rows (eliminacao + cascata).
+- **L.2 ✅⚠️** `sql/009_fornecedor.sql` — `analytics.fornecedor(cnpj, tipo_juridico, fonte)` + `fn_classificar_tipo_juridico` heurística por sufixo (LTDA, S.A., S/A, EIRELI, SOCIEDADE ANÔNIMA, COOPERATIVA, ASSOCIAÇÃO, FUNDAÇÃO, INSTITUTO, FEDERAÇÃO, SINDICATO, IGREJA, HOSPITAL, UNIVERSIDADE, MUNICÍPIO, PREFEITURA, UNIÃO, ESTADO). ME/EPP isolados NÃO marcam PJ (ambíguos com MEI). Primeira carga: 38.686 fornecedores → 22.409 PJ (58%) + 16.277 NULL (42%, mascarado). Endpoint `/fornecedor/{cnpj}` retorna 404 quando `tipo_juridico != 'PJ'`. Fonte versionada permite dump RFB sobrescrever depois. **L.2.b deferido**: MV `mart_fornecedores_municipio` filtrar PJ + frontend 404 elegante + listagem `/fornecedores` mascarada.
+- **L.9.a ✅** `docs/legal/RETENCAO.md` v1 — política completa por camada (raw, canonical, mart, log, MVs, manchetes, logs aplicação) + plano L.9.b/c deferidos (CLI antes de cron).
+- **§18.2 sequência atualizada** — sessão 2026-05-11 fechada; L.2.b + L.9.b + ingestão RFB na próxima.
 
 **v5.4 (2026-05-09)** — Wave LGPD documentada (PLANO §18) + L.1 tombstones implementados:
 - **§18 novo** — 15 itens da Wave LGPD com prioridade, aceite, tempo. Bloqueante para go-live público. Sequência: A→B→**LGPD**→C

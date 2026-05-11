@@ -113,11 +113,35 @@ Pronto:
   `/eliminacoes/publicas` lista (raw_id + motivo + fundamento) sem
   reproduzir conteúdo. CLI `scripts/eliminar.py`. Snapshot raw
   preservado (auditoria).
+- **Audit log LGPD art. 37** (PLANO §18 L.10):
+  `analytics.audit_log` append-only com triggers cirúrgicos em
+  `analytics.eliminacao`, `item_canonical` (só quando `eliminada_em`
+  muda) e `fornecedor`. Captura `ator`/`base_legal` via
+  `current_setting('app.audit_actor')` (psycopg seta `SET LOCAL`
+  antes do write). NÃO loga refresh de MV (volume sem ganho
+  probatório).
+- **Distinção PJ vs MEI/EI** (PLANO §18 L.2 v1):
+  `analytics.fornecedor(cnpj, tipo_juridico, fonte)` + classificador
+  heurístico por sufixo (LTDA, S.A., EIRELI, COOPERATIVA, etc).
+  Endpoint `/fornecedor/{cnpj}` retorna 404 quando
+  `tipo_juridico != 'PJ'` — defesa em camadas contra exposição de
+  MEI/EI/PF. Primeira carga: 22.4k PJ confirmado, 16.3k mascarado
+  (42%). Fonte versionada permite dump RFB substituir heurística
+  depois sem refazer schema.
+- **Política de retenção** (PLANO §18 L.9.a): `docs/legal/RETENCAO.md`
+  v1 com prazos por camada (raw imutável, audit_log 5 anos,
+  manchetes 2 anos, MVs sem retenção, raw_payload 90d após
+  canonicalização). CLI de expurgo e cron mensal deferidos para
+  L.9.b/c.
 
 Em andamento — Wave LGPD (PLANO §18, bloqueante para go-live público):
 - **L.1 ✅** tombstones (acima)
-- **L.2** distinção PJ vs MEI/EI via RFB CNPJ aberto (pendente)
-- **L.3-L.13** documentos jurídicos + UI (pendente)
+- **L.2 ✅⚠️** v1 heurístico (acima); L.2.b deferido (MV
+  `mart_fornecedores_municipio` filtrar PJ + frontend 404 elegante +
+  máscara em `/fornecedores`)
+- **L.9 ✅⚠️** doc retenção (acima); L.9.b/c deferidos (CLI + cron)
+- **L.10 ✅** audit log (acima)
+- **L.3-L.8, L.11-L.13** documentos jurídicos + UI (pendente)
 - **L.14-L.15** instituição-âncora + revisão jurídica externa (pendente)
 
 Não pronto (depende do usuário humano para destravar):
