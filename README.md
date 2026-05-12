@@ -181,6 +181,23 @@ Pronto:
   críticas) + `docs/architecture/THREAT_MODEL.md` (STRIDE com riscos
   conhecidos), Sentry condicional em `src/api/main.py` (inicializa
   apenas se `SENTRY_DSN_API` setado).
+- **Roadmap §19 — extensões de produto** (v5.10):
+  - **RSS/Atom feed** das manchetes em
+    `GET /manchetes/feed.xml` (cache 30 min, autodiscovery no
+    `<head>` de toda página via `metadata.alternates.types`).
+  - **Export CSV** em 5 endpoints sob CC-BY 4.0:
+    `/manchetes.csv`, `/fornecedores.csv`,
+    `/fornecedor/{cnpj}/contratos.csv`,
+    `/tce-pr/municipio/{cd_ibge}/fornecedores.csv`,
+    `/alertas/progressivos.csv`.
+  - **Alerta progressivo** (MV `analytics.alerta_progressivo`):
+    detecta (fornecedor PJ + município + cluster) com mediana
+    crescendo >1.2× em cada um dos 3 últimos trimestres consecutivos.
+    Endpoint `/alertas/progressivos`. Defesa em camadas L.1+L.2
+    aplicada na origem.
+  - **INEP/IDEB cross** documentado em ADR-006 (esboço de schema +
+    MV; implementação ~2d). Adapter `Obra.zip` do TCE-PR também
+    documentado como §19.1.b pendente.
 - **Política de retenção** (PLANO §18 L.9.a): `docs/legal/RETENCAO.md`
   v1 com prazos por camada (raw imutável, audit_log 5 anos,
   manchetes 2 anos, MVs sem retenção, raw_payload 90d após

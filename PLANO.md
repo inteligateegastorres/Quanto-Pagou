@@ -2,12 +2,12 @@
 
 > Plataforma cívica para monitorar gastos públicos brasileiros e identificar possíveis desvios.
 
-**Versão:** v5.9 (2026-05-11)
+**Versão:** v5.10 (2026-05-11)
 **Status:** v5 + manchetes algorítmicas + Wave A (higiene) completa +
 Wave B (estrutura) parcial + Wave LGPD avançada (§18): 11 itens
-implementados (L.1, L.2 + 2.b, L.5, L.6, L.7, L.9 a+b+c, L.10, L.11,
-L.12, L.13) + hardening de resposta à análise externa de 2026-05-11
-(Dependabot, gitleaks, ADRs/threat model, Sentry prep). **Restam para
+implementados + hardening pós-análise-externa (Dependabot, gitleaks,
+ADRs, Sentry prep) + Roadmap §19 com 4 de 5 itens entregues (RSS feed,
+export CSV, alerta progressivo, INEP esboço/ADR-006). **Restam para
 go-live público:** L.3 (LIA), L.4 (RIPD), L.8 (subprocessadores),
 L.14 (instituição-âncora), L.15 (revisor jurídico). Ver §18.3.
 
@@ -1420,7 +1420,49 @@ L.14 (instituição-âncora); L.15 (revisor jurídico).
 
 ---
 
+## 19. Roadmap pós-go-live — extensão de produto (2026-05-11)
+
+Respondendo a análise externa de produto de 2026-05-11 (lista de
+features típicas de portal cívico). Cross-check identificou que ~60%
+do que a análise sugere já está entregue, ~15% é fora do escopo
+deliberado (folha de servidores, transferências federais já cobertas
+pelo SICONFI), e ~25% são ideias legítimas. Filtramos pra 5 com
+relação custo/impacto defensável.
+
+| # | Item | Status | Custo | Arquivo principal |
+|---|---|---|---|---|
+| **§19.1** | Investigar aditivo/cronograma em `Licitacao.xml` | ✅ Investigação concluída — TCE-PR não estrutura aditivo em Licitacao.xml, mas **`Obra.zip` existe por município** (397 arquivos no PIT 2025; 9 tipos: Combustivel, Contrato, Convenio, Despesa, Diarias, Licitacao, Obra, Receita, Relacionamentos). Vira §19.1.b. | 30 min | — |
+| **§19.1.b** | Adapter de ingestão `Obra.zip` (TCE-PR) | ❌ Pendente — implementar `_extract_obra` em `src/ingest/tce_pr.py` análogo ao Licitacao+LicitacaoXContrato. Criar `raw.obras` + `analytics.obra_municipio`. | 1-2 dias | `src/ingest/tce_pr.py` (novo) |
+| **§19.2** | RSS/Atom feed de manchetes | ✅ `GET /manchetes/feed.xml` (Atom 1.0). Cada entry com id estável (cluster+cd_tce+hash da config). Cache 30 min. | 30 min | `src/api/main.py` (`manchetes_feed`) |
+| **§19.3** | Export CSV em endpoints chave | ✅ Helper `_rows_to_csv_response` + 4 endpoints `.csv`: `/manchetes.csv`, `/fornecedores.csv`, `/fornecedor/{cnpj}/contratos.csv`, `/tce-pr/municipio/{cd_ibge}/fornecedores.csv`, `/alertas/progressivos.csv`. CSV usa CC-BY 4.0 por padrão. | 30 min | `src/api/main.py` |
+| **§19.4** | Alerta de aumento progressivo (extensão das manchetes) | ✅ `analytics.alerta_progressivo` MV detecta (cnpj+cd_tce+cluster) com mediana crescendo >1.2× em cada um dos 3 últimos trimestres consecutivos. Defesa em camadas L.1+L.2 aplicada na origem. Endpoint `/alertas/progressivos`. Primeira execução: 7 alertas (medicamentos/merenda escalando 5-39× em PR). | 1h | `sql/013_alerta_progressivo.sql` + endpoint |
+| **§19.5** | Cross com INEP/IDEB (gasto educacional × desempenho) | ❌ Esboço apenas — ADR-006 documenta schema (`analytics.ideb_municipio`, `analytics.matriculas_municipio`), MV proposta (`gasto_educacional_municipio` com `gasto_por_aluno`), limites conhecidos (IDEB bienal, causalidade≠correlação) e caminho de implementação (~2 dias). | 2 dias | `docs/architecture/adr/ADR-006-cross-ineps-ideb.md` |
+
+### 19.1 O que NÃO entra no roadmap (e por quê)
+
+Análise externa sugeriu várias features que ficam deliberadamente fora:
+
+| Sugestão da análise | Razão de não fazer |
+|---|---|
+| Folha de servidores, cargo, lotação, remuneração | LGPD ruim, dado pessoal não-mascarado, já coberto pelo Portal da Transparência federal. PLANO §6.5 + Wave LGPD L.2 documentam. |
+| Transferências federais União→Estado→Município | SICONFI/Tesouro Nacional já faz; preferir contribuir lá (memória `project_transparencia` — preferência por contribuir em OSS existente). |
+| Emendas parlamentares municipais com vereador associado | TCE-PR PIT não cruza contrato com vereador. Fontes municipais fragmentadas, ROI incerto. |
+| Modo "Fiscalize seu bairro" (CEP/bairro/rua) | TCE-PR PIT não traz georreferência estruturada. Querido Diário pode ajudar mas é busca textual. Deferido. |
+| Vínculos políticos de fornecedores | Sem fonte estruturada + risco alto de difamação por inferência. Manchetes algorítmicas (§15) explicitamente NÃO publicam sobre fornecedor por esse motivo. |
+| Alertas por e-mail / notificações push | Plataforma stateless por design (sem login). RSS/Atom (§19.2) substitui parcialmente. |
+
+---
+
 ## 14. Changelog
+
+**v5.10 (2026-05-11)** — Roadmap §19 (resposta a análise externa de produto):
+- Cross-check de análise externa de produto identificou que ~60% das features sugeridas já estavam entregues, ~15% deliberadamente fora de escopo, ~25% legítimas. Filtramos 5 com custo/impacto defensável.
+- **§19.1 investigação ✅** — descoberta importante: TCE-PR PIT publica `Obra.zip` por município (397 no ano 2025) + 8 outros tipos (Convenio, Despesa, Combustivel, etc). Adapter `Obra` vira §19.1.b pendente.
+- **§19.2 ✅** `GET /manchetes/feed.xml` (Atom 1.0) — engajamento sem login. Cache 30 min, id estável por (cluster+cd_tce+config_hash). Site URL via `NEXT_PUBLIC_SITE_URL`.
+- **§19.3 ✅** Helper `_rows_to_csv_response` + 5 endpoints `.csv` (`/manchetes.csv`, `/fornecedores.csv`, `/fornecedor/{cnpj}/contratos.csv`, `/tce-pr/municipio/{cd_ibge}/fornecedores.csv`, `/alertas/progressivos.csv`). Aplicação jornalística sob CC-BY 4.0.
+- **§19.4 ✅** `sql/013_alerta_progressivo.sql` — `analytics.alerta_progressivo` MV detecta crescimento monotônico >1.2× tri-a-tri nos últimos 3 trimestres. Primeira execução: 7 alertas reais (medicamentos/merenda escalando 5-39× em municípios PR). Endpoint `/alertas/progressivos` + CSV.
+- **§19.5 esboço ✅** ADR-006 documenta schema completo (`ideb_municipio`, `matriculas_municipio`, MV `gasto_educacional_municipio` com `gasto_por_aluno`), limites (IDEB bienal, causalidade), caminho de implementação (~2d). Não implementado nesta entrega.
+- **§19.1.1** documenta features explicitamente fora de escopo (folha, transferências, emendas, "fiscalize seu bairro", vínculos políticos, alertas por e-mail) com razão registrada.
 
 **v5.9 (2026-05-11)** — Hardening em resposta à análise externa:
 - Cross-check rigoroso de análise externa (2026-05-11) — ~70% das críticas eram drift (LICENSE, SECURITY.md, CONTRIBUTING, CoC, CI, README já entregues em Wave A; política LGPD completa via Wave §18). Sobreviveram 4 itens legítimos: Dependabot, Secret Scanning, ADRs/threat model, Sentry.
