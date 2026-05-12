@@ -19,6 +19,8 @@ Decisoes:
 
 from __future__ import annotations
 
+import csv
+import io
 import os
 from datetime import date, timedelta
 from decimal import Decimal
@@ -27,6 +29,7 @@ from typing import Any, Literal
 import psycopg
 from psycopg import sql as psycopg_sql
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 # Pool/lifespan/ConnDep extraidos pra deps.py (PLANO §17.B.1 fase 1).
@@ -356,6 +359,29 @@ class FornecedorPerfilOut(BaseModel):
     cnpj_mascarado: bool = Field(
         description="True se CNPJ vem mascarado (TCE-PR mascara CPFs de PFs)"
     )
+
+
+class AlertaProgressivoOut(BaseModel):
+    """Alerta de aumento progressivo trimestre-a-trimestre (PLANO §19.4)."""
+    fornecedor_cnpj: str
+    fornecedor_nome: str | None
+    cd_tce: str
+    cluster_id: str
+    trimestre_1: str
+    trimestre_2: str
+    trimestre_3: str
+    mediana_1: Decimal
+    mediana_2: Decimal
+    mediana_3: Decimal
+    growth_ratio: Decimal = Field(
+        description="mediana_3 / mediana_1. >= 1.44 (1.2² mínimo do filtro) por construção."
+    )
+    n_1: int
+    n_2: int
+    n_3: int
+    total_1: Decimal
+    total_2: Decimal
+    total_3: Decimal
 
 
 class FornecedorContratoOut(BaseModel):
@@ -708,6 +734,249 @@ class ManchteSaidaOut(BaseModel):
     municipio_nome: str | None
     spread_anterior: Decimal | None
     parametros_hash: str
+
+
+_SITE_URL = os.environ.get(
+    "NEXT_PUBLIC_SITE_URL", "https://quantopagou.org"
+).rstrip("/")
+
+
+def _rows_to_csv_response(
+    rows: list[dict[str, Any]],
+    fieldnames: list[str],
+    filename: str,
+) -> Response:
+    """Helper L.19.3: serializa lista de dicts em CSV pra download.
+    Aceita Decimal, date, None — converte pra str apropriada."""
+    buf = io.StringIO()
+    writer = csv.DictWriter(
+        buf, fieldnames=fieldnames, extrasaction="ignore", quoting=csv.QUOTE_MINIMAL
+    )
+    writer.writeheader()
+    for r in rows:
+        out: dict[str, Any] = {}
+        for k in fieldnames:
+            v = r.get(k)
+            if v is None:
+                out[k] = ""
+            elif isinstance(v, Decimal):
+                out[k] = format(v, "f")
+            elif isinstance(v, (date,)):
+                out[k] = v.isoformat()
+            else:
+                out[k] = v
+        writer.writerow(out)
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "public, max-age=300",
+        },
+    )
+
+
+def _xml_escape(s: str | None) -> str:
+    if s is None:
+        return ""
+    return (
+        s.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&apos;")
+    )
+
+
+@app.get(
+    "/manchetes/feed.xml",
+    response_class=Response,
+    tags=["meta"],
+    summary="Atom feed das manchetes ativas (PLANO §19.2)",
+)
+def manchetes_feed(conn: ConnDep) -> Response:
+    """Atom 1.0 das manchetes ativas — engajamento sem login.
+    Cada entry tem id estavel (cluster_id + cd_tce + parametros_hash)
+    pra leitores RSS deduplicarem corretamente. Substitui parcialmente
+    necessidade de alerta por e-mail (PLANO §19)."""
+    sql = """
+        SELECT cluster_id, cluster_version, cd_tce, municipio_nome,
+               spread, med_sujeito, med_cluster, n_sujeito,
+               valor_total_sujeito, parametros_hash,
+               refresh_em
+        FROM analytics.manchete
+        ORDER BY rank_no_dia
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql)
+        rows = cur.fetchall()
+
+    last_updated = (
+        max((r["refresh_em"] for r in rows), default=None)
+        if rows
+        else None
+    )
+    feed_updated = (
+        last_updated.isoformat() if last_updated else "2026-01-01T00:00:00+00:00"
+    )
+
+    entries = []
+    for r in rows:
+        cluster_id = r["cluster_id"]
+        cd_tce = r["cd_tce"]
+        municipio = r["municipio_nome"] or cd_tce
+        spread = float(r["spread"] or 0)
+        med_s = float(r["med_sujeito"] or 0)
+        med_c = float(r["med_cluster"] or 0)
+        n_sujeito = int(r["n_sujeito"] or 0)
+        params_hash = r["parametros_hash"] or "v0"
+        # id estavel — muda se cluster, municipio ou config mudar
+        entry_id = (
+            f"tag:quantopagou.org,2026:manchete:"
+            f"{cluster_id}:{cd_tce}:{params_hash[:8]}"
+        )
+        link = f"{_SITE_URL}/manchetes#{cluster_id}-{cd_tce}"
+        title = (
+            f"{municipio}: mediana de {cluster_id.replace('_', ' ')} "
+            f"{spread:.1f}× a do estado"
+        )
+        summary = (
+            f"Mediana do município: R$ {med_s:,.2f} · "
+            f"Mediana do cluster PR: R$ {med_c:,.2f} · "
+            f"{n_sujeito} contratos no período."
+        ).replace(",", ".")
+        updated = (
+            r["refresh_em"].isoformat()
+            if r["refresh_em"]
+            else feed_updated
+        )
+        entries.append(
+            f"""  <entry>
+    <id>{_xml_escape(entry_id)}</id>
+    <title>{_xml_escape(title)}</title>
+    <link href="{_xml_escape(link)}" rel="alternate"/>
+    <updated>{_xml_escape(updated)}</updated>
+    <summary type="text">{_xml_escape(summary)}</summary>
+    <category term="{_xml_escape(cluster_id)}"/>
+  </entry>"""
+        )
+
+    feed_xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<feed xmlns="http://www.w3.org/2005/Atom">\n'
+        f"  <title>Manchetes — Quanto Pagou</title>\n"
+        f"  <subtitle>Discrepâncias algoritmicas em gastos públicos "
+        f"municipais do Paraná. Sem curadoria humana.</subtitle>\n"
+        f"  <link href=\"{_xml_escape(_SITE_URL + '/manchetes')}\" "
+        f'rel="alternate"/>\n'
+        f"  <link href=\"{_xml_escape(_SITE_URL + '/manchetes/feed.xml')}\" "
+        f'rel="self"/>\n'
+        f"  <id>tag:quantopagou.org,2026:manchetes</id>\n"
+        f"  <updated>{_xml_escape(feed_updated)}</updated>\n"
+        f"  <generator uri=\"{_xml_escape(_SITE_URL)}\" version=\"1\">"
+        "Quanto Pagou</generator>\n"
+        f"  <rights>CC-BY 4.0 — Quanto Pagou. Dados primários: TCE-PR (público).</rights>\n"
+        + "\n".join(entries)
+        + "\n</feed>\n"
+    )
+    return Response(
+        content=feed_xml,
+        media_type="application/atom+xml; charset=utf-8",
+        headers={"Cache-Control": "public, max-age=1800"},
+    )
+
+
+@app.get(
+    "/manchetes.csv",
+    response_class=Response,
+    tags=["meta"],
+    summary="Manchetes ativas em CSV (PLANO §19.3)",
+)
+def get_manchetes_csv(conn: ConnDep) -> Response:
+    sql = """
+        SELECT rank_no_dia, cluster_id, cluster_version, cd_tce, cd_ibge,
+               municipio_nome, porte, populacao, n_sujeito, valor_total_sujeito,
+               med_sujeito, med_cluster, spread, iqr_sujeito, iqr_cluster,
+               comparab_proxy, spread_90d, spread_180d, spread_365d,
+               janelas_passadas, rank_score, parametros_hash
+        FROM analytics.manchete
+        ORDER BY rank_no_dia
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql)
+        rows = cur.fetchall()
+    return _rows_to_csv_response(
+        rows,
+        fieldnames=[
+            "rank_no_dia", "cluster_id", "cluster_version", "cd_tce", "cd_ibge",
+            "municipio_nome", "porte", "populacao", "n_sujeito",
+            "valor_total_sujeito", "med_sujeito", "med_cluster", "spread",
+            "iqr_sujeito", "iqr_cluster", "comparab_proxy",
+            "spread_90d", "spread_180d", "spread_365d",
+            "janelas_passadas", "rank_score", "parametros_hash",
+        ],
+        filename="manchetes_quantopagou.csv",
+    )
+
+
+@app.get(
+    "/alertas/progressivos",
+    response_model=list[AlertaProgressivoOut],
+    tags=["meta"],
+    summary="Alertas de aumento progressivo trimestre-a-trimestre (PLANO §19.4)",
+)
+def get_alertas_progressivos(
+    conn: ConnDep, limit: int = Query(default=50, ge=1, le=500)
+) -> list[AlertaProgressivoOut]:
+    """Combinações (fornecedor PJ + município + cluster) onde a mediana
+    do valor de contrato cresceu >1.2× em cada trimestre nos últimos 3
+    trimestres consecutivos com dados. Complementa /manchetes —
+    manchete capta nível, alerta progressivo capta tendência."""
+    sql = """
+        SELECT fornecedor_cnpj, fornecedor_nome, cd_tce, cluster_id,
+               trimestre_1::text, trimestre_2::text, trimestre_3::text,
+               mediana_1, mediana_2, mediana_3, growth_ratio,
+               n_1, n_2, n_3, total_1, total_2, total_3
+        FROM analytics.alerta_progressivo
+        ORDER BY growth_ratio DESC
+        LIMIT %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (limit,))
+        return [AlertaProgressivoOut(**r) for r in cur.fetchall()]
+
+
+@app.get(
+    "/alertas/progressivos.csv",
+    response_class=Response,
+    tags=["meta"],
+    summary="Alertas progressivos em CSV (PLANO §19.3 + §19.4)",
+)
+def get_alertas_progressivos_csv(
+    conn: ConnDep, limit: int = Query(default=500, ge=1, le=5000)
+) -> Response:
+    sql = """
+        SELECT fornecedor_cnpj, fornecedor_nome, cd_tce, cluster_id,
+               trimestre_1::text, trimestre_2::text, trimestre_3::text,
+               mediana_1, mediana_2, mediana_3, growth_ratio,
+               n_1, n_2, n_3, total_1, total_2, total_3
+        FROM analytics.alerta_progressivo
+        ORDER BY growth_ratio DESC
+        LIMIT %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (limit,))
+        rows = cur.fetchall()
+    return _rows_to_csv_response(
+        rows,
+        fieldnames=[
+            "fornecedor_cnpj", "fornecedor_nome", "cd_tce", "cluster_id",
+            "trimestre_1", "trimestre_2", "trimestre_3",
+            "mediana_1", "mediana_2", "mediana_3", "growth_ratio",
+            "n_1", "n_2", "n_3", "total_1", "total_2", "total_3",
+        ],
+        filename="alertas_progressivos_quantopagou.csv",
+    )
 
 
 @app.get("/manchetes", response_model=list[ManchteOut], tags=["meta"])
@@ -1819,6 +2088,54 @@ def list_fornecedores(
         return [FornecedorListItemOut(**r) for r in cur.fetchall()]
 
 
+@app.get(
+    "/fornecedores.csv",
+    response_class=Response,
+    tags=["fornecedor"],
+    summary="Listagem de fornecedores PJ em CSV (PLANO §19.3)",
+)
+def list_fornecedores_csv(
+    conn: ConnDep,
+    search: str | None = Query(default=None),
+    min_contratos: int = Query(default=_FORNECEDOR_THRESHOLD, ge=1),
+    limit: int = Query(default=500, ge=1, le=5000),
+) -> Response:
+    """Mesma query de /fornecedores em CSV pra uso jornalistico (CC-BY 4.0).
+    Limit default mais alto (500) ja que e download."""
+    sql = """
+        SELECT
+            rc.fornecedor_cnpj,
+            MAX(rc.fornecedor_nome) AS fornecedor_nome,
+            COUNT(*) AS n_contratos,
+            ROUND(SUM(rc.valor_total)::numeric, 2) AS valor_total,
+            COUNT(DISTINCT rc.raw_payload->>'cd_tce') AS n_municipios_distintos
+        FROM raw.compras rc
+        JOIN analytics.fornecedor f ON f.cnpj = rc.fornecedor_cnpj
+        WHERE rc.fornecedor_cnpj IS NOT NULL
+          AND f.tipo_juridico = 'PJ'
+          AND (
+              %s::text IS NULL
+              OR lower(rc.fornecedor_nome) LIKE '%%' || lower(%s) || '%%'
+              OR rc.fornecedor_cnpj LIKE '%%' || %s || '%%'
+          )
+        GROUP BY rc.fornecedor_cnpj
+        HAVING COUNT(*) >= %s
+        ORDER BY valor_total DESC NULLS LAST
+        LIMIT %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (search, search, search, min_contratos, limit))
+        rows = cur.fetchall()
+    return _rows_to_csv_response(
+        rows,
+        fieldnames=[
+            "fornecedor_cnpj", "fornecedor_nome", "n_contratos",
+            "valor_total", "n_municipios_distintos",
+        ],
+        filename="fornecedores_quantopagou.csv",
+    )
+
+
 # ----------------------------- Municipio (resolver) -------------------
 
 
@@ -2103,6 +2420,51 @@ def fornecedor_contratos(
         return [FornecedorContratoOut(**r) for r in cur.fetchall()]
 
 
+@app.get(
+    "/fornecedor/{cnpj}/contratos.csv",
+    response_class=Response,
+    tags=["fornecedor"],
+    summary="Contratos do fornecedor em CSV (PLANO §19.3)",
+)
+def fornecedor_contratos_csv(
+    conn: ConnDep, cnpj: str, limit: int = Query(default=500, ge=1, le=5000)
+) -> Response:
+    """Mesma query de /fornecedor/{cnpj}/contratos em CSV. Default limit 500.
+    Aplica L.2 default deny (helper _require_pj_or_404)."""
+    _require_pj_or_404(conn, cnpj)
+    sql = """
+        SELECT
+            rc.id AS raw_id,
+            rc.source_id AS contrato_id,
+            COALESCE(mp.nome, rc.raw_payload->>'municipio') AS municipio,
+            rc.orgao_nome,
+            rc.descricao,
+            rc.valor_total,
+            rc.contract_date::text AS contract_date,
+            ic.cluster_id,
+            ic.em_quarentena
+        FROM raw.compras rc
+        JOIN analytics.item_canonical ic ON ic.raw_id = rc.id
+        LEFT JOIN analytics.municipio_pr mp ON mp.cd_tce = rc.raw_payload->>'cd_tce'
+        WHERE rc.fornecedor_cnpj = %s
+        ORDER BY rc.valor_total DESC NULLS LAST, rc.contract_date DESC NULLS LAST
+        LIMIT %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (cnpj, limit))
+        rows = cur.fetchall()
+    safe_cnpj = "".join(ch for ch in cnpj if ch.isdigit())
+    return _rows_to_csv_response(
+        rows,
+        fieldnames=[
+            "raw_id", "contrato_id", "municipio", "orgao_nome",
+            "descricao", "valor_total", "contract_date",
+            "cluster_id", "em_quarentena",
+        ],
+        filename=f"contratos_{safe_cnpj}_quantopagou.csv",
+    )
+
+
 # ----------------------------- TCE-PR ---------------------------------
 
 # Os endpoints abaixo usam mart_contratos_municipio e
@@ -2205,6 +2567,40 @@ def tce_pr_fornecedores(
     with conn.cursor() as cur:
         cur.execute(sql, (cd_ibge, limit))
         return [FornecedorMunicipioOut(**r) for r in cur.fetchall()]
+
+
+@app.get(
+    "/tce-pr/municipio/{cd_ibge}/fornecedores.csv",
+    response_class=Response,
+    tags=["tce-pr"],
+    summary="Fornecedores PJ do municipio em CSV (PLANO §19.3)",
+)
+def tce_pr_fornecedores_csv(
+    conn: ConnDep,
+    cd_ibge: str,
+    limit: int = Query(default=500, ge=1, le=5000),
+) -> Response:
+    """Top fornecedores PJ do municipio em CSV. A MV ja filtra PJ
+    (L.2.b), entao MEI/EI nao aparecem."""
+    sql = """
+        SELECT cd_ibge, municipio, fornecedor_cnpj, fornecedor_nome,
+               n_contratos, valor_total_periodo, n_orgaos_distintos
+        FROM analytics.mart_fornecedores_municipio
+        WHERE cd_ibge = %s
+        ORDER BY valor_total_periodo DESC
+        LIMIT %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (cd_ibge, limit))
+        rows = cur.fetchall()
+    return _rows_to_csv_response(
+        rows,
+        fieldnames=[
+            "cd_ibge", "municipio", "fornecedor_cnpj", "fornecedor_nome",
+            "n_contratos", "valor_total_periodo", "n_orgaos_distintos",
+        ],
+        filename=f"fornecedores_municipio_{cd_ibge}_quantopagou.csv",
+    )
 
 
 @app.get(

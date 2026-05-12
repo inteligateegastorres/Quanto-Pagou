@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { fmtBRL, fmtBRLCompact } from "@/lib/api";
+import { API_BASE, fmtBRL, fmtBRLCompact } from "@/lib/api";
 import { DisclaimerOrigem } from "@/lib/DisclaimerOrigem";
 import { BotaoContestarRanking } from "@/lib/BotaoContestarRanking";
 import {
@@ -89,6 +89,28 @@ export default async function ManchetesPage({
           Os critérios estão em <code>config/manchete_v1.yaml</code> e cada
           manchete carrega o hash da configuração que a colocou aqui — para
           auditoria pública.
+        </p>
+        <p className="text-xs text-muted pt-1">
+          <a
+            href={`${API_BASE}/manchetes/feed.xml`}
+            className="no-underline hover:underline"
+          >
+            RSS / Atom feed
+          </a>
+          {" · "}
+          <a
+            href={`${API_BASE}/manchetes.csv`}
+            className="no-underline hover:underline"
+          >
+            Exportar CSV
+          </a>
+          {" · "}
+          <a
+            href={`${API_BASE}/alertas/progressivos.csv`}
+            className="no-underline hover:underline"
+          >
+            Alertas progressivos (CSV)
+          </a>
         </p>
       </header>
 

@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
 
+const API_BASE =
+  process.env.QUANTOPAGOU_API_BASE ?? "http://127.0.0.1:8001";
+
 export const metadata: Metadata = {
   metadataBase: new URL(
     process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
@@ -9,6 +12,12 @@ export const metadata: Metadata = {
   title: "Quanto Pagou",
   description:
     "Plataforma cívica para monitorar gastos públicos brasileiros e identificar possíveis desvios.",
+  alternates: {
+    // RSS/Atom autodiscovery (PLANO §19.2). Leitores buscam isso no <head>.
+    types: {
+      "application/atom+xml": `${API_BASE}/manchetes/feed.xml`,
+    },
+  },
 };
 
 export default function RootLayout({
