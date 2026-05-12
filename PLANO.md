@@ -2,14 +2,17 @@
 
 > Plataforma cívica para monitorar gastos públicos brasileiros e identificar possíveis desvios.
 
-**Versão:** v5.10 (2026-05-11)
+**Versão:** v5.11 (2026-05-11)
 **Status:** v5 + manchetes algorítmicas + Wave A (higiene) completa +
 Wave B (estrutura) parcial + Wave LGPD avançada (§18): 11 itens
 implementados + hardening pós-análise-externa (Dependabot, gitleaks,
-ADRs, Sentry prep) + Roadmap §19 com 4 de 5 itens entregues (RSS feed,
-export CSV, alerta progressivo, INEP esboço/ADR-006). **Restam para
-go-live público:** L.3 (LIA), L.4 (RIPD), L.8 (subprocessadores),
-L.14 (instituição-âncora), L.15 (revisor jurídico). Ver §18.3.
+ADRs, Sentry prep) + Roadmap §19 expandido para 10 sub-itens (4
+entregues: RSS, CSV, alerta progressivo, ADR-006 esboço; 6 documentados
+em detalhe para sessões futuras: adapter Obra, INEP/IDEB, dispensa
+repetida, per capita first-class, adapters PIT restantes, prazo
+previsto vs real). **Restam para go-live público:** L.3 (LIA), L.4
+(RIPD), L.8 (subprocessadores), L.14 (instituição-âncora), L.15
+(revisor jurídico). Ver §18.3.
 
 ---
 
@@ -1422,38 +1425,372 @@ L.14 (instituição-âncora); L.15 (revisor jurídico).
 
 ## 19. Roadmap pós-go-live — extensão de produto (2026-05-11)
 
-Respondendo a análise externa de produto de 2026-05-11 (lista de
-features típicas de portal cívico). Cross-check identificou que ~60%
-do que a análise sugere já está entregue, ~15% é fora do escopo
-deliberado (folha de servidores, transferências federais já cobertas
-pelo SICONFI), e ~25% são ideias legítimas. Filtramos pra 5 com
-relação custo/impacto defensável.
+Respondendo a análises externas de produto de 2026-05-11. Cross-check
+identificou que ~60% das features já estavam entregues, ~15% é fora
+do escopo deliberado, ~25% são ideias legítimas. Documentadas como
+sub-seções com aceite, custo e dependência.
 
-| # | Item | Status | Custo | Arquivo principal |
-|---|---|---|---|---|
-| **§19.1** | Investigar aditivo/cronograma em `Licitacao.xml` | ✅ Investigação concluída — TCE-PR não estrutura aditivo em Licitacao.xml, mas **`Obra.zip` existe por município** (397 arquivos no PIT 2025; 9 tipos: Combustivel, Contrato, Convenio, Despesa, Diarias, Licitacao, Obra, Receita, Relacionamentos). Vira §19.1.b. | 30 min | — |
-| **§19.1.b** | Adapter de ingestão `Obra.zip` (TCE-PR) | ❌ Pendente — implementar `_extract_obra` em `src/ingest/tce_pr.py` análogo ao Licitacao+LicitacaoXContrato. Criar `raw.obras` + `analytics.obra_municipio`. | 1-2 dias | `src/ingest/tce_pr.py` (novo) |
-| **§19.2** | RSS/Atom feed de manchetes | ✅ `GET /manchetes/feed.xml` (Atom 1.0). Cada entry com id estável (cluster+cd_tce+hash da config). Cache 30 min. | 30 min | `src/api/main.py` (`manchetes_feed`) |
-| **§19.3** | Export CSV em endpoints chave | ✅ Helper `_rows_to_csv_response` + 4 endpoints `.csv`: `/manchetes.csv`, `/fornecedores.csv`, `/fornecedor/{cnpj}/contratos.csv`, `/tce-pr/municipio/{cd_ibge}/fornecedores.csv`, `/alertas/progressivos.csv`. CSV usa CC-BY 4.0 por padrão. | 30 min | `src/api/main.py` |
-| **§19.4** | Alerta de aumento progressivo (extensão das manchetes) | ✅ `analytics.alerta_progressivo` MV detecta (cnpj+cd_tce+cluster) com mediana crescendo >1.2× em cada um dos 3 últimos trimestres consecutivos. Defesa em camadas L.1+L.2 aplicada na origem. Endpoint `/alertas/progressivos`. Primeira execução: 7 alertas (medicamentos/merenda escalando 5-39× em PR). | 1h | `sql/013_alerta_progressivo.sql` + endpoint |
-| **§19.5** | Cross com INEP/IDEB (gasto educacional × desempenho) | ❌ Esboço apenas — ADR-006 documenta schema (`analytics.ideb_municipio`, `analytics.matriculas_municipio`), MV proposta (`gasto_educacional_municipio` com `gasto_por_aluno`), limites conhecidos (IDEB bienal, causalidade≠correlação) e caminho de implementação (~2 dias). | 2 dias | `docs/architecture/adr/ADR-006-cross-ineps-ideb.md` |
+### 19.0 Visão geral — status
 
-### 19.1 O que NÃO entra no roadmap (e por quê)
+| # | Item | Status | Custo |
+|---|---|---|---|
+| §19.1 | Investigação aditivo/cronograma em Licitacao.xml | ✅ Concluída — TCE-PR não estrutura aditivo em Licitacao.xml; mas descobriu Obra.zip | 30 min |
+| §19.1.b | Adapter de ingestão Obra.zip (TCE-PR) | ❌ **Pendente** | 1-2d |
+| §19.2 | RSS/Atom feed de manchetes | ✅ Entregue | 30 min |
+| §19.3 | Export CSV em endpoints chave | ✅ Entregue (5 endpoints) | 30 min |
+| §19.4 | Alerta de aumento progressivo | ✅ Entregue (7 alertas reais detectados) | 1h |
+| §19.5 | Cross INEP/IDEB | ❌ **Pendente** (ADR-006 esboço completo) | 2d |
+| §19.6 | Alerta dispensa emergencial repetida | ❌ **Pendente** | 2-4h |
+| §19.7 | Métrica per capita first-class | ❌ **Pendente** | 2-4h |
+| §19.8 | Adapters outros tipos PIT (Convenio/Despesa/Combustivel/Diarias/Receita) | ❌ **Pendente** | 5-10d (1-2d cada) |
+| §19.9 | Prazo previsto vs real (dt_inicio/dt_fim) | ❌ **Pendente** | 4-6h |
+
+**Total para fechar:** 9-15 dias. Implementação ordenada por
+custo×impacto está em §19.X (ordem de execução recomendada) no final
+da seção.
+
+### 19.1 ✅ Investigação Licitacao.xml — concluída
+
+TCE-PR PIT não estrutura aditivo nem cronograma em `Licitacao.xml`
+(amostras inspecionadas via central directory do ZIP em 2026-05-11).
+Resultado: campo ausente; vira §19.1.b com fonte diferente (`Obra.zip`).
+
+### 19.1.b ❌ Adapter de ingestão Obra.zip (TCE-PR) — PENDENTE
+
+**Descoberta de 2026-05-11:** TCE-PR PIT publica 9 tipos de arquivo
+por município, dos quais **6 ainda não temos adapter**:
+
+| Tipo | Status | Cobertura potencial |
+|---|---|---|
+| Contrato.xml | ✅ Adapter completo (`src/ingest/tce_pr.py`) | 156k contratos PR |
+| Licitacao.xml + LicitacaoXContrato.xml | ✅ JOIN em memória pra modalidade | 65% dos contratos |
+| **Obra.zip** | ❌ §19.1.b | 397 municípios × ~10-50 obras = ~10-20k registros estimados |
+| Convenio.zip | ❌ §19.8 | Convênios estaduais |
+| Despesa.zip | ❌ §19.8 | Empenhada/liquidada/paga por categoria |
+| Combustivel.zip | ❌ §19.8 | Específico combustível |
+| Diarias.zip | ❌ §19.8 | Diárias de servidor (LGPD: avaliar antes) |
+| Receita.zip | ❌ §19.8 | Lado receita (IPTU, ISS, transferências, etc) |
+| Relacionamentos.zip | ✅ usado para LicitacaoXContrato | — |
+
+**Para §19.1.b especificamente (Obra):**
+
+1. **Investigação preliminar (4h):** baixar amostra de 3-5
+   `Obra.zip` de municípios pequeno/médio/grande, inventariar todos
+   os campos do XML. Documentar em `docs/architecture/adr/ADR-007-obra-tce-pr.md`.
+2. **Adapter (6-8h):** espelhar pattern de `_extract_inner_xml`
+   + parser em `src/ingest/tce_pr.py`. Criar `raw.obras` (similar
+   a `raw.compras` com `id`, `snapshot_id`, `source`, colunas
+   dedicadas + `raw_payload JSONB`).
+3. **Schema canônico (2-4h):** `analytics.obra_canonical` análoga
+   a `item_canonical`. Possíveis colunas: `cd_tce`, `orgao_codigo`,
+   `descricao_obra`, `valor_original`, `valor_atual` (se houver),
+   `data_inicio_prevista`, `data_termino_prevista`, `data_termino_real`,
+   `pct_executado` (se houver), `fornecedor_cnpj`, `aditivos JSONB[]`.
+4. **MV de marts (2-4h):** `analytics.mart_obras_municipio` agregando
+   por município + cluster (cluster de obra precisa de YAML novo
+   ou reuso de `obras_edificacao_escolar`, etc).
+5. **Endpoint + frontend (4-8h):** `GET /tce-pr/municipio/{cd_ibge}/obras`,
+   `GET /obra/{raw_id}`. Página `/obra/[id]` + `/municipio/[cd_tce]`
+   ganha aba "Obras".
+6. **Defesas LGPD:** aplicar L.2 (PJ vs MEI/EI) em `fornecedor_cnpj`
+   de obra. Trigger audit_log (L.10). Permitir tombstone (L.1) com
+   mesmo padrão.
+
+**Aceite:**
+- 397 municípios com pelo menos a contagem de obras corretamente
+  ingerida.
+- Endpoint público devolve campos do schema canônico.
+- `/obra/{raw_id}` mostra fornecedor responsável, valor original,
+  valor atual (se houver), datas. Aditivos exibidos como lista se
+  campo existir.
+- Documentação clara sobre quais campos da P1 da análise externa
+  são entregues (provável: empresa responsável, prazo previsto,
+  valor original) e quais NÃO (provável: % executado, fotos, mapa
+  — TCE-PR não estrutura).
+
+**Risco:** XML pode não ter aditivo/cronograma estruturado.
+Investigação preliminar (passo 1) tem opção de aborto se inventário
+revelar que campos essenciais não estão lá.
+
+### 19.2 ✅ RSS/Atom feed de manchetes — entregue
+
+`GET /manchetes/feed.xml` (Atom 1.0). Cache 30 min, id estável
+(cluster+cd_tce+config_hash). Autodiscovery via
+`metadata.alternates.types` no layout — leitores RSS encontram
+automaticamente. Link visível em `/manchetes`.
+
+### 19.3 ✅ Export CSV em endpoints chave — entregue
+
+Helper `_rows_to_csv_response` + 5 endpoints `.csv`:
+`/manchetes.csv`, `/fornecedores.csv`,
+`/fornecedor/{cnpj}/contratos.csv`,
+`/tce-pr/municipio/{cd_ibge}/fornecedores.csv`,
+`/alertas/progressivos.csv`. CC-BY 4.0 por padrão.
+
+### 19.4 ✅ Alerta de aumento progressivo — entregue
+
+`analytics.alerta_progressivo` MV detecta (cnpj+cd_tce+cluster) com
+mediana crescendo >1.2× em cada um dos 3 últimos trimestres
+consecutivos. 7 alertas reais já detectados (medicamentos/merenda
+escalando 5-39×).
+
+### 19.5 ❌ Cross INEP/IDEB — PENDENTE (ADR-006 esboçado)
+
+ADR-006 documenta schema completo (`ideb_municipio`,
+`matriculas_municipio`), MV proposta (`gasto_educacional_municipio`
+com `gasto_por_aluno`), limites conhecidos (IDEB bienal,
+causalidade≠correlação) e caminho de implementação.
+
+**Para implementar (~2 dias):**
+
+1. **L.19.5.a (4h):** `scripts/load_ideb.py` baixa CSV INEP do
+   último biênio publicado. Schema em ADR-006.
+2. **L.19.5.b (4h):** `scripts/load_matriculas.py` análogo.
+3. **L.19.5.c (2h):** `sql/0NN_ideb_cross.sql` com schema + MV
+   `gasto_educacional_municipio` (do ADR-006).
+4. **L.19.5.d (4h):** endpoint
+   `/comparar/educacional?cd_ibge=X&cluster=merenda_escolar`
+   + página `/comparar/educacional` no frontend. Modal "como
+   interpretar" (similar /metodologia) alertando causalidade ≠
+   correlação.
+
+**Aceite:**
+- Tabela com top/bottom municípios por `gasto_por_aluno` no cluster
+  selecionado, com IDEB do mesmo ano (ou ano mais próximo
+  disponível) ao lado.
+- Aviso explícito de que dado IDEB é bienal e pode estar 1-2 anos
+  atrasado vs gasto.
+- Botão "exportar CSV" como nos outros endpoints (CC-BY 4.0).
+
+**Restrição:** não publicar manchete algorítmica sobre cruzamento
+educacional sem revisão jurídica (causalidade inferida pode gerar
+difamação institucional). Manter como ferramenta de consulta.
+
+### 19.6 ❌ Alerta de dispensa emergencial repetida — PENDENTE
+
+**Hipótese:** combinação `(fornecedor_cnpj + orgao_codigo)` com ≥3
+contratos em modalidade `dispensa` nos últimos 12 meses é sinal de
+"dispensa emergencial recorrente" — caso clássico de captura de
+fornecedor. Análise externa P3 mencionou explicitamente.
+
+**Para implementar (~2-4h):**
+
+1. **L.19.6.a (1h):** `sql/0NN_alerta_dispensa.sql` com MV
+   `analytics.alerta_dispensa_repetida`:
+   ```sql
+   CREATE MATERIALIZED VIEW analytics.alerta_dispensa_repetida AS
+   SELECT
+       rc.fornecedor_cnpj,
+       MAX(rc.fornecedor_nome) AS fornecedor_nome,
+       rc.orgao_codigo,
+       MAX(rc.orgao_nome) AS orgao_nome,
+       rc.raw_payload->>'cd_tce' AS cd_tce,
+       COUNT(*) AS n_dispensas_12m,
+       SUM(rc.valor_total) AS valor_total_dispensas,
+       MIN(rc.contract_date) AS primeira,
+       MAX(rc.contract_date) AS ultima
+   FROM raw.compras rc
+   JOIN analytics.fornecedor f ON f.cnpj = rc.fornecedor_cnpj
+   JOIN analytics.item_canonical ic ON ic.raw_id = rc.id
+   WHERE rc.source = 'tce_pr/contrato'
+     AND rc.modalidade = 'dispensa'
+     AND rc.contract_date >= NOW() - INTERVAL '12 months'
+     AND f.tipo_juridico = 'PJ'
+     AND ic.eliminada_em IS NULL
+   GROUP BY rc.fornecedor_cnpj, rc.orgao_codigo,
+            rc.raw_payload->>'cd_tce'
+   HAVING COUNT(*) >= 3;
+   ```
+2. **L.19.6.b (1h):** endpoint `/alertas/dispensa-repetida` +
+   CSV equivalente.
+3. **L.19.6.c (1h):** integração em `/manchetes` (terceira aba ou
+   link) e `/fornecedor/[cnpj]` (banner se aparece).
+
+**Aceite:**
+- MV refresh roda em `analytics.build_marts` semanal.
+- Endpoint público lista (cnpj, órgão, município, n_dispensas,
+  valor_total) ordenado por n_dispensas DESC.
+- Defesa em camadas L.1 (tombstones) + L.2 (PJ) aplicada na origem
+  como em §19.4.
+
+**Limite conhecido:** 3 dispensas em 12 meses pode ter explicação
+legítima (calamidade, especialização técnica). UI precisa de
+disclaimer "não implica irregularidade" — reusa
+`<DisclaimerOrigem>` (L.11).
+
+### 19.7 ❌ Métrica per capita first-class — PENDENTE
+
+`analytics.municipio_pr` já tem `populacao` (IBGE Censo 2022, 396
+municípios cobertos). Falta apresentar como métrica primária em vez
+de só como badge.
+
+**Para implementar (~2-4h):**
+
+1. **L.19.7.a (1h):** view ou função SQL
+   `analytics.mart_gasto_per_capita`:
+   ```sql
+   CREATE MATERIALIZED VIEW analytics.mart_gasto_per_capita AS
+   SELECT
+       mp.cd_ibge,
+       mp.nome AS municipio,
+       mp.porte,
+       mp.populacao,
+       ic.cluster_id,
+       COUNT(*) AS n_contratos,
+       SUM(rc.valor_total) AS gasto_total,
+       (SUM(rc.valor_total) / NULLIF(mp.populacao, 0))::numeric(20,2)
+           AS gasto_per_capita
+   FROM raw.compras rc
+   JOIN analytics.item_canonical ic ON ic.raw_id = rc.id
+   JOIN analytics.municipio_pr mp
+       ON mp.cd_tce = rc.raw_payload->>'cd_tce'
+   WHERE rc.source = 'tce_pr/contrato'
+     AND ic.eliminada_em IS NULL
+     AND mp.populacao IS NOT NULL
+   GROUP BY mp.cd_ibge, mp.nome, mp.porte, mp.populacao, ic.cluster_id;
+   ```
+2. **L.19.7.b (30min):** endpoint
+   `/tce-pr/per-capita?cluster=X&porte=Y&order=desc&limit=N` retorna
+   ranking. CSV equivalente.
+3. **L.19.7.c (2h):** UI em `/comparar` adiciona coluna
+   "R$/habitante" ao lado da mediana. Página `/municipio/[cd_tce]`
+   ganha card "Gasto per capita por cluster". Manchete pode
+   incorporar quando `gasto_per_capita >> mediana_porte`.
+
+**Aceite:**
+- Endpoint devolve gastos per capita comparáveis entre municípios
+  de mesmo porte.
+- UI deixa claro que população é IBGE 2022 (data fixa).
+- Manchete algorítmica pode opcionalmente filtrar por
+  `gasto_per_capita_acima_mediana_porte` (novo critério em YAML
+  manchete_v2).
+
+**Limite conhecido:** Censo 2022 envelhece; refresh exige IBGE
+publicar Censo 2030 ou estimativas anuais TCU. Manter `populacao`
+versionada por ano em coluna separada quando vier nova edição.
+
+### 19.8 ❌ Adapters outros tipos PIT — PENDENTE
+
+5 tipos restantes (Convenio, Despesa, Combustivel, Diarias, Receita)
+seguem o mesmo pattern de §19.1.b: investigação preliminar
+(inventariar XML) + adapter + schema canônico + MV + endpoints.
+
+**Ordem recomendada por impacto cívico:**
+
+1. **Despesa.zip** (1-2d) — granularidade empenhada/liquidada/paga
+   por categoria orçamentária. Resolve crítica frequente de "só
+   vemos contrato, não o fluxo da despesa".
+2. **Convenio.zip** (1-2d) — convênios municipais que envolvem
+   transferência condicionada. Pode ter sobreposição com contratos.
+3. **Receita.zip** (1d) — lado receita habilita comparações
+   "qual cidade arrecada mais ISS per capita". Complementa §19.7.
+4. **Combustivel.zip** (1d) — granular por veículo/órgão; permite
+   detectar consumo anômalo. Sub-set específico de despesa.
+5. **Diarias.zip** (1d) — **avaliar LGPD antes** — diária de
+   servidor é dado pessoal (CPF mascarado pelo TCE mas nome do
+   servidor pode aparecer). Pode requerer mascaramento similar a
+   L.2 (default deny por padrão).
+
+**Aceite por adapter:**
+- Investigação XML documentada em ADR próprio (ex: ADR-009 Despesa).
+- Schema canônico + tabela `raw.{tipo}` + `analytics.{tipo}_canonical`
+  + ≥1 MV agregada.
+- Endpoint público + CSV equivalente.
+- Defesas LGPD reaplicadas.
+
+### 19.9 ❌ Prazo previsto vs real — PENDENTE
+
+`raw.compras.raw_payload` já tem `dt_inicio` e `dt_fim` em todos os
+156k contratos (verificado via `jsonb_object_keys` em 2026-05-11).
+Falta promover a colunas dedicadas + métrica de atraso.
+
+**Para implementar (~4-6h):**
+
+1. **L.19.9.a (1h):** `sql/0NN_prazo_contrato.sql`:
+   ```sql
+   ALTER TABLE raw.compras
+       ADD COLUMN IF NOT EXISTS dt_inicio_previsto DATE,
+       ADD COLUMN IF NOT EXISTS dt_fim_previsto DATE;
+   UPDATE raw.compras
+      SET dt_inicio_previsto = (raw_payload->>'dt_inicio')::date,
+          dt_fim_previsto = (raw_payload->>'dt_fim')::date
+    WHERE source = 'tce_pr/contrato'
+      AND (dt_inicio_previsto IS NULL OR dt_fim_previsto IS NULL);
+   CREATE INDEX idx_compras_prazo
+       ON raw.compras (dt_fim_previsto)
+       WHERE source = 'tce_pr/contrato' AND dt_fim_previsto IS NOT NULL;
+   ```
+2. **L.19.9.b (1h):** atualizar adapter `src/ingest/tce_pr.py` para
+   popular as colunas em ingestões futuras (não só backfill).
+3. **L.19.9.c (1-2h):** `analytics.mart_contratos_vigentes` que
+   classifica `vigente` / `encerrado` / `em_atraso`
+   (`dt_fim_previsto < NOW()` e nenhum termo de encerramento — TCE
+   não publica termo de encerramento estruturado, então é proxy).
+4. **L.19.9.d (1-2h):** UI em `/contrato/[id]` mostra prazo previsto
+   + status. `/fornecedor/[cnpj]` ganha aba "Contratos em atraso".
+
+**Aceite:**
+- Colunas `dt_inicio_previsto` e `dt_fim_previsto` populadas em
+  ≥95% dos contratos TCE-PR.
+- Endpoint `/contratos/atrasados?orgao_codigo=X` lista contratos
+  vigentes que passaram do prazo.
+- Manchete pode usar "% de contratos em atraso por município" como
+  critério v2.
+
+**Limite conhecido:** "em atraso" é proxy — TCE-PR não publica termo
+de encerramento estruturado. Contrato pode ter sido encerrado de
+fato sem o sinal aparecer no PIT.
+
+### 19.X Ordem de execução recomendada (custo crescente × impacto cívico)
+
+1. **§19.7 Per capita** (2-4h) — usa dado já carregado; primeira
+   métrica que a análise externa P4 pediu; baixo risco.
+2. **§19.6 Dispensa repetida** (2-4h) — espelha pattern §19.4 que
+   já funciona; entrega P3 "contratos emergenciais repetidos".
+3. **§19.9 Prazo previsto vs real** (4-6h) — usa dado já no
+   `raw_payload`; entrega parte de P1 "prazo real vs previsto".
+4. **§19.1.b Adapter Obra.zip** (1-2d) — descoberta importante de
+   2026-05-11; entrega maior parte de P1 (empresa, valor, prazo,
+   talvez aditivo).
+5. **§19.5 INEP/IDEB cross** (2d) — ADR-006 pronto; entrega P4
+   "gasto por aluno × IDEB" que é o exemplo central da análise.
+6. **§19.8 outros adapters PIT** (5-10d) — sequência separada,
+   começando por Despesa.zip.
+
+**Total para fechar P1+P3+P4 da análise externa:** ~5-8 dias úteis
+(itens 1-5).
+
+### 19.10 O que NÃO entra no roadmap (e por quê)
 
 Análise externa sugeriu várias features que ficam deliberadamente fora:
 
 | Sugestão da análise | Razão de não fazer |
 |---|---|
-| Folha de servidores, cargo, lotação, remuneração | LGPD ruim, dado pessoal não-mascarado, já coberto pelo Portal da Transparência federal. PLANO §6.5 + Wave LGPD L.2 documentam. |
+| Folha de servidores (cargo, lotação, remuneração) | LGPD ruim, dado pessoal não-mascarado, já coberto pelo Portal da Transparência federal. PLANO §6.5 + Wave LGPD L.2 documentam. |
 | Transferências federais União→Estado→Município | SICONFI/Tesouro Nacional já faz; preferir contribuir lá (memória `project_transparencia` — preferência por contribuir em OSS existente). |
 | Emendas parlamentares municipais com vereador associado | TCE-PR PIT não cruza contrato com vereador. Fontes municipais fragmentadas, ROI incerto. |
-| Modo "Fiscalize seu bairro" (CEP/bairro/rua) | TCE-PR PIT não traz georreferência estruturada. Querido Diário pode ajudar mas é busca textual. Deferido. |
+| Modo "Fiscalize seu bairro" (CEP/bairro/rua) | TCE-PR PIT não traz georreferência estruturada. Querido Diário pode ajudar mas é busca textual. Deferido até ter fonte estruturada. |
 | Vínculos políticos de fornecedores | Sem fonte estruturada + risco alto de difamação por inferência. Manchetes algorítmicas (§15) explicitamente NÃO publicam sobre fornecedor por esse motivo. |
-| Alertas por e-mail / notificações push | Plataforma stateless por design (sem login). RSS/Atom (§19.2) substitui parcialmente. |
+| Alertas por e-mail / notificações push | Plataforma stateless por design (sem login). RSS/Atom (§19.2) substitui parcialmente. Considerar quando houver instituição-âncora L.14. |
+| Mapa / fotos / cronograma físico de obras | TCE-PR não publica estes dados estruturados. Dependeria de scraping de portais municipais (fragmentado, ToS variado, alto custo de manutenção). Não fazer agora. |
+| Canal de denúncia integrado com MP/Tribunais | Escopo de governança que requer parceria institucional (L.14). Plataforma já fornece o ticket auditável (L.12) — integração formal vem depois. |
+| Anexar fotos em denúncia/ticket | Custo de storage + moderação + verificação. Considerar pós-L.14 (instituição-âncora). |
 
 ---
 
 ## 14. Changelog
+
+**v5.11 (2026-05-11)** — Roadmap §19 expandido para 10 sub-itens com tudo documentado:
+- Resposta a "documentar tudo para implementação futura" — registro detalhado de cada gap pendente para que sessão futura (mesmo com outro mantenedor/modelo) consiga executar sem perguntar.
+- **§19.0 visão geral** — tabela única com 10 itens (status + custo).
+- **§19.1.b expandida** — 6 passos detalhados pra adapter Obra.zip: investigação (4h), adapter (6-8h), schema canônico (2-4h), MV (2-4h), endpoint+frontend (4-8h), defesas LGPD. Total 1-2 dias úteis. Aceite explícito com lista do que é entregável vs não-entregável (TCE-PR não tem fotos/mapa). Risco de aborto documentado.
+- **§19.5 expandida** — 4 sub-tarefas L.19.5.a-d com custos individuais. Total ~2 dias.
+- **§19.6 nova** — Alerta de dispensa emergencial repetida. SQL completo da MV documentado inline (3 dispensas em 12 meses no mesmo CNPJ+órgão). 2-4h. Aceite + limite conhecido.
+- **§19.7 nova** — Métrica per capita first-class. SQL da MV `mart_gasto_per_capita` documentado inline. Usa `analytics.municipio_pr.populacao` (IBGE 2022) já carregado em 396 municípios. 2-4h.
+- **§19.8 nova** — Adapters dos 5 tipos restantes do PIT (Despesa, Convenio, Receita, Combustivel, Diarias), com ordem por impacto cívico e nota de avaliar LGPD em Diarias antes (dado pessoal). 5-10d total.
+- **§19.9 nova** — Prazo previsto vs real usando `dt_inicio`/`dt_fim` já presentes em `raw_payload` (verificado via `jsonb_object_keys`). ALTER TABLE + backfill + `mart_contratos_vigentes`. 4-6h. Limite "em atraso" é proxy documentado.
+- **§19.X ordem de execução recomendada** — 6 itens em sequência custo×impacto crescente. Total ~5-8d pra fechar P1+P3+P4 da análise externa.
+- **§19.10 expandida** — 9 features deliberadamente fora (vs 6 antes), com razão registrada para cada. Inclui novas: mapa/fotos/cronograma físico, canal denúncia integrado com MP, anexar fotos em ticket.
 
 **v5.10 (2026-05-11)** — Roadmap §19 (resposta a análise externa de produto):
 - Cross-check de análise externa de produto identificou que ~60% das features sugeridas já estavam entregues, ~15% deliberadamente fora de escopo, ~25% legítimas. Filtramos 5 com custo/impacto defensável.

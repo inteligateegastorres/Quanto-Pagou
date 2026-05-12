@@ -181,7 +181,7 @@ Pronto:
   críticas) + `docs/architecture/THREAT_MODEL.md` (STRIDE com riscos
   conhecidos), Sentry condicional em `src/api/main.py` (inicializa
   apenas se `SENTRY_DSN_API` setado).
-- **Roadmap §19 — extensões de produto** (v5.10):
+- **Roadmap §19 — extensões de produto** (v5.10–v5.11):
   - **RSS/Atom feed** das manchetes em
     `GET /manchetes/feed.xml` (cache 30 min, autodiscovery no
     `<head>` de toda página via `metadata.alternates.types`).
@@ -195,9 +195,22 @@ Pronto:
     crescendo >1.2× em cada um dos 3 últimos trimestres consecutivos.
     Endpoint `/alertas/progressivos`. Defesa em camadas L.1+L.2
     aplicada na origem.
-  - **INEP/IDEB cross** documentado em ADR-006 (esboço de schema +
-    MV; implementação ~2d). Adapter `Obra.zip` do TCE-PR também
-    documentado como §19.1.b pendente.
+  - **6 itens pendentes documentados em detalhe** em PLANO §19 para
+    sessões futuras (com SQL inline, custo por sub-tarefa, aceite
+    explícito):
+    §19.1.b adapter `Obra.zip` (1-2d),
+    §19.5 cross INEP/IDEB (2d, ADR-006),
+    §19.6 alerta dispensa emergencial repetida (2-4h),
+    §19.7 métrica per capita first-class (2-4h),
+    §19.8 adapters dos 5 tipos restantes do PIT (Despesa, Convenio,
+    Receita, Combustivel, Diarias — 5-10d),
+    §19.9 prazo previsto vs real usando dt_inicio/dt_fim já no
+    raw_payload (4-6h).
+  - **Decisões de escopo registradas** (ADR-006 e ADR-007 + §19.10):
+    fotos/mapa/cronograma físico de obras NÃO vêm do TCE-PR — não
+    fabricar; folha de servidores, transferências federais e
+    vínculos políticos ficam fora; e-mail/push fica fora por
+    design stateless.
 - **Política de retenção** (PLANO §18 L.9.a): `docs/legal/RETENCAO.md`
   v1 com prazos por camada (raw imutável, audit_log 5 anos,
   manchetes 2 anos, MVs sem retenção, raw_payload 90d após

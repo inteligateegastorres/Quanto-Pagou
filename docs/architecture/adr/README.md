@@ -26,6 +26,7 @@ Formato inspirado em [Michael Nygard, 2011](https://cognitect.com/blog/2011/11/1
 | [004](./ADR-004-ticket-auditavel-correcoes.md) | Ticket auditável `QP-AAAA-XXXX` para correções (L.12/L.13) | Aceito |
 | [005](./ADR-005-dual-licensing.md) | Dual licensing — AGPL-3.0 código + CC-BY 4.0 dados | Aceito |
 | [006](./ADR-006-cross-ineps-ideb.md) | Cross com INEP/IDEB (gasto educacional × desempenho) | Proposto |
+| [007](./ADR-007-rastreamento-obras.md) | Rastreamento de obras — escopo e limites (P1 da análise externa) | Aceito (decisão de escopo) |
 
 ## Threat model
 
