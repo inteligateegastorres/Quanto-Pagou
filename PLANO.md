@@ -2,17 +2,15 @@
 
 > Plataforma cívica para monitorar gastos públicos brasileiros e identificar possíveis desvios.
 
-**Versão:** v5.11 (2026-05-11)
-**Status:** v5 + manchetes algorítmicas + Wave A (higiene) completa +
-Wave B (estrutura) parcial + Wave LGPD avançada (§18): 11 itens
-implementados + hardening pós-análise-externa (Dependabot, gitleaks,
-ADRs, Sentry prep) + Roadmap §19 expandido para 10 sub-itens (4
-entregues: RSS, CSV, alerta progressivo, ADR-006 esboço; 6 documentados
-em detalhe para sessões futuras: adapter Obra, INEP/IDEB, dispensa
-repetida, per capita first-class, adapters PIT restantes, prazo
-previsto vs real). **Restam para go-live público:** L.3 (LIA), L.4
-(RIPD), L.8 (subprocessadores), L.14 (instituição-âncora), L.15
-(revisor jurídico). Ver §18.3.
+**Versão:** v5.12 (2026-05-11)
+**Status:** v5 + manchetes algorítmicas + Wave A completa + Wave B
+parcial + Wave LGPD avançada (§18, 11 itens) + hardening (Dependabot,
+gitleaks, ADRs, Sentry) + §19 (10 sub-itens, 4 entregues + 6
+documentados) + **§20 camada cognitiva (proposta documentada com
+riscos item-por-item; nada implementado — decisão pendente)**.
+**Restam para go-live público:** L.3 (LIA), L.4 (RIPD), L.8
+(subprocessadores), L.14 (instituição-âncora), L.15 (revisor
+jurídico). Ver §18.3.
 
 ---
 
@@ -1778,7 +1776,328 @@ Análise externa sugeriu várias features que ficam deliberadamente fora:
 
 ---
 
+## 20. Camada cognitiva — embeddings, RAG cívico e seus limites
+
+**Status:** Roadmap futuro, não implementado. Documentação preventiva
+para guiar decisões quando o tópico voltar a ser proposto.
+**Data:** 2026-05-11
+**ADR relacionado:** [ADR-008](docs/architecture/adr/ADR-008-uso-de-ia-generativa.md)
+
+Resposta a proposta de 2026-05-11 sobre usar **RAG (Retrieval-Augmented
+Generation)** para transformar o projeto de "consulta de dados" em
+"assistente investigativo cidadão". Concordamos com a tese central
+("quanto foi pago" → "gasto gerou resultado"), mas o caminho honesto
+**não é RAG generalista** — é uma camada cognitiva limitada, com
+regras claras de zona e gates de instituição-âncora.
+
+### 20.0 Princípios fundadores
+
+1. **IA é complemento ao ETL estruturado, não substituto.** Métricas,
+   rankings e agregações continuam em SQL/OLAP. RAG NÃO faz cálculo
+   financeiro.
+2. **Reprodutibilidade auditável é não-negociável.** Manchetes
+   algorítmicas (§15) têm `parametros_hash`; qualquer pessoa
+   reproduz. RAG não tem esse luxo nativo — toda saída precisa de
+   versão de modelo + hash de prompt + fontes citadas registradas.
+3. **Humano na cadeia em zona amarela** (ver §20.1). Zona vermelha
+   é proibida.
+4. **LGPD invalida índice vetorial:** tombstone (L.1) precisa
+   propagar pra qualquer embedding indexado. Sem isso, eliminação
+   por solicitação do titular vira ineficaz.
+5. **Sem instituição-âncora (L.14), só Fase A é financeiramente
+   sustentável.** LLM inference em escala (cidadão perguntando o
+   dia inteiro) é insustentável sem orçamento garantido.
+6. **Manchete algorítmica §15 NÃO publica sobre fornecedor por
+   risco de difamação por inferência.** RAG cívico que diz
+   "essa empresa é suspeita" é EXATAMENTE o que evitamos. Princípio
+   transferido literalmente para a camada cognitiva.
+
+### 20.1 Três zonas — verde, amarelo, vermelho
+
+**Zona verde — baixo risco, alto valor (implementável agora):**
+
+| Caso | Razão de ser verde |
+|---|---|
+| **Glossário cidadão** ("o que é inexigibilidade?") | Resposta determinística sobre lei pública; auditável contra texto fonte. LLM nem é estritamente necessário — glossário YAML curado serve. |
+| **Tier 2 — embeddings em `dsObjeto`** (sentence-transformers + HDBSCAN) | Sem LLM, sem alucinação. Já é Fase 2+ do PLANO original. Resolve "busca semântica" sem riscos. |
+| **Resumo de documento longo** (relatório TCE 400 páginas) | **Rascunho para jornalista revisar**, não publicado. Saída privada. |
+| **Busca semântica em diários oficiais** (Querido Diário já consumido) | Retorna trechos literais com citação da fonte; LLM opcional só pra ranking. |
+
+**Zona amarela — médio risco, valor condicional (apenas pós-L.14):**
+
+| Caso | Por que precisa humano |
+|---|---|
+| **Cruzamento "obra paralisada × diário oficial × auditoria TCE"** | Cadeia inferida pode misturar empresas com nomes parecidos; risco de imputação errada. Útil como **dica investigativa privada** para parceiro jornalístico, não banner público. |
+| **Linha investigativa para vereador/jornalista** | Mesmo padrão — assistente subdomínio autenticado `/lab`, não rota pública. |
+| **"Resumo da semana das manchetes em linguagem cidadã"** | Saída pode ser publicada SE: revisor humano lê antes + fontes citadas + assinada como "boletim, não verdade automatizada". |
+
+**Restrição não-negociável para zona amarela:**
+
+- Versão do modelo + hash do prompt + temperatura registrados.
+- Lista de fontes citadas com `raw_id` ou link permanente.
+- Marca clara "GERADO POR IA — verificar antes de publicar" na UI.
+- Caminho de feedback (correção do que está errado vira retrieval
+  melhor depois).
+- Tombstone L.1 invalida índice vetorial — eliminação propaga
+  upstream e ao cache.
+
+**Zona vermelha — alto dano, proibida:**
+
+| Caso | Por que vermelha |
+|---|---|
+| **"Essa empresa é suspeita?"** com resposta direta | Manchetes §15 já decidiram explicitamente não publicar sobre fornecedor. RAG faria o mesmo dano com pior auditoria. |
+| **"Sócio mencionado em CPI"** | Cadeia que requer precisão jurídica. LLM alucina sócios/CPF com volume. |
+| **Conclusão tipo "isso é irregular"** | Só TCE/MP/Judiciário pode dizer. Já registrado em `data/PRIVACY.md` §4. |
+| **RAG sobre `correcao_ticket.contato_email`** | LGPD direto. Campo nunca sai do banco (L.12). |
+| **Geração de "índice de risco do fornecedor X"** | Substituiria sub-scores decomponíveis (memória `feedback_produto_legal`) por número opaco. Decisão automatizada de impacto sobre titular = LGPD art. 20 + risco difamação. |
+
+### 20.2 Arquitetura conceitual (3 camadas)
+
+```
++---------------------------------------------------+
+| Camada 3: RAG cívico (LLM)            Fases B/C/D |
+| - Glossário (verde)                               |
+| - Assistente jornalístico privado (amarelo)       |
+|                                                   |
+| Não publicar conclusão automática.                |
++---------------------------------------------------+
+                       ↑
++---------------------------------------------------+
+| Camada 2: Vetorial (pgvector)         Fase A      |
+| - Embeddings de dsObjeto (Tier 2)                 |
+| - Embeddings de diários oficiais (Querido Diário) |
+| - Embeddings de descrições de obras (pós-§19.1.b) |
++---------------------------------------------------+
+                       ↑
++---------------------------------------------------+
+| Camada 1: ETL estruturado (PostgreSQL)  já existe |
+| - raw.compras, item_canonical, marts, manchetes   |
+| - analytics.audit_log, eliminacao, fornecedor     |
+| - Defesa em camadas L.1/L.2/L.10                  |
++---------------------------------------------------+
+```
+
+Stack proposto: **pgvector** (extensão Postgres — sem novo serviço),
+**sentence-transformers** com **BERTimbau base** ou **multilingual-e5**
+(roda em CPU sem GPU), **opcional Llama/Qwen 7B local** para Fase B/C.
+
+### 20.3 Fases de implementação
+
+#### Fase A — Tier 2 embeddings sem LLM (~2-3 semanas, baixo custo)
+
+Entrega 70% do valor de busca semântica **sem** alucinação:
+
+1. **A.1 (4h):** pgvector extension + tabela
+   `analytics.embedding_dsobjeto` (raw_id, vector(384), modelo_id,
+   atualizado_em).
+2. **A.2 (1-2d):** script `scripts/build_embeddings_dsobjeto.py` —
+   gera embedding de cada `descricao` em `raw.compras` usando
+   sentence-transformers (modelo: `intfloat/multilingual-e5-small`
+   ou `neuralmind/bert-base-portuguese-cased`). CPU OK.
+3. **A.3 (4h):** endpoint `/buscar/semantico?q=combustivel%20diesel`
+   — embedding da query + cosine similarity em pgvector. Retorna
+   top-N raw_ids com score.
+4. **A.4 (2-3d):** HDBSCAN sobre os embeddings de **quarentena**
+   (50k+ contratos sem cluster keyword). Detecta clusters
+   emergentes não previstos no `config/cluster_keywords.yaml`.
+   Output: PR no YAML com novos clusters propostos para revisão
+   humana. Resolve parte da pendência crônica de cobertura 34%.
+5. **A.5 (4h):** UI em `/buscar` com toggle "busca exata / semântica".
+   Aviso explícito de método.
+6. **A.6 (defesa):** tombstone L.1 invalida row em
+   `analytics.embedding_dsobjeto` via trigger ON DELETE.
+
+**Custo de inferência:** zero em produção. Embedding gerado uma vez
+por contrato; query embedding é um único pass de CPU (~50ms para
+e5-small).
+
+#### Fase B — Glossário cidadão (~1 semana, custo zero)
+
+1. **B.1 (1d):** `config/glossario.yaml` curado com ~30-50 termos
+   (inexigibilidade, dispensa, restos a pagar, empenho, liquidação,
+   pregão, SRP, aditivo quantitativo, etc).
+2. **B.2 (4h):** componente `<TermoTooltip term="inexigibilidade">`
+   em React. Hover/clique exibe definição + link pra fonte legal.
+3. **B.3 (4h):** rota `/glossario` listando tudo. Auto-link em
+   páginas (descricao do contrato cita "dispensa" → linka).
+4. **B.4 (opcional, +1d):** LLM pequeno local responde perguntas
+   livres CONSULTANDO o glossário. Marcado "GERADO POR IA — confira
+   no /glossario".
+
+#### Fase C — Assistente jornalístico privado (BLOQUEADA até L.14)
+
+**Gate explícito:** não começar sem **L.14 (instituição-âncora
+confirmada)** + **L.15 (revisor jurídico independente)** + **Wave
+C.4 (Cloudflare na frente)** + **orçamento de inferência garantido**.
+
+Se gate passar:
+
+1. **C.1 (~3d):** indexação Querido Diário (PDFs públicos
+   municipais) em pgvector via OCR + chunking + embeddings.
+2. **C.2 (~2d):** subdomínio autenticado `lab.quantopagou.org`
+   para parceiros credenciados (jornalistas, vereadores, instituição
+   âncora). Auth simples (email allowlist; sem PII de visitante).
+3. **C.3 (~2d):** pipeline RAG completo — retrieval + ranking +
+   geração com Llama 8B / Qwen 7B (local em GPU ou via Groq/Together
+   se houver verba) + citação obrigatória de fontes.
+4. **C.4 (~2d):** UI de feedback (resposta correta/incorreta →
+   melhora retrieval com fine-tune leve).
+5. **C.5:** auditoria interna mensal — amostra aleatória de queries
+   + saídas revisada por humano; métricas de alucinação publicadas.
+
+#### Fase D — Zona vermelha, **NUNCA**
+
+Não fazer publicação automática de conclusão sobre fornecedor,
+sócio, irregularidade ou imputação. Sem exceção.
+
+### 20.4 Dependências e gates
+
+| Fase | Bloqueante | Por quê |
+|---|---|---|
+| A | Nenhum | pgvector é grátis; sentence-transformers roda em CPU; sem risco de difamação porque não usa LLM. |
+| B | Recomendado após Fase A (mas independente) | Glossário curado é texto; pode ser feito em paralelo. |
+| C | **L.14 + L.15 + Wave C.4 + orçamento de inferência** | Sem instituição-âncora não temos quem revise saída; sem revisor jurídico não temos cobertura de risco; sem rate-limit qualquer scrape derruba; sem orçamento LLM API engole margem. |
+| D | Para sempre | Limite ético. |
+
+### 20.5 Riscos conhecidos e mitigações
+
+| Risco | Mitigação |
+|---|---|
+| **Alucinação** | Fontes citadas obrigatórias + marca "IA — verificar"; nunca publicar como verdade automática. |
+| **Difamação por inferência** | Zona vermelha proibida; manchetes §15 já documenta esse princípio. |
+| **Custo de inference em produção pública** | Fase A roda em CPU sem LLM. Fase C exige orçamento garantido. |
+| **LGPD: eliminação não propaga** | Trigger ON DELETE em `raw.compras` invalida embedding. Tombstone (L.1) testado com refresh do índice. |
+| **Reprodutibilidade** | Hash de prompt + versão de modelo registrados em cada resposta da Fase C; auditoria pública mensal. |
+| **OCR ruim de PDFs municipais** | Não tentar Fase C sem investimento dedicado em OCR (Tesseract + pós-processamento). Custo de manutenção pode exceder benefício. |
+| **Drift de modelo (cliente novo, resposta diferente)** | Lock de modelo + versão no `config/rag_v1.yaml`; mudança de modelo gera nova entrada no audit log e re-revisão de exemplares. |
+
+### 20.6 O que aprendemos de projetos similares
+
+| Projeto | Lição transferível |
+|---|---|
+| **Operação Serenata / Rosie** | "Não publica conclusão — só sinaliza, jornalista revisa." Padrão de zona amarela com humano na cadeia. Foi sustentável; Quanto Pagou pode replicar. |
+| **JusBrasil** | Processo ANPD por republicar dado público de processos sem cuidado com PD. Lição: dado público não desativa LGPD (Art. 7º §3º). |
+| **Escavador** | Idem. Agregação de PD a partir de fontes públicas vira tratamento novo sob LGPD. |
+| **OpenAI ChatGPT em portais municipais** | Vários casos de alucinação de dados financeiros publicados como fato. Lição: zona vermelha existe por razão. |
+
+### 20.7 Custos estimados (cenário sem instituição-âncora)
+
+| Fase | Infra | Inferência | Manutenção |
+|---|---|---|---|
+| **A** | pgvector (grátis na Supabase free tier até ~200MB) | Zero (CPU local) | Baixa — embedding regenera só em ingest semanal |
+| **B** | Zero | Opcional (Llama local CPU funciona) | Baixa — YAML curado |
+| **C** | GPU ou API LLM (~US$ 50-200/mês conservador) | US$ 100-500/mês conservador | Alta — OCR + revisão humana |
+| **D** | N/A | N/A | N/A |
+
+Fase A e B cabem no orçamento atual. Fase C requer financiamento
+externo (L.14).
+
+### 20.8 O que NÃO entra nesta camada (e por quê)
+
+| Sugestão | Razão de não fazer |
+|---|---|
+| **"Índice de risco do fornecedor" gerado por LLM** | Substituiria sub-scores decomponíveis (`feedback_produto_legal`) por número opaco. Decisão automatizada de impacto = LGPD art. 20 + difamação. |
+| **RAG sobre dado pessoal de tickets** | LGPD direto. Reportador escolhe se quer publicar descrição (L.12); contato_email nunca sai. |
+| **Auto-geração de notícia/manchete via LLM publicada direto** | Manchetes §15 já são algorítmicas com `parametros_hash`. Substituir por LLM piora auditoria. |
+| **Chatbot público "tipo ChatGPT da prefeitura"** | Custo de inference incontrolável + zona vermelha por padrão. |
+| **Análise de "vínculos políticos" de fornecedor via LLM** | Já registrado em §19.10 como fora de escopo geral; não muda com camada cognitiva. |
+
+### 20.9 Sequência recomendada quando alguém disser "vamos usar IA"
+
+Resposta defensável para próxima análise externa que dirá "vocês
+deveriam usar IA pra tudo":
+
+1. **Mostrar §20.1** — três zonas com casos e razões.
+2. **Apontar §20.4** — gates explícitos para Fase C.
+3. **Citar §20.6** — lições de quem fez errado.
+4. **Oferecer Fase A** como caminho concreto se houver tempo de
+   desenvolvimento dedicado (~2-3 semanas).
+
+### 20.10 Riscos item-por-item (para discussão antes da decisão)
+
+Cada sub-item das fases A/B/C abaixo com **risco específico** que vai
+além dos riscos gerais §20.5. Lista feita para discussão antes de
+qualquer decisão de implementação — não é decisão final.
+
+**Fase A — Tier 2 embeddings sem LLM**
+
+| Item | Risco específico | Mitigação possível | Questão aberta pra você |
+|---|---|---|---|
+| **A.1** pgvector + tabela embedding_dsobjeto | Inchaço de banco: 156k × 384 dims × 4 bytes = ~240 MiB só pro vetor; mais índice HNSW dobra. Supabase free tier (~500 MiB total) fica apertado. | Migrar pro Supabase Pro (~US$ 25/mês) OU usar modelo menor (e5-small = 384 dims já é compacto; e5-tiny = 256 dims). | Topa pagar Pro ou mantém free tier e usa modelo menor? |
+| **A.2** Geração de embeddings (sentence-transformers) | Modelo escolhido vira **dependência permanente** — trocar depois exige regenerar todos os 156k vetores. Modelo `multilingual-e5-small` é Apache 2.0 (ok); `bert-base-portuguese-cased` é MIT (ok). Mas se o modelo sair do HuggingFace, fica inalcançável. | Versionar modelo no `config/embeddings.yaml`; espelhar arquivo do modelo em R2 (~120 MiB) com snapshot junto dos snapshots de ingestão. | Espelhar modelo no R2 ou aceitar dependência externa do HF? |
+| **A.3** Endpoint `/buscar/semantico` | Custo computacional **por requisição** (CPU encode da query ~50ms). Sem rate-limit, ataque trivial — 1 atacante manda 100 req/s e queima CPU do worker. | Cloudflare Wave C.4 + cache de queries comuns. | Adia Fase A.3 até Wave C.4 ou ativa com rate-limit interno básico? |
+| **A.4** HDBSCAN sobre embeddings de quarentena | **Risco editorial real:** clusters emergentes detectados podem agrupar contratos por padrão espúrio (ex: "fornecedor X" agrupa todos os contratos do mesmo CNPJ — sem revelar nada novo; ou pior, agrupa "contratos com nome de servidor mencionado" — dado pessoal coletado por correlação). | PR no `cluster_keywords.yaml` exige revisão humana antes de merge; nunca aplicar automaticamente. Excluir features que mencionam CPF/nome no agrupamento. | Aceita esse fluxo de "PR sugerido pelo bot, humano revisa"? |
+| **A.5** UI `/buscar` com toggle | Usuário leigo pode interpretar resultado semântico como "exato". Ex: busca "merenda" pode retornar contrato de "lanche escolar" — semanticamente correto, mas pode confundir se ele queria filtrar literal. | Banner explicativo + badge "match semântico" em cada resultado quando vier do toggle semântico. | OK ou prefere fazer rota separada `/buscar/semantico` (sem toggle no mesmo lugar)? |
+| **A.6** Trigger invalida embedding em tombstone L.1 | Trigger AFTER UPDATE em `analytics.item_canonical(eliminada_em)` precisa DELETE em `analytics.embedding_dsobjeto`. Não-trivial: se trigger falhar, embedding vira "fantasma" — `/buscar/semantico` retorna ID que `/contrato/{id}` devolve 410 Gone. Inconsistência confunde usuário. | Testar fluxo completo em smoke test antes do go-live: criar contrato → indexar → eliminar via L.1 → confirmar que sai do retrieval. Wave LGPD §18.A.10 ganha smoke check. | OK adicionar esse smoke à CHECKLIST? |
+
+**Fase B — Glossário cidadão**
+
+| Item | Risco específico | Mitigação possível | Questão aberta pra você |
+|---|---|---|---|
+| **B.1** Glossário YAML curado | Curadoria errada vira **fonte de autoridade falsa**. Ex: definir "inexigibilidade" de jeito impreciso → usuário cita Quanto Pagou em peça processual → você assina embaixo. | Cada termo cita lei/artigo aplicável; modal mostra fonte; aviso "Resumo educativo, não substitui consulta jurídica". | OK ou prefere remeter direto pra LRF/Lei 14.133 sem definição própria? |
+| **B.2** Componente `<TermoTooltip>` em JSX | Auto-link agressivo (replace texto → componente) pode quebrar accessibility ou prejudicar leitura. Tooltip mobile é UX ruim. | Auto-link só em `<strong>` ou primeira ocorrência; modal em vez de tooltip. | OK ou prefere link discreto manual em vez de auto-link? |
+| **B.3** Rota `/glossario` lista completa | Pode virar **vetor de SEO** que distrai do foco do projeto (transparência, não dicionário). | `noindex` na rota; só linkada de páginas internas. | OK ou indexável? |
+| **B.4** LLM local opcional (fallback) | Mesmo modelo "pequeno" pode alucinar. Llama 3 8B responde "inexigibilidade é..." com afirmações erradas com taxa não-zero. | Pular B.4 inteiramente; ficar com glossário YAML. | Toparia B.4 ou corta? |
+
+**Fase C — Assistente jornalístico privado (BLOQUEADA até L.14)**
+
+| Item | Risco específico | Mitigação possível | Questão aberta pra você |
+|---|---|---|---|
+| **C.0 Existir mesmo** | Construir Fase C **assume** que terá L.14 (instituição-âncora) + L.15 (revisor jurídico) + Wave C.4 + orçamento sustentável. Se um cair, Fase C vira passivo (mantenedor único cuidando de algo desenhado pra time). | Documentar como condicional explícita no PLANO. Não começar antes dos 4 gates. | Aceita manter como condicional ou risca completamente até L.14 fechar? |
+| **C.1** Indexar Querido Diário | **OCR de PDFs municipais é péssimo no Brasil.** PDFs escaneados, layouts variados, nomes próprios mal-reconhecidos. RAG sobre OCR ruim = alucinação garantida. | Limitar à busca de trechos literais (não geração); ou investir 4-8 semanas em OCR + revisão manual antes de aceitar índice. | Aceita esse custo ou pular Querido Diário em Fase C? |
+| **C.2** Subdomínio autenticado `/lab` | **Login = LGPD novo:** dado de visitante (email do parceiro), exige base legal + tratamento + DPO formal (não autodeclaração de pequeno porte). | Documento de termos do `/lab` separado, parceria formalizada via L.14. | OK ou prefere mantê-lo sem login (link compartilhado via token expirável)? |
+| **C.3** Pipeline RAG completo com LLM | **Difamação por inferência mais provável aqui:** retrieval pega 2 contratos similares + LLM gera "padrão suspeito de superfaturamento" mesmo sem evidência. | Marca obrigatória "rascunho jornalístico" + nunca publicar saída sem revisor humano + auditoria mensal de amostra de queries. | Topa essa moldura ou considera Fase C inerentemente arriscada demais e prefere skip? |
+| **C.4** UI feedback (corrigir resposta) | Feedback positivo de parceiro mal-intencionado pode "treinar" o sistema a sempre confirmar suspeita sobre fornecedor específico. | Não aplicar feedback diretamente — usar como sinal pra revisão humana mensal. | OK ou corta feedback loop inteiramente? |
+| **C.5** Auditoria mensal pública de queries | Publicar amostra pode vazar **investigação em andamento** de jornalista parceiro. | Auditoria interna (não pública) revisada por L.15 trimestralmente. | OK ou exige auditoria pública total mesmo com risco editorial? |
+
+**Riscos transversais (afetam todas as fases)**
+
+| Risco | Onde aparece | Discussão pendente |
+|---|---|---|
+| **Reprocessabilidade de eliminação L.1** | Toda Fase | Cada índice/cache que tem embedding precisa de path de invalidação. Hoje audit_log L.10 não cobre embedding. Decidir se trigger é suficiente ou exige delete cascade explícito. |
+| **Bus factor da camada cognitiva** | Toda Fase | Mantenedor único + nova stack (pgvector, sentence-transformers, LLM) = manutenção explode. Avaliar se vale entrar antes de L.14. |
+| **Custo de regeneração de embeddings** | Fase A.2, C.1 | Trocar modelo = reindex 156k+ rows; trocar modelo de OCR = re-OCR de N PDFs. Custo pode amarrar projeto a escolha ruim. |
+| **Drift de modelo (publicar com versão X, depois X+1 muda resposta)** | Fase B.4, C.3 | Lock de versão + audit log + comunicado público quando bump for inevitável. Mas usuário pode interpretar "resposta diferente" como "alguém alterou algo escondido". |
+| **Capacidade de revisor jurídico (L.15)** | Fase C | Revisor jurídico revisa Wave LGPD (escopo já grande); somar Fase C exige novo escopo de revisão. Pode inviabilizar se mantenedor único tiver que arcar com fee adicional. |
+
+### 20.11 Pontos para discussão antes de qualquer commit em §20
+
+Lista compactada das decisões abertas, ordenada por momento em que
+precisam ser tomadas:
+
+**Antes de qualquer linha de código:**
+1. Vale a pena Fase A neste momento (com Wave LGPD ainda fechando)?
+2. Espelhar modelos de embedding no R2 ou aceitar dependência HuggingFace?
+3. Supabase free tier ou Pro (US$ 25/mês)?
+4. Quem é o "revisor humano" do PR sugerido pelo bot em A.4?
+
+**Antes de Fase B:**
+5. Glossário com definição própria ou só ponteiro pra lei?
+6. B.4 (LLM local pra perguntas livres) — dentro ou fora?
+
+**Antes de Fase C (bloqueada por L.14):**
+7. Fase C **existe** ou risca-se completamente do PLANO?
+8. Se existe: login formal no `/lab` ou token-link?
+9. Investir em OCR para Querido Diário ou aceitar limite de busca literal?
+10. Auditoria pública total ou trimestral interna revisada por L.15?
+
+**Transversal (sempre relevante):**
+11. Quem cobre o bus factor se a stack crescer (pgvector + ML + LLM)?
+12. Tem orçamento sustentável pra Fase C (LLM inference + OCR + revisor)?
+
+---
+
 ## 14. Changelog
+
+**v5.12 (2026-05-11)** — §20 Camada cognitiva (proposta + riscos para discussão):
+- Resposta a proposta sobre RAG cívico transformar projeto de "consulta de dados" em "assistente investigativo". Concordamos com tese central, mas caminho honesto não é RAG generalista — é camada cognitiva limitada com regras de zona e gates de instituição-âncora.
+- **§20.0 princípios fundadores** — 6 princípios não-negociáveis (IA é complemento ao ETL; reprodutibilidade auditável; humano na cadeia em zona amarela; LGPD invalida índice; gate L.14 pra Fase C; manchetes §15 sobre fornecedor transferido).
+- **§20.1 três zonas** — verde (alto valor, baixo risco — glossário, Tier 2 embeddings, resumo privado), amarela (médio risco — assistente jornalístico privado, gate L.14), vermelha (alto dano — "essa empresa é suspeita?", "sócio em CPI", conclusão jurídica; proibida).
+- **§20.2 arquitetura 3 camadas** — pgvector + sentence-transformers + LLM opcional. Fases A-D mapeadas.
+- **§20.3 fases A-D** com sub-tarefas e custos.
+- **§20.6 lições de projetos similares** — Operação Serenata/Rosie (modelo de zona amarela com humano), JusBrasil/Escavador (processo ANPD por republicar PD), ChatGPT em portais municipais (alucinação publicada como fato).
+- **§20.10 RISCOS ITEM-POR-ITEM PARA DISCUSSÃO** — tabela completa com risco específico + mitigação possível + questão aberta para cada sub-item das Fases A/B/C + 5 riscos transversais.
+- **§20.11 pontos para discussão antes de qualquer commit em §20** — 12 decisões abertas ordenadas por momento (antes de código, antes de Fase B, antes de Fase C, transversal). Lista feita para revisão posterior.
 
 **v5.11 (2026-05-11)** — Roadmap §19 expandido para 10 sub-itens com tudo documentado:
 - Resposta a "documentar tudo para implementação futura" — registro detalhado de cada gap pendente para que sessão futura (mesmo com outro mantenedor/modelo) consiga executar sem perguntar.
