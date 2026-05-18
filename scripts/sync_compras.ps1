@@ -8,12 +8,19 @@
 #
 # Postgres precisa estar no ar (use scripts/dev_up.ps1 para subir).
 #
+# Desde 2026-05-18 (PLANO §19.11): o endpoint /modulo-contratos exige
+# codigoOrgao obrigatorio. O spider agora itera analytics.orgao_federal
+# (esfera=F + status_ativo). Rode `python -m ingest orgaos` antes para
+# popular o cadastro de orgaos (idempotente, ~30s).
+#
 # Uso:
-#   pwsh scripts/sync_compras.ps1                          # ultimos 7 dias
+#   pwsh scripts/sync_compras.ps1                          # ultimos 7 dias, todos orgaos federais
 #   pwsh scripts/sync_compras.ps1 -Days 30                 # ultimos 30 dias
 #   pwsh scripts/sync_compras.ps1 -Start 2026-04-01 -End 2026-04-30
-#   pwsh scripts/sync_compras.ps1 -MaxPages 2              # smoke test
-#   pwsh scripts/sync_compras.ps1 -NoSplit                 # modo legacy (1 tentativa)
+#   pwsh scripts/sync_compras.ps1 -Orgaos "26298,20000"    # so estes orgaos
+#   pwsh scripts/sync_compras.ps1 -OrgaosLimit 5           # smoke test (5 primeiros)
+#   pwsh scripts/sync_compras.ps1 -MaxPages 2              # smoke test (2 paginas por janela)
+#   pwsh scripts/sync_compras.ps1 -NoSplit                 # 1 tentativa por orgao, sem split de data
 #   pwsh scripts/sync_compras.ps1 -MinWindowDays 7         # nao divide abaixo de 7 dias
 #   pwsh scripts/sync_compras.ps1 -SkipBuild               # nao refaz marts
 #
@@ -26,6 +33,8 @@ param(
     [string]$End,
     [int]$PageSize = 500,
     [Nullable[int]]$MaxPages,
+    [string]$Orgaos = "all",
+    [Nullable[int]]$OrgaosLimit,
     [switch]$NoSplit,
     [int]$MinWindowDays = 1,
     [switch]$SkipBuild
@@ -88,8 +97,12 @@ if ($LASTEXITCODE -ne 0) {
 $argsList = @(
     "-m","uv","run","python","-m","ingest",
     $Start, $End,
-    "--page-size", "$PageSize"
+    "--page-size", "$PageSize",
+    "--orgaos", $Orgaos
 )
+if ($null -ne $OrgaosLimit) {
+    $argsList += @("--orgaos-limit", "$OrgaosLimit")
+}
 if ($null -ne $MaxPages) {
     $argsList += @("--max-pages", "$MaxPages")
 }
@@ -101,7 +114,8 @@ if ($NoSplit) {
 
 $totalDays = ($endDate - $startDate).Days + 1
 $splitDesc = if ($NoSplit) { "no-split" } else { "split min=${MinWindowDays}d" }
-$windowDesc = "$Start -> $End (${totalDays}d, page_size=$PageSize, $splitDesc"
+$orgaosDesc = if ($null -ne $OrgaosLimit) { "orgaos=$Orgaos limit=$OrgaosLimit" } else { "orgaos=$Orgaos" }
+$windowDesc = "$Start -> $End (${totalDays}d, page_size=$PageSize, $orgaosDesc, $splitDesc"
 if ($null -ne $MaxPages) { $windowDesc += ", max_pages=$MaxPages" }
 $windowDesc += ")"
 

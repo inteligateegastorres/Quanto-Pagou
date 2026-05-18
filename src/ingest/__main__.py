@@ -20,9 +20,9 @@ from rich.logging import RichHandler
 
 from ingest.compras import (
     DEFAULT_PAGE_SIZE,
-    ingest,
+    ingest_by_orgaos,
     ingest_fixture,
-    ingest_with_split,
+    load_orgaos_ativos_federais,
 )
 from ingest.compras_orgaos import (
     DEFAULT_PAGE_SIZE as ORGAOS_DEFAULT_PAGE_SIZE,
@@ -152,15 +152,31 @@ def main(argv: list[str] | None = None) -> int:
         help="Carrega de JSONL local em vez da API (uso quando upstream esta caido).",
     )
     parser.add_argument(
+        "--orgaos",
+        type=str,
+        default=None,
+        help=(
+            "'all' = todos os orgaos federais ativos (analytics.orgao_federal). "
+            "Ou lista de codigos separada por virgula: '26298,20000'. "
+            "Obrigatorio quando nao se usa --fixture (breaking change upstream, ver PLANO §19.11)."
+        ),
+    )
+    parser.add_argument(
+        "--orgaos-limit",
+        type=int,
+        default=None,
+        help="Limita N primeiros orgaos quando --orgaos all (smoke test).",
+    )
+    parser.add_argument(
         "--no-split",
         action="store_true",
-        help="Desativa window-splitting: tenta a janela inteira de uma vez (modo legacy).",
+        help="Desativa window-splitting: cada orgao tenta a janela inteira de uma vez.",
     )
     parser.add_argument(
         "--min-window-days",
         type=int,
         default=1,
-        help="Tamanho minimo da janela durante o split recursivo (default 1 = 1 dia).",
+        help="Tamanho minimo da janela por orgao no split recursivo (default 1 = 1 dia).",
     )
 
     args = parser.parse_args(argv)
@@ -173,17 +189,10 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     console = Console()
-    if args.fixture:
-        mode = f"fixture={args.fixture}"
-    elif args.no_split:
-        mode = "API live (no-split)"
-    else:
-        mode = f"API live (split, min={args.min_window_days}d)"
-    console.rule(f"[bold]Compras.gov.br ingest[/] {args.start} -> {args.end} ({mode})")
 
     def _progress(page: int, total_pages: int, items_so_far: int) -> None:
         console.print(
-            f"  pagina {page}/{total_pages or '?'}  itens acumulados: {items_so_far}"
+            f"    pagina {page}/{total_pages or '?'}  itens acumulados: {items_so_far}"
         )
 
     def _window_event(event: str, ws, we, **kw) -> None:
@@ -194,6 +203,8 @@ def main(argv: list[str] | None = None) -> int:
             "fail":  "[red]FAIL",
             "fatal": "[red bold]FATAL",
         }.get(event, event)
+        codigo = kw.get("codigo_orgao")
+        prefix = f"orgao={codigo}  " if codigo is not None else ""
         extra = ""
         if event == "split" and "error" in kw:
             extra = f"  motivo: {kw['error'][:120]}"
@@ -202,48 +213,83 @@ def main(argv: list[str] | None = None) -> int:
         elif event == "ok" and "result" in kw:
             r = kw["result"]
             extra = f"  paginas={r.pages_fetched} itens={r.items_inserted}"
-        console.print(f"  {tag}[/] {ws} -> {we}{extra}")
+        console.print(f"    {tag}[/] {prefix}{ws} -> {we}{extra}")
 
-    try:
-        if args.fixture:
+    def _orgao_event(event: str, codigo_orgao: int, **kw) -> None:
+        idx = kw.get("idx", "?")
+        total = kw.get("total", "?")
+        if event == "start":
+            console.print(f"[bold]>> orgao {codigo_orgao}[/]  ({idx}/{total})")
+        elif event == "done":
+            console.print(
+                f"   [green]OK[/]  orgao {codigo_orgao}: "
+                f"sub-janelas={kw.get('successes', 0)} falhas={kw.get('failures', 0)} "
+                f"itens={kw.get('items', 0)}"
+            )
+        elif event == "fatal":
+            console.print(
+                f"   [red bold]FATAL[/]  orgao {codigo_orgao}: {kw.get('error', '')[:200]}"
+            )
+
+    # --- modo fixture: sem orgao, replay puro ---
+    if args.fixture:
+        console.rule(
+            f"[bold]Compras.gov.br ingest[/] {args.start} -> {args.end} "
+            f"(fixture={args.fixture})"
+        )
+        try:
             result = ingest_fixture(
                 args.fixture,
                 period_start=args.start,
                 period_end=args.end,
                 on_progress=_progress,
             )
-            console.rule("[bold green]OK")
-            console.print(f"  snapshot_id   : {result.snapshot_id}")
-            console.print(f"  snapshot_path : {result.snapshot_path}")
-            console.print(f"  paginas       : {result.pages_fetched}")
-            console.print(f"  itens         : {result.items_inserted}")
-            console.print(f"  sha256        : {result.hash_sha256[:16]}...")
-            return 0
+        except Exception as exc:
+            console.print(f"[red]ERRO:[/] {exc}")
+            raise
+        console.rule("[bold green]OK")
+        console.print(f"  snapshot_id   : {result.snapshot_id}")
+        console.print(f"  snapshot_path : {result.snapshot_path}")
+        console.print(f"  paginas       : {result.pages_fetched}")
+        console.print(f"  itens         : {result.items_inserted}")
+        console.print(f"  sha256        : {result.hash_sha256[:16]}...")
+        return 0
 
-        if args.no_split:
-            result = ingest(
-                args.start,
-                args.end,
-                page_size=args.page_size,
-                max_pages=args.max_pages,
-                on_progress=_progress,
-            )
-            console.rule("[bold green]OK")
-            console.print(f"  snapshot_id   : {result.snapshot_id}")
-            console.print(f"  snapshot_path : {result.snapshot_path}")
-            console.print(f"  paginas       : {result.pages_fetched}")
-            console.print(f"  itens         : {result.items_inserted}")
-            console.print(f"  sha256        : {result.hash_sha256[:16]}...")
-            return 0
+    # --- modo live: precisa de --orgaos ---
+    if args.orgaos is None:
+        console.print(
+            "[red]ERRO:[/] --orgaos é obrigatório no modo live "
+            "(breaking change upstream — PLANO §19.11)."
+        )
+        console.print("Use [bold]--orgaos all[/] ou [bold]--orgaos 26298,20000[/].")
+        return 2
 
-        summary = ingest_with_split(
+    try:
+        codigo_orgaos = _resolve_orgaos(args.orgaos, args.orgaos_limit)
+    except (ValueError, RuntimeError) as exc:
+        console.print(f"[red]ERRO:[/] {exc}")
+        return 2
+
+    # No-split = janela inteira por orgao (sem dividir por data).
+    window_days = (args.end - args.start).days + 1
+    min_window_days = window_days if args.no_split else args.min_window_days
+    split_desc = "no-split" if args.no_split else f"split min={min_window_days}d"
+    console.rule(
+        f"[bold]Compras.gov.br ingest[/] {args.start} -> {args.end} "
+        f"(API live, {len(codigo_orgaos)} orgaos, {split_desc})"
+    )
+
+    try:
+        summary = ingest_by_orgaos(
             args.start,
             args.end,
+            codigo_orgaos,
             page_size=args.page_size,
             max_pages=args.max_pages,
-            min_window_days=args.min_window_days,
+            min_window_days=min_window_days,
             on_progress=_progress,
             on_window_event=_window_event,
+            on_orgao_event=_orgao_event,
         )
     except Exception as exc:
         console.print(f"[red]ERRO:[/] {exc}")
@@ -255,18 +301,51 @@ def main(argv: list[str] | None = None) -> int:
         console.rule("[bold green]OK")
     else:
         console.rule("[bold red]FALHOU")
+    console.print(f"  orgaos rodados : {len(codigo_orgaos)}")
     console.print(f"  janelas OK     : {len(summary.successes)}")
     console.print(f"  janelas FAILED : {len(summary.failures)}")
     console.print(f"  paginas total  : {summary.pages_total}")
     console.print(f"  itens total    : {summary.items_total}")
     if summary.failures:
-        console.print("  janelas com falha:")
-        for fw in summary.failures:
+        console.print("  janelas com falha (primeiras 10):")
+        for fw in summary.failures[:10]:
             console.print(
-                f"    {fw.period_start} -> {fw.period_end}  {fw.error[:120]}"
+                f"    orgao={fw.codigo_orgao}  {fw.period_start} -> {fw.period_end}  "
+                f"{fw.error[:120]}"
             )
+        if len(summary.failures) > 10:
+            console.print(f"    ... e mais {len(summary.failures) - 10}")
     # Exit codes: 0 = sucesso (total ou parcial); 2 = nada ingerido.
     return 0 if summary.has_any_success else 2
+
+
+def _resolve_orgaos(spec: str, limit: int | None) -> list[int]:
+    """Resolve o valor de --orgaos para uma lista de inteiros.
+
+    'all' carrega de analytics.orgao_federal (esfera='F' + status_ativo).
+    Senão, lista de códigos separada por vírgula.
+    """
+    if spec == "all":
+        codigos = load_orgaos_ativos_federais(limit=limit)
+        if not codigos:
+            raise RuntimeError(
+                "Nenhum orgao federal ativo em analytics.orgao_federal. "
+                "Rode 'python -m ingest orgaos' primeiro para popular o cadastro."
+            )
+        return codigos
+
+    if limit is not None:
+        raise ValueError("--orgaos-limit só é válido com --orgaos all")
+
+    try:
+        codigos = [int(tok.strip()) for tok in spec.split(",") if tok.strip()]
+    except ValueError as exc:
+        raise ValueError(
+            f"--orgaos invalido: {spec!r}. Use 'all' ou lista 'N,N,N' de inteiros."
+        ) from exc
+    if not codigos:
+        raise ValueError("--orgaos não pode ser vazio")
+    return codigos
 
 
 if __name__ == "__main__":

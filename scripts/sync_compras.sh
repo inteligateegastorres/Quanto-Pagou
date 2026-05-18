@@ -8,12 +8,19 @@
 #
 # Postgres precisa estar no ar (use scripts/dev_up.sh para subir).
 #
+# Desde 2026-05-18 (PLANO §19.11): o endpoint /modulo-contratos exige
+# codigoOrgao obrigatorio. O spider agora itera analytics.orgao_federal
+# (esfera=F + status_ativo). Rode `python -m ingest orgaos` antes para
+# popular o cadastro de orgaos (idempotente, ~30s).
+#
 # Uso:
-#   bash scripts/sync_compras.sh                   # ultimos 7 dias
+#   bash scripts/sync_compras.sh                   # ultimos 7 dias, todos orgaos federais
 #   DAYS=30 bash scripts/sync_compras.sh           # ultimos 30 dias
 #   START=2026-04-01 END=2026-04-30 bash scripts/sync_compras.sh
-#   MAX_PAGES=2 bash scripts/sync_compras.sh       # smoke test
-#   NO_SPLIT=1 bash scripts/sync_compras.sh        # modo legacy (1 tentativa)
+#   ORGAOS="26298,20000" bash scripts/sync_compras.sh   # so estes orgaos
+#   ORGAOS_LIMIT=5 bash scripts/sync_compras.sh    # smoke test (5 primeiros)
+#   MAX_PAGES=2 bash scripts/sync_compras.sh       # smoke (2 paginas por janela)
+#   NO_SPLIT=1 bash scripts/sync_compras.sh        # 1 tentativa por orgao, sem split de data
 #   MIN_WINDOW_DAYS=7 bash scripts/sync_compras.sh # nao divide abaixo de 7 dias
 #   SKIP_BUILD=1 bash scripts/sync_compras.sh      # nao refaz marts
 #
@@ -28,6 +35,8 @@ cd "$ROOT"
 : "${END:=}"
 : "${PAGE_SIZE:=500}"
 : "${MAX_PAGES:=}"
+: "${ORGAOS:=all}"
+: "${ORGAOS_LIMIT:=}"
 : "${NO_SPLIT:=0}"
 : "${MIN_WINDOW_DAYS:=1}"
 : "${SKIP_BUILD:=0}"
@@ -74,7 +83,10 @@ if ! docker exec quantopagou-postgres pg_isready -U quantopagou -d quantopagou >
 fi
 
 # ---------- ingest ----------
-ingest_args=( -m uv run python -m ingest "$START" "$END" --page-size "$PAGE_SIZE" )
+ingest_args=( -m uv run python -m ingest "$START" "$END" --page-size "$PAGE_SIZE" --orgaos "$ORGAOS" )
+if [ -n "$ORGAOS_LIMIT" ]; then
+    ingest_args+=( --orgaos-limit "$ORGAOS_LIMIT" )
+fi
 if [ -n "$MAX_PAGES" ]; then
     ingest_args+=( --max-pages "$MAX_PAGES" )
 fi
@@ -86,7 +98,9 @@ else
     split_desc="split min=${MIN_WINDOW_DAYS}d"
 fi
 
-window_desc="$START -> $END (page_size=$PAGE_SIZE, $split_desc"
+orgaos_desc="orgaos=$ORGAOS"
+if [ -n "$ORGAOS_LIMIT" ]; then orgaos_desc+=" limit=$ORGAOS_LIMIT"; fi
+window_desc="$START -> $END (page_size=$PAGE_SIZE, $orgaos_desc, $split_desc"
 if [ -n "$MAX_PAGES" ]; then
     window_desc+=", max_pages=$MAX_PAGES"
 fi

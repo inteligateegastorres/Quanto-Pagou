@@ -49,6 +49,9 @@ class IngestResult:
     hash_sha256: str
     period_start: date
     period_end: date
+    # codigo_orgao é None apenas em modo fixture (replay de payload pré-quebra).
+    # Em chamadas live ao endpoint /modulo-contratos é obrigatório.
+    codigo_orgao: int | None = None
 
 
 @dataclass(slots=True)
@@ -57,6 +60,7 @@ class FailedWindow:
     period_end: date
     error: str
     snapshot_id: str | None  # snapshot 'failed' registrado em raw.snapshots, se houver
+    codigo_orgao: int | None = None
 
 
 @dataclass(slots=True)
@@ -83,9 +87,17 @@ class IngestRunSummary:
         return len(self.failures) > 0
 
 
-def _build_snapshot_id(period_start: date, period_end: date) -> str:
+def _build_snapshot_id(
+    period_start: date,
+    period_end: date,
+    codigo_orgao: int | None = None,
+) -> str:
     ts = int(time.time())
-    return f"compras_gov_br_contratos-item_{period_start.isoformat()}_{period_end.isoformat()}_{ts}"
+    orgao_part = f"_orgao{codigo_orgao}" if codigo_orgao is not None else ""
+    return (
+        f"compras_gov_br_contratos-item{orgao_part}_"
+        f"{period_start.isoformat()}_{period_end.isoformat()}_{ts}"
+    )
 
 
 def _snapshot_path(snapshot_id: str) -> Path:
@@ -190,12 +202,17 @@ def _iter_pages(
     client: httpx.Client,
     period_start: date,
     period_end: date,
+    *,
+    codigo_orgao: int,
     page_size: int,
     max_pages: int | None,
 ) -> Iterator[dict[str, Any]]:
+    # Desde 2026-05-18 a API exige codigoOrgao (breaking change upstream).
+    # Ver PLANO §19.11 + ADR-009.
     page = 1
     while True:
         params = {
+            "codigoOrgao": codigo_orgao,
             "dataVigenciaInicialMin": period_start.isoformat(),
             "dataVigenciaInicialMax": period_end.isoformat(),
             "pagina": page,
@@ -284,12 +301,15 @@ def _persist_pages(
     *,
     period_start: date,
     period_end: date,
+    codigo_orgao: int | None = None,
     snapshot_id_override: str | None = None,
     source: str = SOURCE,
     on_progress: Any = None,
 ) -> IngestResult:
     """Persiste um stream de paginas (snapshot + raw.compras). Reusavel por fixtures."""
-    snapshot_id = snapshot_id_override or _build_snapshot_id(period_start, period_end)
+    snapshot_id = snapshot_id_override or _build_snapshot_id(
+        period_start, period_end, codigo_orgao=codigo_orgao
+    )
     snap_path = _snapshot_path(snapshot_id)
     hasher = hashlib.sha256()
     pages_fetched = 0
@@ -362,6 +382,7 @@ def _persist_pages(
         hash_sha256=hash_hex,
         period_start=period_start,
         period_end=period_end,
+        codigo_orgao=codigo_orgao,
     )
 
 
@@ -369,25 +390,43 @@ def ingest(
     period_start: date,
     period_end: date,
     *,
+    codigo_orgao: int,
     page_size: int = DEFAULT_PAGE_SIZE,
     max_pages: int | None = None,
     on_progress: Any = None,
 ) -> IngestResult:
-    """Executa ingestao de uma janela via API Compras.gov.br."""
+    """Executa ingestao de uma janela via API Compras.gov.br para um órgão.
+
+    `codigo_orgao` é obrigatório desde 2026-05-18 (breaking change upstream:
+    /modulo-contratos/2_consultarContratosItem exige `codigoOrgao`).
+    """
     if period_start > period_end:
         raise ValueError("period_start > period_end")
 
     headers = {"Accept": "application/json", "User-Agent": "quantopagou-ingest/0.0.1"}
     base = settings.compras_api_base.rstrip("/")
 
-    logger.info("Ingest API iniciado: %s -> %s", period_start, period_end)
+    logger.info(
+        "Ingest API iniciado: orgao=%s %s -> %s",
+        codigo_orgao,
+        period_start,
+        period_end,
+    )
 
     with httpx.Client(base_url=base, headers=headers, timeout=HTTP_TIMEOUT) as client:
-        pages_iter = _iter_pages(client, period_start, period_end, page_size, max_pages)
+        pages_iter = _iter_pages(
+            client,
+            period_start,
+            period_end,
+            codigo_orgao=codigo_orgao,
+            page_size=page_size,
+            max_pages=max_pages,
+        )
         return _persist_pages(
             pages_iter,
             period_start=period_start,
             period_end=period_end,
+            codigo_orgao=codigo_orgao,
             on_progress=on_progress,
         )
 
@@ -431,6 +470,7 @@ def _ingest_window_recursive(
     period_start: date,
     period_end: date,
     *,
+    codigo_orgao: int,
     page_size: int,
     max_pages: int | None,
     min_window_days: int,
@@ -441,12 +481,16 @@ def _ingest_window_recursive(
     length_days = (period_end - period_start).days + 1
 
     if on_window_event:
-        on_window_event("start", period_start, period_end, length_days=length_days)
+        on_window_event(
+            "start", period_start, period_end,
+            codigo_orgao=codigo_orgao, length_days=length_days,
+        )
 
     try:
         result = ingest(
             period_start,
             period_end,
+            codigo_orgao=codigo_orgao,
             page_size=page_size,
             max_pages=max_pages,
             on_progress=on_progress,
@@ -457,7 +501,8 @@ def _ingest_window_recursive(
             # Nao adianta dividir; propaga para o caller.
             if on_window_event:
                 on_window_event(
-                    "fatal", period_start, period_end, error=str(exc)[:300]
+                    "fatal", period_start, period_end,
+                    codigo_orgao=codigo_orgao, error=str(exc)[:300],
                 )
             raise
 
@@ -466,28 +511,39 @@ def _ingest_window_recursive(
             # snapshot ja foi marcado 'failed' por _persist_pages se chegou a entrar la;
             # caso contrario nao ha snapshot_id para listar.
             summary.failures.append(
-                FailedWindow(period_start, period_end, err, snapshot_id=None)
+                FailedWindow(
+                    period_start, period_end, err,
+                    snapshot_id=None, codigo_orgao=codigo_orgao,
+                )
             )
             if on_window_event:
-                on_window_event("fail", period_start, period_end, error=err)
+                on_window_event(
+                    "fail", period_start, period_end,
+                    codigo_orgao=codigo_orgao, error=err,
+                )
             return
 
         # Divide e recurse.
         if on_window_event:
             on_window_event(
-                "split", period_start, period_end, error=str(exc)[:300]
+                "split", period_start, period_end,
+                codigo_orgao=codigo_orgao, error=str(exc)[:300],
             )
         halves = _split_window(period_start, period_end)
         if halves is None:
             # Defensivo: nao deveria chegar aqui (length_days > min_window_days >= 1).
             err = f"{type(exc).__name__}: {exc}"[:500]
             summary.failures.append(
-                FailedWindow(period_start, period_end, err, snapshot_id=None)
+                FailedWindow(
+                    period_start, period_end, err,
+                    snapshot_id=None, codigo_orgao=codigo_orgao,
+                )
             )
             return
         first, second = halves
         _ingest_window_recursive(
             first[0], first[1],
+            codigo_orgao=codigo_orgao,
             page_size=page_size, max_pages=max_pages,
             min_window_days=min_window_days,
             on_progress=on_progress, on_window_event=on_window_event,
@@ -495,6 +551,7 @@ def _ingest_window_recursive(
         )
         _ingest_window_recursive(
             second[0], second[1],
+            codigo_orgao=codigo_orgao,
             page_size=page_size, max_pages=max_pages,
             min_window_days=min_window_days,
             on_progress=on_progress, on_window_event=on_window_event,
@@ -504,20 +561,26 @@ def _ingest_window_recursive(
 
     summary.successes.append(result)
     if on_window_event:
-        on_window_event("ok", period_start, period_end, result=result)
+        on_window_event(
+            "ok", period_start, period_end,
+            codigo_orgao=codigo_orgao, result=result,
+        )
 
 
 def ingest_with_split(
     period_start: date,
     period_end: date,
     *,
+    codigo_orgao: int,
     page_size: int = DEFAULT_PAGE_SIZE,
     max_pages: int | None = None,
     min_window_days: int = 1,
     on_progress: Any = None,
     on_window_event: Any = None,
 ) -> IngestRunSummary:
-    """Ingere uma janela; em caso de falha transitoria, divide ao meio recursivamente.
+    """Ingere uma janela para um órgão; em caso de falha transitoria, divide ao meio recursivamente.
+
+    `codigo_orgao` é obrigatório (breaking change upstream — ver `ingest()`).
 
     `min_window_days` = 1 significa "para de dividir quando a janela tem 1 dia
     (start == end)". Janelas terminais que falham viram FailedWindow no sumario
@@ -525,7 +588,8 @@ def ingest_with_split(
     _persist_pages (caso contrario snapshot_id e None).
 
     O caller pode passar `on_window_event(event, start, end, **kw)` para receber
-    notificacoes ('start', 'ok', 'split', 'fail', 'fatal').
+    notificacoes ('start', 'ok', 'split', 'fail', 'fatal'). `codigo_orgao` é
+    incluído como kw em todos os eventos.
     """
     if period_start > period_end:
         raise ValueError("period_start > period_end")
@@ -535,6 +599,7 @@ def ingest_with_split(
     summary = IngestRunSummary()
     _ingest_window_recursive(
         period_start, period_end,
+        codigo_orgao=codigo_orgao,
         page_size=page_size, max_pages=max_pages,
         min_window_days=min_window_days,
         on_progress=on_progress, on_window_event=on_window_event,
@@ -579,3 +644,112 @@ def ingest_fixture(
         source=f"{SOURCE}/fixture",
         on_progress=on_progress,
     )
+
+
+# ---------------------------------------------------------------------------
+# Loop por órgão (L.19.11.b). O endpoint /modulo-contratos passou a exigir
+# codigoOrgao; iteramos a lista de órgãos federais ativos (carregada de
+# analytics.orgao_federal), aplicando window-split de data por órgão.
+# Esfera 'F' (federal) é o recorte padrão — estaduais já vem do TCE-PR;
+# municipais não pertencem ao escopo do Compras.gov.br federal.
+# ---------------------------------------------------------------------------
+
+
+def load_orgaos_ativos_federais(limit: int | None = None) -> list[int]:
+    """Carrega códigos de órgãos federais ativos de analytics.orgao_federal.
+
+    Ordenado por codigo_orgao para reprodutibilidade entre execuções.
+    `limit` é útil para smoke tests (ex: `--orgaos-limit 5`).
+    """
+    sql = (
+        "SELECT codigo_orgao FROM analytics.orgao_federal "
+        "WHERE esfera = 'F' AND status_ativo = TRUE "
+        "ORDER BY codigo_orgao"
+    )
+    params: tuple[Any, ...] = ()
+    if limit is not None:
+        if limit < 1:
+            raise ValueError("limit deve ser >= 1")
+        sql += " LIMIT %s"
+        params = (limit,)
+    with psycopg.connect(settings.database_url) as conn, conn.cursor() as cur:
+        cur.execute(sql, params)
+        return [row[0] for row in cur.fetchall()]
+
+
+def ingest_by_orgaos(
+    period_start: date,
+    period_end: date,
+    codigo_orgaos: list[int],
+    *,
+    page_size: int = DEFAULT_PAGE_SIZE,
+    max_pages: int | None = None,
+    min_window_days: int = 1,
+    on_progress: Any = None,
+    on_window_event: Any = None,
+    on_orgao_event: Any = None,
+    continue_on_fatal: bool = True,
+) -> IngestRunSummary:
+    """Itera codigo_orgaos, chamando ingest_with_split por órgão.
+
+    Cada órgão tem seu próprio window-split de data: falha transitória em
+    um órgão não afeta os outros. `IngestRunSummary` agrega successes e
+    failures de todos os órgãos; cada IngestResult/FailedWindow leva
+    `codigo_orgao` no payload para attribuição posterior.
+
+    `continue_on_fatal=True` (default): erros não-recoverable (DB local,
+    bug de código) de um órgão são registrados como FailedWindow e o loop
+    continua. Em False, propaga a exceção e interrompe o batch.
+
+    `on_orgao_event(event, codigo_orgao, **kw)` recebe 'start' / 'done' /
+    'fatal' por órgão. `on_window_event` é encaminhado para o split por data.
+    """
+    if not codigo_orgaos:
+        raise ValueError("codigo_orgaos vazio")
+    if period_start > period_end:
+        raise ValueError("period_start > period_end")
+
+    summary = IngestRunSummary()
+    total = len(codigo_orgaos)
+    for idx, codigo_orgao in enumerate(codigo_orgaos, 1):
+        if on_orgao_event:
+            on_orgao_event("start", codigo_orgao, idx=idx, total=total)
+        try:
+            sub = ingest_with_split(
+                period_start, period_end,
+                codigo_orgao=codigo_orgao,
+                page_size=page_size,
+                max_pages=max_pages,
+                min_window_days=min_window_days,
+                on_progress=on_progress,
+                on_window_event=on_window_event,
+            )
+        except Exception as exc:
+            err = f"{type(exc).__name__}: {exc}"[:500]
+            logger.exception(
+                "Erro fatal no orgao %s; continuar=%s", codigo_orgao, continue_on_fatal
+            )
+            if on_orgao_event:
+                on_orgao_event(
+                    "fatal", codigo_orgao, idx=idx, total=total, error=err
+                )
+            if not continue_on_fatal:
+                raise
+            summary.failures.append(
+                FailedWindow(
+                    period_start, period_end, err,
+                    snapshot_id=None, codigo_orgao=codigo_orgao,
+                )
+            )
+            continue
+
+        summary.successes.extend(sub.successes)
+        summary.failures.extend(sub.failures)
+        if on_orgao_event:
+            on_orgao_event(
+                "done", codigo_orgao, idx=idx, total=total,
+                successes=len(sub.successes),
+                failures=len(sub.failures),
+                items=sub.items_total,
+            )
+    return summary
