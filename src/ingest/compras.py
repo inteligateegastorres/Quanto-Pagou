@@ -162,9 +162,13 @@ _TRANSIENT_BODY_FRAGMENTS = (
     stop=stop_after_attempt(8),
     reraise=True,
 )
-def _get_page(client: httpx.Client, params: dict[str, Any]) -> dict[str, Any]:
+def _get_page(
+    client: httpx.Client,
+    params: dict[str, Any],
+    endpoint: str = ENDPOINT,
+) -> dict[str, Any]:
     try:
-        resp = client.get(ENDPOINT, params=params)
+        resp = client.get(endpoint, params=params)
     except (httpx.ConnectError, httpx.ReadTimeout, httpx.WriteTimeout) as exc:
         raise _RetryableHTTP(str(exc)) from exc
     if 500 <= resp.status_code < 600:

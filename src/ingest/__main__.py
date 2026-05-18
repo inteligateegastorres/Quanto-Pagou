@@ -1,4 +1,11 @@
-"""CLI: python -m ingest <start> <end> [--page-size N] [--max-pages N] [--fixture PATH]."""
+"""CLI ingest Compras.gov.br.
+
+Forma legacy (contratos):
+    python -m ingest <start> <end> [--page-size N] [--max-pages N] [--fixture PATH]
+
+Forma nova (órgãos federais, L.19.11.a):
+    python -m ingest orgaos [--page-size N] [--max-pages N] [--fixture PATH]
+"""
 
 from __future__ import annotations
 
@@ -17,6 +24,13 @@ from ingest.compras import (
     ingest_fixture,
     ingest_with_split,
 )
+from ingest.compras_orgaos import (
+    DEFAULT_PAGE_SIZE as ORGAOS_DEFAULT_PAGE_SIZE,
+)
+from ingest.compras_orgaos import (
+    ingest_orgaos,
+    ingest_orgaos_fixture,
+)
 from ingest.config import settings
 
 
@@ -24,7 +38,87 @@ def _parse_date(s: str) -> date:
     return date.fromisoformat(s)
 
 
+def _run_orgaos(argv: list[str]) -> int:
+    """Subcomando 'orgaos': ingere cadastro de órgãos federais."""
+    parser = argparse.ArgumentParser(
+        prog="python -m ingest orgaos",
+        description="Ingere cadastro de órgãos federais (Compras.gov.br /modulo-uasg).",
+    )
+    parser.add_argument(
+        "--page-size",
+        type=int,
+        default=ORGAOS_DEFAULT_PAGE_SIZE,
+        help=f"tamanhoPagina (default {ORGAOS_DEFAULT_PAGE_SIZE}).",
+    )
+    parser.add_argument(
+        "--max-pages",
+        type=int,
+        default=None,
+        help="Limita páginas (smoke test). Default: sem limite.",
+    )
+    parser.add_argument(
+        "--fixture",
+        type=Path,
+        default=None,
+        help="Carrega de JSONL local em vez da API (uso em test/CI).",
+    )
+    parser.add_argument(
+        "--inativos",
+        action="store_true",
+        help="Coleta órgãos inativos (statusOrgao=false) em vez de ativos.",
+    )
+    args = parser.parse_args(argv)
+
+    logging.basicConfig(
+        level=settings.log_level,
+        format="%(message)s",
+        datefmt="[%X]",
+        handlers=[RichHandler(rich_tracebacks=True, markup=False)],
+    )
+
+    console = Console()
+    mode = f"fixture={args.fixture}" if args.fixture else "API live"
+    status = "inativos" if args.inativos else "ativos"
+    console.rule(f"[bold]Compras.gov.br /modulo-uasg[/] órgãos {status} ({mode})")
+
+    def _progress(page: int, total_pages: int, orgaos_so_far: int) -> None:
+        console.print(
+            f"  pagina {page}/{total_pages or '?'}  orgaos acumulados: {orgaos_so_far}"
+        )
+
+    try:
+        if args.fixture:
+            result = ingest_orgaos_fixture(args.fixture, on_progress=_progress)
+        else:
+            result = ingest_orgaos(
+                status_ativo=not args.inativos,
+                page_size=args.page_size,
+                max_pages=args.max_pages,
+                on_progress=_progress,
+            )
+    except Exception as exc:
+        console = Console()
+        console.print(f"[red]ERRO:[/] {exc}")
+        raise
+
+    console.rule("[bold green]OK")
+    console.print(f"  snapshot_id      : {result.snapshot_id}")
+    console.print(f"  snapshot_path    : {result.snapshot_path}")
+    console.print(f"  paginas          : {result.pages_fetched}")
+    console.print(f"  orgaos total     : {result.orgaos_total}")
+    console.print(f"  orgaos upserted  : {result.orgaos_upserted}")
+    console.print(f"  sha256           : {result.hash_sha256[:16]}...")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
+    if argv is None:
+        argv = sys.argv[1:]
+    # Dispatch subcomando 'orgaos' antes do parser legacy para não quebrar
+    # o shape posicional (start, end) do ingest de contratos.
+    if argv and argv[0] == "orgaos":
+        return _run_orgaos(argv[1:])
+
     parser = argparse.ArgumentParser(
         prog="python -m ingest",
         description="Ingere itens de contratos federais (Compras.gov.br) numa janela de datas.",
