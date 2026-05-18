@@ -2,12 +2,14 @@
 
 > Plataforma cívica para monitorar gastos públicos brasileiros e identificar possíveis desvios.
 
-**Versão:** v5.12 (2026-05-11)
+**Versão:** v5.13 (2026-05-18)
 **Status:** v5 + manchetes algorítmicas + Wave A completa + Wave B
 parcial + Wave LGPD avançada (§18, 11 itens) + hardening (Dependabot,
-gitleaks, ADRs, Sentry) + §19 (10 sub-itens, 4 entregues + 6
-documentados) + **§20 camada cognitiva (proposta documentada com
-riscos item-por-item; nada implementado — decisão pendente)**.
+gitleaks, ADRs, Sentry) + §19 (11 sub-itens, 4 entregues + 7
+documentados — **§19.11 novo: spider Compras.gov.br obsoleto por
+breaking change upstream, 1º na ordem de execução**) + **§20 camada
+cognitiva (proposta documentada com riscos item-por-item; nada
+implementado — decisão pendente)**.
 **Restam para go-live público:** L.3 (LIA), L.4 (RIPD), L.8
 (subprocessadores), L.14 (instituição-âncora), L.15 (revisor
 jurídico). Ver §18.3.
@@ -1442,8 +1444,9 @@ sub-seções com aceite, custo e dependência.
 | §19.7 | Métrica per capita first-class | ❌ **Pendente** | 2-4h |
 | §19.8 | Adapters outros tipos PIT (Convenio/Despesa/Combustivel/Diarias/Receita) | ❌ **Pendente** | 5-10d (1-2d cada) |
 | §19.9 | Prazo previsto vs real (dt_inicio/dt_fim) | ❌ **Pendente** | 4-6h |
+| §19.11 | Adaptar spider Compras.gov.br ao novo contrato (codigoOrgao obrigatório) | ❌ **Pendente — bloqueia ingest federal** | 1-2d |
 
-**Total para fechar:** 9-15 dias. Implementação ordenada por
+**Total para fechar:** 10-17 dias (com §19.11). Implementação ordenada por
 custo×impacto está em §19.X (ordem de execução recomendada) no final
 da seção.
 
@@ -1739,24 +1742,111 @@ Falta promover a colunas dedicadas + métrica de atraso.
 de encerramento estruturado. Contrato pode ter sido encerrado de
 fato sem o sinal aparecer no PIT.
 
+### 19.11 ❌ Adaptar spider Compras.gov.br ao novo contrato — PENDENTE (bloqueante)
+
+**Descoberto em 2026-05-18** durante tentativa de rodar
+`scripts/sync_compras.ps1`. A API
+`/modulo-contratos/2_consultarContratosItem` quebrou o contrato:
+agora exige `codigoOrgao` como parâmetro **obrigatório**. O spider
+em `src/ingest/compras.py:185-209` só passa `dataVigenciaInicialMin/Max`
++ paginação, então toda chamada retorna **`404 "Resource not found"`**.
+Não é instabilidade transitória do backend JPA (que motivou o
+window splitting existente) — é mudança de contrato definitiva.
+
+**Confirmações do probe:**
+
+| Probe | Resultado |
+|---|---|
+| `GET /modulo-contratos/2_consultarContratosItem?dataVigenciaInicialMin=...&dataVigenciaInicialMax=...` | **404 "Resource not found"** |
+| Swagger (`/v3/api-docs`) | confirma `codigoOrgao required=true` |
+| Mesma URL + `codigoOrgao=26298` (FNDE) | **200**, 10 itens em abril/2026 |
+| `tamanhoPagina=500` ainda válido | sim (mínimo subiu a 10, default agora é 10) |
+| `/modulo-uasg/2_consultarOrgao?statusOrgao=1` | retorna **11.162 órgãos ativos** em 23 páginas |
+
+**Impacto imediato:** pipeline federal congela. Banco hoje só tem o
+fixture sintético (90 contratos) + TCE-PR (156k). Manchete federal,
+mart_pares, ranking_orgaos continuam baseados no fixture.
+
+**Plano de adaptação:**
+
+1. **L.19.11.a (4h):** novo módulo `src/ingest/compras_orgaos.py`
+   que consome `/modulo-uasg/2_consultarOrgao?statusOrgao=1` e
+   materializa `analytics.orgao_federal(codigo_orgao, nome, cnpj,
+   esfera, poder, ultima_sync)`. ~11k linhas, paginar até esgotar.
+2. **L.19.11.b (4-6h):** refatorar `_iter_pages` em
+   `src/ingest/compras.py` para aceitar `codigo_orgao` no path
+   params. Loop externo no `ingest()` itera sobre `analytics.orgao_federal`.
+   Manter window splitting existente por órgão (cada órgão é
+   independente; falha de um não derruba os outros).
+3. **L.19.11.c (2-4h):** ranking heurístico de órgãos por volume
+   esperado (top 200 órgãos com `nome ILIKE '%ministerio%'`,
+   '%fundo%', '%universidade%' provavelmente cobrem >80% do
+   volume). Modo `--orgaos top200` vs `--orgaos all` no CLI.
+   Default = top200 pra não saturar (200 órgãos × N páginas <<
+   11k × N).
+4. **L.19.11.d (2h):** ajustar `IngestRunSummary` pra agregar por
+   órgão (hoje agrega por janela de data). Snapshot ID e
+   `raw.snapshots.id` ganham sufixo `_orgao{codigo}` pra evitar
+   colisão.
+5. **L.19.11.e (1-2h):** atualizar `scripts/sync_compras.ps1` /
+   `.sh` com novo flag `-Orgaos top200|all|codigo_lista`. Documentar
+   no comentário do header do script.
+6. **L.19.11.f (1h):** ADR em `docs/architecture/adr/ADR-009-compras-gov-br-orgao-required.md`
+   registrando o breaking change upstream, descoberta, decisão de
+   varredura top-N, e link pra issue (se abrirmos).
+
+**Aceite:**
+- `scripts/sync_compras.ps1` roda end-to-end contra a API real
+  (não fixture) sem 404.
+- Modo default `--orgaos top200` completa janela de 7 dias em
+  tempo razoável (<15 min) e popula `raw.compras` com pelo menos
+  1k linhas novas em condições normais.
+- Modo `--orgaos all` documentado como "varredura completa, pode
+  levar horas" mas funcional.
+- `analytics.orgao_federal` materializada e atualizável.
+
+**Riscos:**
+- **Custo de chamada multiplica.** Antes: 1 janela = N páginas.
+  Agora: 1 janela × M órgãos × N páginas. Mitigado por ranking
+  top-N e por backend deles aguentar (cada chamada é mais leve
+  porque escopo por órgão é menor).
+- **Backend deles pode aplicar throttle por IP.** Probe inicial
+  não detectou; mas varredura de 200+ órgãos pode disparar
+  rate-limit não-documentado. Tenacity já tem backoff.
+- **Lista de órgãos pode mudar.** Mensal/anual; orgao_federal
+  precisa de refresh periódico (cron mensal trivial).
+
+**Decisão sobre fixture:** fixture sintético atual em
+`data/fixtures/compras_sample.jsonl` continua valendo pra CI e
+testes. Sync real é caminho separado.
+
+**Por que isto é o 1º item da ordem de execução:** sem isto, o
+projeto efetivamente perdeu sua principal fonte federal. Os outros
+itens (§19.6-§19.9) operam só sobre TCE-PR; valiosos, mas o gap
+federal cresce a cada semana.
+
 ### 19.X Ordem de execução recomendada (custo crescente × impacto cívico)
 
-1. **§19.7 Per capita** (2-4h) — usa dado já carregado; primeira
+1. **§19.11 Adaptar spider Compras.gov.br** (1-2d) — **bloqueante**.
+   Detectado em 2026-05-18: API quebrou (codigoOrgao agora obrigatório),
+   spider 404a em toda chamada. Sem isso, dados federais congelam no
+   fixture sintético. Antes de qualquer item novo de produto.
+2. **§19.7 Per capita** (2-4h) — usa dado já carregado; primeira
    métrica que a análise externa P4 pediu; baixo risco.
-2. **§19.6 Dispensa repetida** (2-4h) — espelha pattern §19.4 que
+3. **§19.6 Dispensa repetida** (2-4h) — espelha pattern §19.4 que
    já funciona; entrega P3 "contratos emergenciais repetidos".
-3. **§19.9 Prazo previsto vs real** (4-6h) — usa dado já no
+4. **§19.9 Prazo previsto vs real** (4-6h) — usa dado já no
    `raw_payload`; entrega parte de P1 "prazo real vs previsto".
-4. **§19.1.b Adapter Obra.zip** (1-2d) — descoberta importante de
+5. **§19.1.b Adapter Obra.zip** (1-2d) — descoberta importante de
    2026-05-11; entrega maior parte de P1 (empresa, valor, prazo,
    talvez aditivo).
-5. **§19.5 INEP/IDEB cross** (2d) — ADR-006 pronto; entrega P4
+6. **§19.5 INEP/IDEB cross** (2d) — ADR-006 pronto; entrega P4
    "gasto por aluno × IDEB" que é o exemplo central da análise.
-6. **§19.8 outros adapters PIT** (5-10d) — sequência separada,
+7. **§19.8 outros adapters PIT** (5-10d) — sequência separada,
    começando por Despesa.zip.
 
-**Total para fechar P1+P3+P4 da análise externa:** ~5-8 dias úteis
-(itens 1-5).
+**Total para fechar P1+P3+P4 da análise externa:** ~6-10 dias úteis
+(itens 1-6, com §19.11 incluído).
 
 ### 19.10 O que NÃO entra no roadmap (e por quê)
 
@@ -2088,6 +2178,13 @@ precisam ser tomadas:
 ---
 
 ## 14. Changelog
+
+**v5.13 (2026-05-18)** — §19.11 spider Compras.gov.br obsoleto (descoberta upstream):
+- Tentativa de rodar `scripts/sync_compras.ps1` revelou que a API `/modulo-contratos/2_consultarContratosItem` quebrou o contrato: agora exige `codigoOrgao` como parâmetro obrigatório. Spider atual 404a em toda chamada.
+- Probe documentado: swagger confirma; chamada com `codigoOrgao=26298` retorna 200; endpoint `/modulo-uasg/2_consultarOrgao?statusOrgao=1` lista 11.162 órgãos pra alimentar loop.
+- **§19.11 novo** — Adaptar spider com loop por órgão. 6 sub-tarefas (L.19.11.a-f), 1-2 dias úteis. Inclui ranking heurístico top-200 pra não saturar (modo default), ADR-009 pra registrar o breaking change, e ajuste de snapshot_id pra evitar colisão entre órgãos.
+- **§19.X reordenado** — §19.11 agora é #1 (bloqueante para ingest federal); demais itens do roadmap descem uma posição. Total P1+P3+P4 sobe de ~5-8d para ~6-10d.
+- **Nada de produto novo** — esta versão só documenta o gap; código não foi tocado.
 
 **v5.12 (2026-05-11)** — §20 Camada cognitiva (proposta + riscos para discussão):
 - Resposta a proposta sobre RAG cívico transformar projeto de "consulta de dados" em "assistente investigativo". Concordamos com tese central, mas caminho honesto não é RAG generalista — é camada cognitiva limitada com regras de zona e gates de instituição-âncora.
