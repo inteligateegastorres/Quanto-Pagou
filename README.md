@@ -195,13 +195,25 @@ Pronto:
     crescendo >1.2× em cada um dos 3 últimos trimestres consecutivos.
     Endpoint `/alertas/progressivos`. Defesa em camadas L.1+L.2
     aplicada na origem.
-  - **6 itens pendentes documentados em detalhe** em PLANO §19 para
+  - **§19.7 métrica per capita first-class** (v5.15): MV
+    `analytics.mart_gasto_per_capita` cruza contratos TCE-PR com
+    populacao IBGE Censo 2022 (3.710 linhas — municipio × cluster).
+    Endpoints `GET /tce-pr/per-capita` + CSV +
+    `GET /tce-pr/municipio/{cd_ibge}/per-capita`. UI: coluna
+    **R$/habitante** em `/comparar` (respeita filtro de período) e
+    card **"Gasto per capita por categoria"** em
+    `/municipio/[cd_tce]`. Limite publicado: populacao é Censo 2022
+    (data fixa) — versionar quando vier nova edição.
+  - **§19.11.a+b spider Compras.gov.br adaptado** (v5.14): cadastro
+    de 11.162 órgãos federais + loop por `codigo_orgao` (obrigatório
+    após breaking change upstream). Pipeline federal desbloqueado.
+    Sync full ~4-5h em modo síncrono (otimização §19.11.g pendente).
+  - **4 itens pendentes documentados em detalhe** em PLANO §19 para
     sessões futuras (com SQL inline, custo por sub-tarefa, aceite
     explícito):
     §19.1.b adapter `Obra.zip` (1-2d),
     §19.5 cross INEP/IDEB (2d, ADR-006),
     §19.6 alerta dispensa emergencial repetida (2-4h),
-    §19.7 métrica per capita first-class (2-4h),
     §19.8 adapters dos 5 tipos restantes do PIT (Despesa, Convenio,
     Receita, Combustivel, Diarias — 5-10d),
     §19.9 prazo previsto vs real usando dt_inicio/dt_fim já no

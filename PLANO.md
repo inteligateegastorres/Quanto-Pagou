@@ -2,12 +2,12 @@
 
 > Plataforma cívica para monitorar gastos públicos brasileiros e identificar possíveis desvios.
 
-**Versão:** v5.14 (2026-05-18)
+**Versão:** v5.15 (2026-05-18)
 **Status:** v5 + manchetes algorítmicas + Wave A completa + Wave B
 parcial + Wave LGPD avançada (§18, 11 itens) + hardening (Dependabot,
-gitleaks, ADRs, Sentry) + §19 (11 sub-itens, **6 entregues** + 5
-documentados — **§19.11.a+b entregues hoje: spider Compras.gov.br
-adaptado para loop por órgão, pipeline federal desbloqueado**) +
+gitleaks, ADRs, Sentry) + §19 (11 sub-itens, **7 entregues** + 4
+documentados — **§19.7 per capita first-class entregue hoje:
+R$/hab em /comparar + card por cluster em /municipio**) +
 **§20 camada cognitiva (proposta documentada com riscos
 item-por-item; nada implementado — decisão pendente)**.
 **Restam para go-live público:** L.3 (LIA), L.4 (RIPD), L.8
@@ -1441,7 +1441,7 @@ sub-seções com aceite, custo e dependência.
 | §19.4 | Alerta de aumento progressivo | ✅ Entregue (7 alertas reais detectados) | 1h |
 | §19.5 | Cross INEP/IDEB | ❌ **Pendente** (ADR-006 esboço completo) | 2d |
 | §19.6 | Alerta dispensa emergencial repetida | ❌ **Pendente** | 2-4h |
-| §19.7 | Métrica per capita first-class | ❌ **Pendente** | 2-4h |
+| §19.7 | Métrica per capita first-class | ✅ **Entregue** (2026-05-18) | 2-3h |
 | §19.8 | Adapters outros tipos PIT (Convenio/Despesa/Combustivel/Diarias/Receita) | ❌ **Pendente** | 5-10d (1-2d cada) |
 | §19.9 | Prazo previsto vs real (dt_inicio/dt_fim) | ❌ **Pendente** | 4-6h |
 | §19.11.a | Spider de órgãos federais (`/modulo-uasg`) | ✅ **Entregue** (2026-05-18) | 4h |
@@ -1622,7 +1622,7 @@ legítima (calamidade, especialização técnica). UI precisa de
 disclaimer "não implica irregularidade" — reusa
 `<DisclaimerOrigem>` (L.11).
 
-### 19.7 ❌ Métrica per capita first-class — PENDENTE
+### 19.7 ✅ Métrica per capita first-class — ENTREGUE (2026-05-18)
 
 `analytics.municipio_pr` já tem `populacao` (IBGE Censo 2022, 396
 municípios cobertos). Falta apresentar como métrica primária em vez
@@ -1826,26 +1826,30 @@ Agora desbloqueado.
    2026-05-18** (commits `b15fb48` + `e8ee1c2`). Pipeline federal
    desbloqueado. Sync full operacional mas demora ~4-5h — otimização
    em §19.11.g abaixo.
-1. **§19.7 Per capita** (2-4h) — usa dado já carregado; primeira
-   métrica que a análise externa P4 pediu; baixo risco.
-2. **§19.6 Dispensa repetida** (2-4h) — espelha pattern §19.4 que
+0.b ~~**§19.7 Per capita first-class**~~ ✅ **Entregue 2026-05-18**.
+   MV `mart_gasto_per_capita` (3.710 linhas) + 3 endpoints + coluna
+   R$/hab em `/comparar` + card per cluster em `/municipio/[cd_tce]`.
+   Sinais reais aparecendo: MARINGA outlier em credenciamento de
+   saúde (R$ 51k/hab — provável teto contratual), PONTA GROSSA 3×
+   CURITIBA em combustíveis per capita.
+1. **§19.6 Dispensa repetida** (2-4h) — espelha pattern §19.4 que
    já funciona; entrega P3 "contratos emergenciais repetidos".
-3. **§19.9 Prazo previsto vs real** (4-6h) — usa dado já no
+2. **§19.9 Prazo previsto vs real** (4-6h) — usa dado já no
    `raw_payload`; entrega parte de P1 "prazo real vs previsto".
-4. **§19.1.b Adapter Obra.zip** (1-2d) — descoberta importante de
+3. **§19.1.b Adapter Obra.zip** (1-2d) — descoberta importante de
    2026-05-11; entrega maior parte de P1 (empresa, valor, prazo,
    talvez aditivo).
-5. **§19.5 INEP/IDEB cross** (2d) — ADR-006 pronto; entrega P4
+4. **§19.5 INEP/IDEB cross** (2d) — ADR-006 pronto; entrega P4
    "gasto por aluno × IDEB" que é o exemplo central da análise.
-6. **§19.8 outros adapters PIT** (5-10d) — sequência separada,
+5. **§19.8 outros adapters PIT** (5-10d) — sequência separada,
    começando por Despesa.zip.
-7. **§19.11.g Otimização do sync full Compras.gov.br** (não estimado)
+6. **§19.11.g Otimização do sync full Compras.gov.br** (não estimado)
    — paralelização (httpx async ou threads) e/ou cache de "órgão
    dormente" pra trazer o sync de ~5h para minutos. Não bloqueia P1-P4
    da análise externa; entra quando o sync semanal virar gargalo.
 
-**Total para fechar P1+P3+P4 da análise externa:** ~5-8 dias úteis
-(itens 1-5; §19.11 já entregue).
+**Total para fechar P1+P3+P4 da análise externa:** ~4-7 dias úteis
+(itens 1-4; §19.7 + §19.11 já entregues).
 
 ### 19.10 O que NÃO entra no roadmap (e por quê)
 
@@ -2177,6 +2181,15 @@ precisam ser tomadas:
 ---
 
 ## 14. Changelog
+
+**v5.15 (2026-05-18 ~17:30 BRT)** — §19.7 per capita first-class entregue:
+- **L.19.7.a** — `sql/015_mart_gasto_per_capita.sql`: nova MV `analytics.mart_gasto_per_capita` agrupando (cluster × cd_ibge) com `gasto_total`, `gasto_per_capita = SUM(valor_total)/populacao` e `mediana_valor_contrato`. Filtra eliminação L.1 + quarentena + `confianca_resolucao >= 0.5` (mesmo guardrail de `mart_contratos_municipio`). UNIQUE INDEX habilita `REFRESH CONCURRENTLY`. Wirado em `build_marts.py`. **3.710 linhas materializadas** (109 grandes + 658 médios + 2.943 pequenos × clusters).
+- **L.19.7.b** — 3 endpoints novos em `src/api/main.py`: `GET /tce-pr/per-capita?cluster=X&porte=Y&order=per_capita_desc&limit=N` (ranking global), `GET /tce-pr/per-capita.csv` (PLANO §19.3, mesmo filtro) e `GET /tce-pr/municipio/{cd_ibge}/per-capita` (por município, alimenta o card). `PerCapitaOut` Pydantic. `RankingMunicipioOut` ganhou `populacao: int | None` para alimentar `/comparar` sem segunda chamada.
+- **L.19.7.c** — UI: coluna **R$/habitante** em `/comparar` (calculada no cliente a partir do `valor_total_periodo` já filtrado por período/modalidade — respeita os filtros que o usuário escolheu). Card **"Gasto per capita por categoria"** em `/municipio/[cd_tce]` (top 8 clusters por R$/hab), com populacao IBGE 2022 explícita no header. Tipos `PerCapita` + helpers `tcepr.perCapita`/`perCapitaMunicipio` em `lib/tcepr.ts`. `tsc --noEmit` verde.
+- **Validação real:** MARINGA aparece como outlier suspeito em `servicos_saude_credenciamento` com R$ 51.110/hab — provavelmente "teto contratual de credenciamento" (não desembolso); vira gancho para próxima manchete + revisão da semântica do cluster. PONTA GROSSA em combustíveis R$ 22,90/hab vs CURITIBA R$ 6,82/hab — 3× per capita entre municípios de mesmo porte, sinal limpo.
+- **Limite conhecido publicado na UI:** populacao = IBGE Censo 2022, data fixa. Quando vier nova edição (Censo 2030 ou estimativas TCU), versionar `populacao` por ano em coluna separada em `analytics.municipio_pr`.
+- **QA CHECKLIST.md** ampliada com 3 endpoints + 2 itens de smoke (§19.7).
+- **§19.X reordenado** — §19.7 sai do topo; #1 vira §19.6 dispensa repetida (2-4h). Total P1+P3+P4 cai pra ~4-7d.
 
 **v5.14 (2026-05-18 ~15:00 BRT)** — §19.11.a + §19.11.b entregues; pipeline federal desbloqueado:
 - **§19.11.a (commit `b15fb48`)** — spider de órgãos federais. Migration `sql/014_orgao_federal.sql` (tabela `analytics.orgao_federal` com PK `codigo_orgao`), `src/ingest/compras_orgaos.py` consumindo `/modulo-uasg/2_consultarOrgao?statusOrgao=true`, CLI `python -m ingest orgaos`. Sync completo importou **11.162 órgãos em 31s**.

@@ -7,6 +7,7 @@ import {
   type ContratoMunicipio,
   type FornecedorMunicipio,
   type MunicipioInfo,
+  type PerCapita,
   type RankingMunicipio,
 } from "@/lib/tcepr";
 import { qd, fmtDate, type Gazette } from "@/lib/qd";
@@ -60,14 +61,15 @@ export default async function MunicipioPage({
   // depende do municipio: para alguns o QD nao tem dados, para outros
   // (Curitiba: 8.942 diarios desde 1993) tem volume bom.
   // Fetch best-effort — se falhar, secao some.
-  const [resumoR, fornecedoresR, contratosClusterR, gazettesR] = cdIbge
+  const [resumoR, fornecedoresR, contratosClusterR, gazettesR, perCapitaR] = cdIbge
     ? await Promise.allSettled([
         tcepr.resumo(cdIbge),
         tcepr.fornecedores(cdIbge, 10),
         tcepr.contratosPorCluster(cdIbge, { limit: 50 }),
         qd.gazettes(cdIbge, { size: 5 }),
+        tcepr.perCapitaMunicipio(cdIbge, { limit: 8 }),
       ])
-    : [null, null, null, null];
+    : [null, null, null, null, null];
 
   const resumo =
     resumoR && resumoR.status === "fulfilled" ? resumoR.value : null;
@@ -81,6 +83,8 @@ export default async function MunicipioPage({
     gazettesR && gazettesR.status === "fulfilled" ? gazettesR.value.gazettes : [];
   const totalGazettes =
     gazettesR && gazettesR.status === "fulfilled" ? gazettesR.value.total_gazettes : 0;
+  const perCapita: PerCapita[] =
+    perCapitaR && perCapitaR.status === "fulfilled" ? perCapitaR.value : [];
 
   const porCluster = new Map<string, ContratoMunicipio[]>();
   for (const row of contratosCluster) {
@@ -236,6 +240,14 @@ export default async function MunicipioPage({
             </div>
           </div>
         </section>
+      )}
+
+      {perCapita.length > 0 && (
+        <PerCapitaSection
+          rows={perCapita}
+          cdTce={info.cd_tce}
+          municipioNome={info.nome}
+        />
       )}
 
       {porCluster.size > 0 && (
@@ -483,6 +495,79 @@ function ComparacaoCard({
         })}
       </ol>
     </article>
+  );
+}
+
+function PerCapitaSection({
+  rows,
+  cdTce,
+  municipioNome,
+}: {
+  rows: PerCapita[];
+  cdTce: string;
+  municipioNome: string;
+}) {
+  const sorted = [...rows].sort(
+    (a, b) => Number(b.gasto_per_capita) - Number(a.gasto_per_capita),
+  );
+  const populacao = sorted[0]?.populacao ?? 0;
+  return (
+    <section className="space-y-3">
+      <div className="flex items-baseline justify-between flex-wrap gap-2">
+        <h2 className="text-xl font-semibold">
+          Gasto per capita por categoria
+        </h2>
+        <span className="text-xs text-muted">
+          população: {populacao.toLocaleString("pt-BR")} hab.{" "}
+          <span title="IBGE Censo 2022 — data fixa">(IBGE 2022)</span>
+        </span>
+      </div>
+      <p className="text-sm text-muted">
+        Total contratado em cada categoria ÷ população. Útil pra comparar
+        entre cidades de portes diferentes. Acumulado de todo o período
+        ingerido — para janela específica veja <Link href="/comparar">
+        /comparar</Link>.
+      </p>
+      <ol className="space-y-1">
+        {sorted.map((r) => {
+          const clusterNome = prettyCluster(r.cluster_id);
+          const drillCompare = `/comparar?cluster=${r.cluster_id}&municipios=${cdTce}`;
+          const drillContratos = `/contratos?${new URLSearchParams({
+            cluster_id: r.cluster_id,
+            cluster_nome: clusterNome,
+            cd_tce: cdTce,
+            municipio_nome: municipioNome,
+          }).toString()}`;
+          return (
+            <li
+              key={r.cluster_id}
+              className="flex items-baseline gap-3 border-b border-line/60 py-2 text-sm"
+            >
+              <Link
+                href={drillCompare}
+                className="flex-1 min-w-0 truncate no-underline hover:underline"
+                title="Comparar com outros municípios"
+              >
+                {clusterNome}
+              </Link>
+              <Link
+                href={drillContratos}
+                className="text-xs text-muted w-24 text-right no-underline hover:underline"
+                title={`Ver ${r.n_contratos} contratos`}
+              >
+                {r.n_contratos} c. · {fmtBRLCompact(r.gasto_total)}
+              </Link>
+              <span
+                className="font-mono w-28 text-right font-medium"
+                title={`R$/habitante = ${fmtBRL(r.gasto_total)} ÷ ${populacao.toLocaleString("pt-BR")} hab.`}
+              >
+                {fmtBRL(r.gasto_per_capita)}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
   );
 }
 

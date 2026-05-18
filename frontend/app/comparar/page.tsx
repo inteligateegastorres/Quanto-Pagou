@@ -143,6 +143,7 @@ export default async function CompararPage({
         cd_ibge: m?.cd_ibge ?? "",
         municipio: m?.nome ?? `cd_tce ${cd}`,
         porte: m?.porte ?? "—",
+        populacao: null,
         n_contratos: 0,
         valor_total_periodo: "0",
         mediana_valor_contrato: "0",
@@ -362,6 +363,12 @@ export default async function CompararPage({
                 <th className="text-left py-2 px-3 font-medium text-xs text-muted">Porte</th>
                 <th className="text-right py-2 px-3 font-medium">Contratos</th>
                 <th className="text-right py-2 px-3 font-medium">Volume total</th>
+                <th
+                  className="text-right py-2 px-3 font-medium"
+                  title="Gasto total no período ÷ população IBGE Censo 2022"
+                >
+                  R$/habitante
+                </th>
                 <th className="text-right py-2 px-3 font-medium">Mediana / contrato</th>
                 <th className="text-right py-2 pl-3 font-medium text-xs text-muted">vs mediana</th>
               </tr>
@@ -376,6 +383,11 @@ export default async function CompararPage({
                     : acima > 0
                       ? "text-attention"
                       : "text-ok";
+                const total = Number(r.valor_total_periodo);
+                const perCapita =
+                  r.encontrado && r.populacao && r.populacao > 0
+                    ? total / r.populacao
+                    : null;
                 return (
                   <tr
                     key={r.cd_tce}
@@ -418,6 +430,20 @@ export default async function CompararPage({
                         </Link>
                       ) : "—"}
                     </td>
+                    <td
+                      className="py-2 px-3 text-right font-mono"
+                      title={
+                        r.populacao
+                          ? `População IBGE Censo 2022: ${r.populacao.toLocaleString("pt-BR")} hab.`
+                          : "População IBGE não disponível para este município."
+                      }
+                    >
+                      {perCapita !== null ? (
+                        fmtBRL(perCapita)
+                      ) : (
+                        <span className="text-xs text-muted">—</span>
+                      )}
+                    </td>
                     <td className="py-2 px-3 text-right font-mono font-medium">
                       {r.encontrado ? fmtBRL(m) : (
                         <span
@@ -444,10 +470,12 @@ export default async function CompararPage({
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={6} className="text-xs text-muted pt-2">
+                <td colSpan={7} className="text-xs text-muted pt-2">
                   Mediana de referência (entre os selecionados):{" "}
                   <strong>{fmtBRL(medianaRef)}</strong>. Diferenças{" "}
-                  &lt;5% omitidas.
+                  &lt;5% omitidas. R$/habitante usa{" "}
+                  <strong>população IBGE Censo 2022</strong> (data fixa) e o
+                  mesmo período do filtro acima.
                 </td>
               </tr>
             </tfoot>

@@ -130,8 +130,25 @@ class RankingMunicipioOut(BaseModel):
     cd_ibge: str
     municipio: str
     porte: str
+    populacao: int | None  # IBGE Censo 2022 (PLANO §19.7)
     n_contratos: int
     valor_total_periodo: Decimal
+    mediana_valor_contrato: Decimal
+
+
+class PerCapitaOut(BaseModel):
+    """PLANO §19.7 — gasto_per_capita = SUM(valor_total)/populacao IBGE 2022."""
+
+    cluster_id: str
+    cluster_version: str
+    cd_tce: str
+    cd_ibge: str
+    municipio: str
+    porte: str
+    populacao: int
+    n_contratos: int
+    gasto_total: Decimal
+    gasto_per_capita: Decimal
     mediana_valor_contrato: Decimal
 
 
@@ -2647,6 +2664,7 @@ def tce_pr_ranking_municipios(
             mp.cd_ibge AS cd_ibge,
             COALESCE(mp.nome, rc.raw_payload->>'municipio') AS municipio,
             COALESCE(mp.porte, 'municipio_pr_pequeno') AS porte,
+            mp.populacao AS populacao,
             COUNT(*) AS n_contratos,
             ROUND(SUM(rc.valor_total)::numeric, 2) AS valor_total_periodo,
             ROUND(percentile_cont(0.5) WITHIN GROUP (
@@ -2666,7 +2684,7 @@ def tce_pr_ranking_municipios(
           AND (%s::date IS NULL OR rc.contract_date >= %s::date)
           AND (%s::date IS NULL OR rc.contract_date <= %s::date)
           AND mp.cd_ibge IS NOT NULL
-        GROUP BY 1, 2, 3, 4, 5
+        GROUP BY 1, 2, 3, 4, 5, 6
         ORDER BY {order_sql}
         LIMIT %s
     """
@@ -2724,6 +2742,132 @@ def tce_pr_comparacao_municipios(
     with conn.cursor() as cur:
         cur.execute(sql, (cluster_id, cluster_version, porte, porte, limit))
         return [ContratoMunicipioOut(**r) for r in cur.fetchall()]
+
+
+# ----------------------------- Per capita (PLANO §19.7) ---------------
+
+_PER_CAPITA_ORDER_SQL = {
+    "per_capita_desc": "gasto_per_capita DESC",
+    "per_capita_asc": "gasto_per_capita ASC",
+    "total_desc": "gasto_total DESC",
+    "n_desc": "n_contratos DESC",
+}
+
+_PER_CAPITA_BASE_SELECT = """
+    SELECT cluster_id, cluster_version, cd_tce, cd_ibge, municipio, porte,
+           populacao, n_contratos, gasto_total, gasto_per_capita,
+           mediana_valor_contrato
+    FROM analytics.mart_gasto_per_capita
+"""
+
+
+@app.get(
+    "/tce-pr/per-capita",
+    response_model=list[PerCapitaOut],
+    tags=["tce-pr"],
+    summary="Ranking de gasto per capita (PLANO §19.7)",
+)
+def tce_pr_per_capita(
+    conn: ConnDep,
+    cluster: str | None = Query(
+        default=None,
+        description="Filtra por cluster_id (ex: merenda_escolar, medicamentos)",
+    ),
+    porte: str | None = Query(
+        default=None,
+        description=(
+            "Filtra por porte (municipio_pr_grande/medio/pequeno) — guardrail "
+            "de comparacao entre pares."
+        ),
+    ),
+    order: Literal[
+        "per_capita_desc", "per_capita_asc", "total_desc", "n_desc"
+    ] = Query(default="per_capita_desc"),
+    limit: int = Query(default=20, ge=1, le=200),
+) -> list[PerCapitaOut]:
+    """Ranking de municipios PR por gasto_per_capita (R$/habitante).
+
+    populacao = IBGE Censo 2022; data fixa. Ver `/metodologia` para limites.
+    Sem filtro de cluster, o ranking acumula todos os clusters do municipio
+    — util pra comparar gasto total per capita entre cidades de mesmo porte.
+    """
+    sql = f"""
+        {_PER_CAPITA_BASE_SELECT}
+        WHERE (%s::text IS NULL OR cluster_id = %s)
+          AND (%s::text IS NULL OR porte = %s)
+        ORDER BY {_PER_CAPITA_ORDER_SQL[order]}
+        LIMIT %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (cluster, cluster, porte, porte, limit))
+        return [PerCapitaOut(**r) for r in cur.fetchall()]
+
+
+@app.get(
+    "/tce-pr/per-capita.csv",
+    response_class=Response,
+    tags=["tce-pr"],
+    summary="Per capita em CSV (PLANO §19.3 + §19.7)",
+)
+def tce_pr_per_capita_csv(
+    conn: ConnDep,
+    cluster: str | None = None,
+    porte: str | None = None,
+    order: Literal[
+        "per_capita_desc", "per_capita_asc", "total_desc", "n_desc"
+    ] = "per_capita_desc",
+    limit: int = Query(default=500, ge=1, le=5000),
+) -> Response:
+    """Ranking per capita em CSV. Mesmos filtros do endpoint JSON."""
+    sql = f"""
+        {_PER_CAPITA_BASE_SELECT}
+        WHERE (%s::text IS NULL OR cluster_id = %s)
+          AND (%s::text IS NULL OR porte = %s)
+        ORDER BY {_PER_CAPITA_ORDER_SQL[order]}
+        LIMIT %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (cluster, cluster, porte, porte, limit))
+        rows = cur.fetchall()
+    suffix = f"_{cluster}" if cluster else ""
+    return _rows_to_csv_response(
+        rows,
+        fieldnames=[
+            "cluster_id", "cluster_version", "cd_tce", "cd_ibge",
+            "municipio", "porte", "populacao", "n_contratos",
+            "gasto_total", "gasto_per_capita", "mediana_valor_contrato",
+        ],
+        filename=f"per_capita{suffix}_quantopagou.csv",
+    )
+
+
+@app.get(
+    "/tce-pr/municipio/{cd_ibge}/per-capita",
+    response_model=list[PerCapitaOut],
+    tags=["tce-pr"],
+    summary="Gasto per capita por cluster de um municipio (PLANO §19.7)",
+)
+def tce_pr_municipio_per_capita(
+    conn: ConnDep,
+    cd_ibge: str,
+    order: Literal[
+        "per_capita_desc", "per_capita_asc", "total_desc", "n_desc"
+    ] = Query(default="per_capita_desc"),
+    limit: int = Query(default=20, ge=1, le=200),
+) -> list[PerCapitaOut]:
+    """Top clusters de um municipio por gasto_per_capita.
+
+    Alimenta o card "Gasto per capita por cluster" da pagina /municipio/[cd_tce].
+    """
+    sql = f"""
+        {_PER_CAPITA_BASE_SELECT}
+        WHERE cd_ibge = %s
+        ORDER BY {_PER_CAPITA_ORDER_SQL[order]}
+        LIMIT %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (cd_ibge, limit))
+        return [PerCapitaOut(**r) for r in cur.fetchall()]
 
 
 # ----------------------------- Correcoes (LGPD L.12) ------------------

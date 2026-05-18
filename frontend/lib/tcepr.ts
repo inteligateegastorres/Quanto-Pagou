@@ -45,8 +45,23 @@ export type RankingMunicipio = {
   cd_ibge: string;
   municipio: string;
   porte: string;
+  populacao: number | null;
   n_contratos: number;
   valor_total_periodo: string;
+  mediana_valor_contrato: string;
+};
+
+export type PerCapita = {
+  cluster_id: string;
+  cluster_version: string;
+  cd_tce: string;
+  cd_ibge: string;
+  municipio: string;
+  porte: string;
+  populacao: number;
+  n_contratos: number;
+  gasto_total: string;
+  gasto_per_capita: string;
   mediana_valor_contrato: string;
 };
 
@@ -428,6 +443,34 @@ export const tcepr = {
     const q = qs.toString();
     return jget<RankingMunicipio[]>(
       `/tce-pr/cluster/${encodeURIComponent(clusterId)}/ranking-municipios${q ? "?" + q : ""}`,
+    );
+  },
+  perCapita: (
+    opts: {
+      cluster?: string;
+      porte?: string;
+      order?: string;
+      limit?: number;
+    } = {},
+  ) => {
+    const qs = new URLSearchParams();
+    if (opts.cluster) qs.set("cluster", opts.cluster);
+    if (opts.porte) qs.set("porte", opts.porte);
+    if (opts.order) qs.set("order", opts.order);
+    if (opts.limit != null) qs.set("limit", String(opts.limit));
+    const q = qs.toString();
+    return jget<PerCapita[]>(`/tce-pr/per-capita${q ? "?" + q : ""}`);
+  },
+  perCapitaMunicipio: (
+    cdIbge: string,
+    opts: { order?: string; limit?: number } = {},
+  ) => {
+    const qs = new URLSearchParams();
+    if (opts.order) qs.set("order", opts.order);
+    if (opts.limit != null) qs.set("limit", String(opts.limit));
+    const q = qs.toString();
+    return jget<PerCapita[]>(
+      `/tce-pr/municipio/${cdIbge}/per-capita${q ? "?" + q : ""}`,
     );
   },
 };

@@ -262,6 +262,7 @@ def run(dry_run: bool = False) -> dict[str, Any]:
                 "analytics.mart_orgao_cluster",
                 "analytics.mart_contratos_municipio",
                 "analytics.mart_fornecedores_municipio",
+                "analytics.mart_gasto_per_capita",  # §19.7
                 "analytics.cluster_discrepancias",  # Camada 1 das manchetes
             ):
                 console.print(f"[dim]REFRESH MATERIALIZED VIEW CONCURRENTLY {mv}...[/]")
@@ -294,7 +295,11 @@ def run(dry_run: bool = False) -> dict[str, Any]:
             with conn.cursor() as cur:
                 cur.execute("SELECT COUNT(*) FROM analytics.mart_pares")
                 stats["mart_pares_rows"] = cur.fetchone()[0]
-                for mv in ("mart_contratos_municipio", "mart_fornecedores_municipio"):
+                for mv in (
+                    "mart_contratos_municipio",
+                    "mart_fornecedores_municipio",
+                    "mart_gasto_per_capita",
+                ):
                     try:
                         cur.execute(f"SELECT COUNT(*) FROM analytics.{mv}")
                         stats[f"{mv}_rows"] = cur.fetchone()[0]

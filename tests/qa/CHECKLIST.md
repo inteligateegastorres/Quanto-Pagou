@@ -127,6 +127,13 @@ item tem todos os campos esperados, tipos corretos**.
 - [ ] `GET /tce-pr/municipio/4106902/contratos-por-cluster?limit=10` →
       array
 - [ ] `GET /tce-pr/municipio/4106902/fornecedores?limit=10` → array
+- [ ] `GET /tce-pr/municipio/4106902/per-capita?limit=5` → array com
+      `gasto_per_capita` decrescente; `populacao=1773733` em todas as
+      linhas (§19.7)
+- [ ] `GET /tce-pr/per-capita?cluster=merenda_escolar&porte=municipio_pr_grande&limit=5`
+      → top-5 grandes em R$/hab merenda (§19.7)
+- [ ] `GET /tce-pr/per-capita.csv?cluster=medicamentos&limit=3` → 3
+      linhas + header com colunas `cluster_id,...,gasto_per_capita,...`
 - [ ] Pegue um CNPJ de `/fornecedores?limit=1` e teste:
   - [ ] `GET /fornecedor/{cnpj}` → perfil com `n_contratos ≥ 5`,
         `valor_total`, `n_municipios_distintos`
@@ -368,6 +375,8 @@ atualiza com os params **e** o resultado muda.
 - [ ] Com `cluster_id=merenda_escolar&since=2024-01-01&until=2024-12-31`
       → tabela com municípios comparáveis, badge `cluster_version=v1`
       visível no header da seção (cluster_id sem prefixo `tce_pr_v1__`)
+- [ ] Coluna **R$/habitante** presente; valor = volume_total ÷ populacao
+      IBGE 2022 (§19.7); municípios sem populacao mostram `—` no lugar
 
 ### `/escolas`
 
@@ -378,6 +387,8 @@ atualiza com os params **e** o resultado muda.
 
 - [ ] `/municipio/410690` → Curitiba: agregados por cluster,
       fornecedores top, drill-down funciona
+- [ ] `/municipio/410690` → seção **"Gasto per capita por categoria"**
+      presente, populacao IBGE 2022 explícita no header (§19.7)
 - [ ] `/fornecedor/00844138000177` → ATLANTICA: várias seções (por
       órgão, município, categoria, modalidade, contratos)
 - [ ] `/escolas/<slug-da-listagem>` → contratos da escola
