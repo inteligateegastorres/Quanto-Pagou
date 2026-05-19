@@ -141,7 +141,7 @@ jobs:
 
       - name: Upload top_dsobjeto.csv como artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: unmatched-dsobjeto-${{ steps.ano.outputs.ano }}
           path: data/unmatched/top_dsobjeto.csv
