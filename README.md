@@ -195,6 +195,17 @@ Pronto:
     crescendo >1.2× em cada um dos 3 últimos trimestres consecutivos.
     Endpoint `/alertas/progressivos`. Defesa em camadas L.1+L.2
     aplicada na origem.
+  - **§19.6 alerta de dispensa emergencial repetida** (v5.16): MV
+    `analytics.alerta_dispensa_repetida` detecta combinações
+    (fornecedor PJ + órgão + município) com ≥3 dispensas nos últimos
+    12 meses. Defesa em camadas L.1+L.2 aplicada na origem (mesmo
+    pattern do §19.4). Endpoint `GET /alertas/dispensa-repetida` +
+    CSV. UI: seção em `/manchetes` (top alertas) + banner em
+    `/fornecedor/[cnpj]` quando o fornecedor aparece. Disclaimer
+    "não implica irregularidade" obrigatório (calamidade,
+    especialização ou fracasso de processo anterior podem explicar).
+    71 alertas reais já detectados — incluindo 8 dispensas no mesmo
+    dia somando R$ 7,2M na LAPA.
   - **§19.7 métrica per capita first-class** (v5.15): MV
     `analytics.mart_gasto_per_capita` cruza contratos TCE-PR com
     populacao IBGE Censo 2022 (3.710 linhas — municipio × cluster).
@@ -208,12 +219,11 @@ Pronto:
     de 11.162 órgãos federais + loop por `codigo_orgao` (obrigatório
     após breaking change upstream). Pipeline federal desbloqueado.
     Sync full ~4-5h em modo síncrono (otimização §19.11.g pendente).
-  - **4 itens pendentes documentados em detalhe** em PLANO §19 para
+  - **3 itens pendentes documentados em detalhe** em PLANO §19 para
     sessões futuras (com SQL inline, custo por sub-tarefa, aceite
     explícito):
     §19.1.b adapter `Obra.zip` (1-2d),
     §19.5 cross INEP/IDEB (2d, ADR-006),
-    §19.6 alerta dispensa emergencial repetida (2-4h),
     §19.8 adapters dos 5 tipos restantes do PIT (Despesa, Convenio,
     Receita, Combustivel, Diarias — 5-10d),
     §19.9 prazo previsto vs real usando dt_inicio/dt_fim já no

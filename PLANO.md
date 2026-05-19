@@ -2,12 +2,12 @@
 
 > Plataforma cívica para monitorar gastos públicos brasileiros e identificar possíveis desvios.
 
-**Versão:** v5.15 (2026-05-18)
+**Versão:** v5.16 (2026-05-18)
 **Status:** v5 + manchetes algorítmicas + Wave A completa + Wave B
 parcial + Wave LGPD avançada (§18, 11 itens) + hardening (Dependabot,
-gitleaks, ADRs, Sentry) + §19 (11 sub-itens, **7 entregues** + 4
-documentados — **§19.7 per capita first-class entregue hoje:
-R$/hab em /comparar + card por cluster em /municipio**) +
+gitleaks, ADRs, Sentry) + §19 (11 sub-itens, **8 entregues** + 3
+documentados — **§19.6 dispensa repetida + §19.7 per capita entregues
+hoje; sync federal 365d em background**) +
 **§20 camada cognitiva (proposta documentada com riscos
 item-por-item; nada implementado — decisão pendente)**.
 **Restam para go-live público:** L.3 (LIA), L.4 (RIPD), L.8
@@ -1440,7 +1440,7 @@ sub-seções com aceite, custo e dependência.
 | §19.3 | Export CSV em endpoints chave | ✅ Entregue (5 endpoints) | 30 min |
 | §19.4 | Alerta de aumento progressivo | ✅ Entregue (7 alertas reais detectados) | 1h |
 | §19.5 | Cross INEP/IDEB | ❌ **Pendente** (ADR-006 esboço completo) | 2d |
-| §19.6 | Alerta dispensa emergencial repetida | ❌ **Pendente** | 2-4h |
+| §19.6 | Alerta dispensa emergencial repetida | ✅ **Entregue** (2026-05-18) | 2-3h |
 | §19.7 | Métrica per capita first-class | ✅ **Entregue** (2026-05-18) | 2-3h |
 | §19.8 | Adapters outros tipos PIT (Convenio/Despesa/Combustivel/Diarias/Receita) | ❌ **Pendente** | 5-10d (1-2d cada) |
 | §19.9 | Prazo previsto vs real (dt_inicio/dt_fim) | ❌ **Pendente** | 4-6h |
@@ -1570,7 +1570,7 @@ causalidade≠correlação) e caminho de implementação.
 educacional sem revisão jurídica (causalidade inferida pode gerar
 difamação institucional). Manter como ferramenta de consulta.
 
-### 19.6 ❌ Alerta de dispensa emergencial repetida — PENDENTE
+### 19.6 ✅ Alerta de dispensa emergencial repetida — ENTREGUE (2026-05-18)
 
 **Hipótese:** combinação `(fornecedor_cnpj + orgao_codigo)` com ≥3
 contratos em modalidade `dispensa` nos últimos 12 meses é sinal de
@@ -1832,24 +1832,28 @@ Agora desbloqueado.
    Sinais reais aparecendo: MARINGA outlier em credenciamento de
    saúde (R$ 51k/hab — provável teto contratual), PONTA GROSSA 3×
    CURITIBA em combustíveis per capita.
-1. **§19.6 Dispensa repetida** (2-4h) — espelha pattern §19.4 que
-   já funciona; entrega P3 "contratos emergenciais repetidos".
-2. **§19.9 Prazo previsto vs real** (4-6h) — usa dado já no
+0.c ~~**§19.6 Dispensa emergencial repetida**~~ ✅ **Entregue
+   2026-05-18**. MV `alerta_dispensa_repetida` (71 alertas reais
+   detectados) + endpoint `/alertas/dispensa-repetida` + CSV + seção
+   em `/manchetes` + banner em `/fornecedor/[cnpj]`. Sinais notáveis:
+   SAUNT/LAPA com 8 dispensas no MESMO DIA somando R$ 7,2M; ELENISE
+   REZENDE/LEÓPOLIS com 16 dispensas em 33 dias.
+1. **§19.9 Prazo previsto vs real** (4-6h) — usa dado já no
    `raw_payload`; entrega parte de P1 "prazo real vs previsto".
-3. **§19.1.b Adapter Obra.zip** (1-2d) — descoberta importante de
+2. **§19.1.b Adapter Obra.zip** (1-2d) — descoberta importante de
    2026-05-11; entrega maior parte de P1 (empresa, valor, prazo,
    talvez aditivo).
-4. **§19.5 INEP/IDEB cross** (2d) — ADR-006 pronto; entrega P4
+3. **§19.5 INEP/IDEB cross** (2d) — ADR-006 pronto; entrega P4
    "gasto por aluno × IDEB" que é o exemplo central da análise.
-5. **§19.8 outros adapters PIT** (5-10d) — sequência separada,
+4. **§19.8 outros adapters PIT** (5-10d) — sequência separada,
    começando por Despesa.zip.
-6. **§19.11.g Otimização do sync full Compras.gov.br** (não estimado)
+5. **§19.11.g Otimização do sync full Compras.gov.br** (não estimado)
    — paralelização (httpx async ou threads) e/ou cache de "órgão
    dormente" pra trazer o sync de ~5h para minutos. Não bloqueia P1-P4
    da análise externa; entra quando o sync semanal virar gargalo.
 
-**Total para fechar P1+P3+P4 da análise externa:** ~4-7 dias úteis
-(itens 1-4; §19.7 + §19.11 já entregues).
+**Total para fechar P1+P3+P4 da análise externa:** ~3-5 dias úteis
+(itens 1-3; §19.6 + §19.7 + §19.11 já entregues).
 
 ### 19.10 O que NÃO entra no roadmap (e por quê)
 
@@ -2181,6 +2185,19 @@ precisam ser tomadas:
 ---
 
 ## 14. Changelog
+
+**v5.16 (2026-05-18 ~21:30 BRT)** — §19.6 alerta dispensa emergencial repetida entregue + sync federal 365d em execução:
+- **L.19.6.a** — `sql/016_alerta_dispensa_repetida.sql`: MV `analytics.alerta_dispensa_repetida` agrupa (CNPJ PJ + orgao_codigo + cd_tce) com ≥3 contratos modalidade=dispensa nos últimos 12 meses calendário. Defesa em camadas L.1 (eliminada_em IS NULL via item_canonical) + L.2 (tipo_juridico='PJ' via analytics.fornecedor). 4 índices (PK único pra REFRESH CONCURRENTLY + n_dispensas + valor + cnpj). Wirado em `build_marts.py`. **71 alertas reais materializados.**
+- **L.19.6.b** — 2 endpoints em `src/api/main.py`: `GET /alertas/dispensa-repetida?cnpj=&cd_tce=&order=n_desc&limit=N` (JSON) + `.csv` (PLANO §19.3). `AlertaDispensaOut` Pydantic. Filtro por `cnpj` alimenta o banner de fornecedor sem segundo round-trip.
+- **L.19.6.c** — UI: seção **"Dispensa emergencial repetida"** em `/manchetes` (top 10 por n_dispensas), com tag visual `· todas no mesmo dia` quando `primeira_dispensa == ultima_dispensa`. Banner **"Alerta de dispensa repetida · PLANO §19.6"** em `/fornecedor/[cnpj]` (só renderiza se o CNPJ aparece). Disclaimer obrigatório em ambos: "não implica irregularidade" (calamidade pública, especialização técnica, fracasso de processos anteriores podem explicar).
+- **Sinais reais detectados:**
+  - **SAUNT ADMINISTRADORA / MUNICÍPIO DA LAPA:** 8 dispensas no **mesmo dia** (06/10/2025) somando **R$ 7,26 milhões** (mediana por contrato: R$ 399k). Concentração temporal extrema — vale revisão.
+  - **ELENISE REZENDE / LEÓPOLIS:** 16 dispensas em 33 dias (03/11–05/12/2025), valor pequeno por contrato (~R$ 3k) mas frequência altíssima — padrão de aquisição fragmentada.
+  - **FANCAR FRANÇA / CÂNDIDO DE ABREU:** 9 dispensas espalhadas em 5 meses — padrão diferente, mais "captura recorrente" do que "concentração".
+- **QA CHECKLIST.md** +7 itens de smoke (3 API + 4 UI).
+- **§19.X reordenado** — §19.6 sai da fila; #1 vira §19.9 prazo previsto vs real. Total P1+P3+P4 cai pra ~3-5d.
+
+**Em execução:** sync full federal Compras.gov.br **365 dias × 1.134 órgãos ativos** (PID 27484), rodando em background desde 20:47 BRT. Spider sequencial (§19.11.g async não implementado ainda). Logs em `.dev/sync_compras.{log,stdout.log}`. ETA estimado: 5h ou mais (depende de quantos órgãos têm volume real). Refresh dos marts (incluindo `mart_gasto_per_capita` e `alerta_dispensa_repetida`) automático ao fim.
 
 **v5.15 (2026-05-18 ~17:30 BRT)** — §19.7 per capita first-class entregue:
 - **L.19.7.a** — `sql/015_mart_gasto_per_capita.sql`: nova MV `analytics.mart_gasto_per_capita` agrupando (cluster × cd_ibge) com `gasto_total`, `gasto_per_capita = SUM(valor_total)/populacao` e `mediana_valor_contrato`. Filtra eliminação L.1 + quarentena + `confianca_resolucao >= 0.5` (mesmo guardrail de `mart_contratos_municipio`). UNIQUE INDEX habilita `REFRESH CONCURRENTLY`. Wirado em `build_marts.py`. **3.710 linhas materializadas** (109 grandes + 658 médios + 2.943 pequenos × clusters).

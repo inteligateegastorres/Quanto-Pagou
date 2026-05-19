@@ -6,7 +6,9 @@ import { GuardrailFornecedorBadge } from "@/lib/Badge";
 import { DisclaimerOrigem } from "@/lib/DisclaimerOrigem";
 import { BotaoContestarRanking } from "@/lib/BotaoContestarRanking";
 import {
+  alertas as alertasApi,
   fornecedor as fornecedorApi,
+  type AlertaDispensa,
   type FornecedorPerfil,
   type FornecedorAgregado,
   type FornecedorContrato,
@@ -50,13 +52,14 @@ export default async function FornecedorPage({
     return <PerfilIndisponivel cnpj={cnpj} motivo={msg} />;
   }
 
-  const [porOrgao, porMunicipio, porCategoria, porModalidade, contratos] =
+  const [porOrgao, porMunicipio, porCategoria, porModalidade, contratos, alertasDispensaR] =
     await Promise.allSettled([
       fornecedorApi.porOrgao(cnpj, 10),
       fornecedorApi.porMunicipio(cnpj, 10),
       fornecedorApi.porCategoria(cnpj),
       fornecedorApi.porModalidade(cnpj),
       fornecedorApi.contratos(cnpj, 30),
+      alertasApi.dispensaRepetida({ cnpj, limit: 20 }),
     ]);
 
   const orgaos =
@@ -69,6 +72,8 @@ export default async function FornecedorPage({
     porModalidade.status === "fulfilled" ? porModalidade.value : [];
   const ctos =
     contratos.status === "fulfilled" ? contratos.value : [];
+  const alertasDispensa: AlertaDispensa[] =
+    alertasDispensaR.status === "fulfilled" ? alertasDispensaR.value : [];
 
   const concentracaoOrgaoTopPct =
     orgaos.length > 0
@@ -97,6 +102,9 @@ export default async function FornecedorPage({
 
       <DisclaimerOrigem fonte="tce-pr" />
 
+      {alertasDispensa.length > 0 && (
+        <AlertaDispensaBanner rows={alertasDispensa} />
+      )}
 
       <section className="border border-attention/40 bg-attention/5 rounded-md p-4 text-sm space-y-2">
         <p className="font-medium text-attention">
@@ -241,6 +249,79 @@ export default async function FornecedorPage({
         </p>
       </footer>
     </article>
+  );
+}
+
+function AlertaDispensaBanner({ rows }: { rows: AlertaDispensa[] }) {
+  const totalDispensas = rows.reduce((s, r) => s + r.n_dispensas_12m, 0);
+  const valorTotal = rows.reduce(
+    (s, r) => s + Number(r.valor_total_dispensas),
+    0,
+  );
+  const orgaoUnico = rows.length === 1;
+  return (
+    <section className="border border-attention rounded-md p-4 bg-attention/10 text-sm space-y-3">
+      <header className="space-y-1">
+        <p className="text-xs uppercase tracking-wide text-attention font-medium">
+          Alerta de dispensa repetida · PLANO §19.6
+        </p>
+        <p className="font-medium">
+          Este fornecedor aparece em {rows.length}{" "}
+          {orgaoUnico ? "combinação órgão+município" : "combinações órgão+município"}{" "}
+          com 3 ou mais dispensas nos últimos 12 meses
+          {totalDispensas > rows.length * 3 && (
+            <> · {totalDispensas} dispensas no total</>
+          )}
+          .
+        </p>
+      </header>
+      <p className="text-xs text-muted leading-relaxed">
+        <strong>Não implica irregularidade</strong> — calamidade pública,
+        especialização técnica ou fracasso de processos anteriores podem
+        explicar o uso recorrente da dispensa. A informação está aqui pra
+        servir de ponto de partida pra investigação, não conclusão.
+        Janela: rolling 12 meses, refresh semanal.
+      </p>
+      <ol className="space-y-1 text-xs">
+        {rows.map((a) => (
+          <li
+            key={`${a.orgao_codigo}-${a.cd_tce}`}
+            className="flex items-baseline gap-3 border-t border-line/60 pt-1.5"
+          >
+            <span className="flex-1 min-w-0 truncate">
+              {a.orgao_nome ?? `órgão ${a.orgao_codigo}`}
+              {a.cd_tce && (
+                <>
+                  {" · "}
+                  <Link
+                    href={`/municipio/${a.cd_tce}`}
+                    className="no-underline hover:underline"
+                  >
+                    cd_tce {a.cd_tce}
+                  </Link>
+                </>
+              )}
+            </span>
+            <span className="font-mono whitespace-nowrap">
+              {a.n_dispensas_12m} disp.
+            </span>
+            <span className="font-mono whitespace-nowrap w-20 text-right">
+              {fmtBRLCompact(a.valor_total_dispensas)}
+            </span>
+            <span className="text-muted whitespace-nowrap">
+              {a.primeira_dispensa === a.ultima_dispensa
+                ? `${a.primeira_dispensa} (mesmo dia)`
+                : `${a.primeira_dispensa} → ${a.ultima_dispensa}`}
+            </span>
+          </li>
+        ))}
+      </ol>
+      {rows.length > 1 && (
+        <p className="text-xs text-muted">
+          Total agregado das dispensas listadas: {fmtBRL(valorTotal)}.
+        </p>
+      )}
+    </section>
   );
 }
 

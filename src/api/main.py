@@ -378,6 +378,22 @@ class FornecedorPerfilOut(BaseModel):
     )
 
 
+class AlertaDispensaOut(BaseModel):
+    """PLANO §19.6 — combinação (CNPJ PJ + órgão + município) com ≥3
+    dispensas em 12 meses. 3+ NÃO implica irregularidade (calamidade,
+    especialização técnica podem explicar) — disclaimer obrigatório na UI."""
+    fornecedor_cnpj: str
+    fornecedor_nome: str | None
+    orgao_codigo: str
+    orgao_nome: str | None
+    cd_tce: str | None
+    n_dispensas_12m: int
+    valor_total_dispensas: Decimal
+    mediana_valor_dispensa: Decimal
+    primeira_dispensa: str
+    ultima_dispensa: str
+
+
 class AlertaProgressivoOut(BaseModel):
     """Alerta de aumento progressivo trimestre-a-trimestre (PLANO §19.4)."""
     fornecedor_cnpj: str
@@ -933,6 +949,90 @@ def get_manchetes_csv(conn: ConnDep) -> Response:
             "janelas_passadas", "rank_score", "parametros_hash",
         ],
         filename="manchetes_quantopagou.csv",
+    )
+
+
+_ALERTA_DISPENSA_SELECT = """
+    SELECT fornecedor_cnpj, fornecedor_nome, orgao_codigo, orgao_nome,
+           cd_tce, n_dispensas_12m, valor_total_dispensas,
+           mediana_valor_dispensa,
+           primeira_dispensa::text AS primeira_dispensa,
+           ultima_dispensa::text AS ultima_dispensa
+    FROM analytics.alerta_dispensa_repetida
+"""
+
+_ALERTA_DISPENSA_ORDER = {
+    "n_desc": "n_dispensas_12m DESC, valor_total_dispensas DESC",
+    "valor_desc": "valor_total_dispensas DESC, n_dispensas_12m DESC",
+}
+
+
+@app.get(
+    "/alertas/dispensa-repetida",
+    response_model=list[AlertaDispensaOut],
+    tags=["meta"],
+    summary="Alertas de dispensa emergencial repetida (PLANO §19.6)",
+)
+def get_alertas_dispensa(
+    conn: ConnDep,
+    cnpj: str | None = Query(
+        default=None,
+        description="Filtra por fornecedor_cnpj (alimenta banner em /fornecedor/{cnpj})",
+    ),
+    cd_tce: str | None = Query(
+        default=None, description="Filtra por município (cd_tce)"
+    ),
+    order: Literal["n_desc", "valor_desc"] = Query(default="n_desc"),
+    limit: int = Query(default=50, ge=1, le=500),
+) -> list[AlertaDispensaOut]:
+    """Combinações (fornecedor PJ + órgão + município) com ≥3 contratos
+    em modalidade dispensa nos últimos 12 meses. 3+ NÃO implica
+    irregularidade — calamidade pública, especialização técnica ou
+    fracasso de processos anteriores podem explicar. Esta é uma
+    ferramenta de consulta, não conclusão jurídica."""
+    sql = f"""
+        {_ALERTA_DISPENSA_SELECT}
+        WHERE (%s::text IS NULL OR fornecedor_cnpj = %s)
+          AND (%s::text IS NULL OR cd_tce = %s)
+        ORDER BY {_ALERTA_DISPENSA_ORDER[order]}
+        LIMIT %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (cnpj, cnpj, cd_tce, cd_tce, limit))
+        return [AlertaDispensaOut(**r) for r in cur.fetchall()]
+
+
+@app.get(
+    "/alertas/dispensa-repetida.csv",
+    response_class=Response,
+    tags=["meta"],
+    summary="Alertas dispensa repetida em CSV (PLANO §19.3 + §19.6)",
+)
+def get_alertas_dispensa_csv(
+    conn: ConnDep,
+    cnpj: str | None = None,
+    cd_tce: str | None = None,
+    order: Literal["n_desc", "valor_desc"] = "n_desc",
+    limit: int = Query(default=500, ge=1, le=5000),
+) -> Response:
+    sql = f"""
+        {_ALERTA_DISPENSA_SELECT}
+        WHERE (%s::text IS NULL OR fornecedor_cnpj = %s)
+          AND (%s::text IS NULL OR cd_tce = %s)
+        ORDER BY {_ALERTA_DISPENSA_ORDER[order]}
+        LIMIT %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (cnpj, cnpj, cd_tce, cd_tce, limit))
+        rows = cur.fetchall()
+    return _rows_to_csv_response(
+        rows,
+        fieldnames=[
+            "fornecedor_cnpj", "fornecedor_nome", "orgao_codigo", "orgao_nome",
+            "cd_tce", "n_dispensas_12m", "valor_total_dispensas",
+            "mediana_valor_dispensa", "primeira_dispensa", "ultima_dispensa",
+        ],
+        filename="alertas_dispensa_repetida_quantopagou.csv",
     )
 
 

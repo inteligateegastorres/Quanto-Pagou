@@ -134,6 +134,13 @@ item tem todos os campos esperados, tipos corretos**.
       → top-5 grandes em R$/hab merenda (§19.7)
 - [ ] `GET /tce-pr/per-capita.csv?cluster=medicamentos&limit=3` → 3
       linhas + header com colunas `cluster_id,...,gasto_per_capita,...`
+- [ ] `GET /alertas/dispensa-repetida?limit=5` → array com 5 alertas
+      ordenados por `n_dispensas_12m DESC` (§19.6); cada item tem
+      `fornecedor_cnpj`, `orgao_codigo`, `cd_tce`, `primeira_dispensa`,
+      `ultima_dispensa`
+- [ ] `GET /alertas/dispensa-repetida?cnpj=25075446000106` → só linhas
+      do CNPJ filtrado (alimenta banner em `/fornecedor/{cnpj}`)
+- [ ] `GET /alertas/dispensa-repetida.csv?limit=3` → header +3 linhas
 - [ ] Pegue um CNPJ de `/fornecedores?limit=1` e teste:
   - [ ] `GET /fornecedor/{cnpj}` → perfil com `n_contratos ≥ 5`,
         `valor_total`, `n_municipios_distintos`
@@ -389,6 +396,13 @@ atualiza com os params **e** o resultado muda.
       fornecedores top, drill-down funciona
 - [ ] `/municipio/410690` → seção **"Gasto per capita por categoria"**
       presente, populacao IBGE 2022 explícita no header (§19.7)
+- [ ] `/manchetes` → seção **"Dispensa emergencial repetida"** presente
+      com top alertas; link "Dispensa repetida (CSV)" no header (§19.6)
+- [ ] `/fornecedor/25075446000106` (SAUNT) → banner **"Alerta de
+      dispensa repetida · PLANO §19.6"** com tag "todas no mesmo dia"
+      visível na linha de LAPA
+- [ ] Fornecedor sem alertas (ex: qualquer CNPJ não-listado em
+      `/alertas/dispensa-repetida`) → página sem o banner
 - [ ] `/fornecedor/00844138000177` → ATLANTICA: várias seções (por
       órgão, município, categoria, modalidade, contratos)
 - [ ] `/escolas/<slug-da-listagem>` → contratos da escola

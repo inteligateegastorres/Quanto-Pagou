@@ -538,3 +538,37 @@ export const manchetes = {
   diagnostico: (cd_tce: string) =>
     jgetLive<ManchteDiagnostico>(`/manchetes/diagnostico?cd_tce=${encodeURIComponent(cd_tce)}`),
 };
+
+// ----------------------------- Alerta dispensa repetida (§19.6) --------
+
+export type AlertaDispensa = {
+  fornecedor_cnpj: string;
+  fornecedor_nome: string | null;
+  orgao_codigo: string;
+  orgao_nome: string | null;
+  cd_tce: string | null;
+  n_dispensas_12m: number;
+  valor_total_dispensas: string;
+  mediana_valor_dispensa: string;
+  primeira_dispensa: string;
+  ultima_dispensa: string;
+};
+
+export const alertas = {
+  dispensaRepetida: (opts: {
+    cnpj?: string;
+    cd_tce?: string;
+    order?: "n_desc" | "valor_desc";
+    limit?: number;
+  } = {}) => {
+    const qs = new URLSearchParams();
+    if (opts.cnpj) qs.set("cnpj", opts.cnpj);
+    if (opts.cd_tce) qs.set("cd_tce", opts.cd_tce);
+    if (opts.order) qs.set("order", opts.order);
+    if (opts.limit != null) qs.set("limit", String(opts.limit));
+    const q = qs.toString();
+    return jget<AlertaDispensa[]>(
+      `/alertas/dispensa-repetida${q ? "?" + q : ""}`,
+    );
+  },
+};

@@ -4,7 +4,9 @@ import { API_BASE, fmtBRL, fmtBRLCompact } from "@/lib/api";
 import { DisclaimerOrigem } from "@/lib/DisclaimerOrigem";
 import { BotaoContestarRanking } from "@/lib/BotaoContestarRanking";
 import {
+  alertas as alertasApi,
   manchetes as manchetesApi,
+  type AlertaDispensa,
   type Manchete,
   type ManchteDiagnostico,
   type ManchteSaida,
@@ -55,12 +57,16 @@ export default async function ManchetesPage({
 
   let lista: Manchete[] = [];
   let saidas: ManchteSaida[] = [];
+  let alertasDispensa: AlertaDispensa[] = [];
   let diagnostico: ManchteDiagnostico | null = null;
   let erro: string | null = null;
   try {
-    [lista, saidas] = await Promise.all([
+    [lista, saidas, alertasDispensa] = await Promise.all([
       manchetesApi.lista(),
       manchetesApi.saidas(90).catch(() => [] as ManchteSaida[]),
+      alertasApi
+        .dispensaRepetida({ limit: 10, order: "n_desc" })
+        .catch(() => [] as AlertaDispensa[]),
     ]);
     if (cdTceQuery && /^\d{6,7}$/.test(cdTceQuery)) {
       diagnostico = await manchetesApi.diagnostico(cdTceQuery).catch(() => null);
@@ -110,6 +116,13 @@ export default async function ManchetesPage({
             className="no-underline hover:underline"
           >
             Alertas progressivos (CSV)
+          </a>
+          {" · "}
+          <a
+            href={`${API_BASE}/alertas/dispensa-repetida.csv`}
+            className="no-underline hover:underline"
+          >
+            Dispensa repetida (CSV)
           </a>
         </p>
       </header>
@@ -198,6 +211,10 @@ export default async function ManchetesPage({
         ))}
       </ol>
 
+      {alertasDispensa.length > 0 && (
+        <AlertaDispensaSection rows={alertasDispensa} />
+      )}
+
       {saidas.length > 0 && (
         <section className="space-y-3 border-t border-line pt-6">
           <h2 className="text-base font-semibold">
@@ -248,6 +265,81 @@ export default async function ManchetesPage({
         </p>
       </section>
     </div>
+  );
+}
+
+function AlertaDispensaSection({ rows }: { rows: AlertaDispensa[] }) {
+  return (
+    <section className="space-y-3 border-t border-line pt-6">
+      <header className="space-y-1">
+        <h2 className="text-base font-semibold">
+          Dispensa emergencial repetida{" "}
+          <span className="text-xs text-muted font-normal">
+            (top {rows.length} · PLANO §19.6)
+          </span>
+        </h2>
+        <p className="text-xs text-muted leading-relaxed">
+          Combinações <strong>(fornecedor PJ + órgão + município)</strong>{" "}
+          com 3 ou mais contratos em <em>modalidade dispensa</em> nos
+          últimos 12 meses. <strong>Não implica irregularidade</strong> —
+          calamidade pública, especialização técnica ou fracasso de
+          processos anteriores podem explicar; mas a frequência merece
+          investigação. A janela é rolling — refresh semanal atualiza.
+        </p>
+      </header>
+      <ol className="space-y-2">
+        {rows.map((a) => (
+          <li
+            key={`${a.fornecedor_cnpj}-${a.orgao_codigo}-${a.cd_tce}`}
+            className="border border-line rounded-md p-3 bg-paper text-sm"
+          >
+            <div className="flex items-baseline justify-between gap-2 flex-wrap">
+              <div className="flex-1 min-w-0">
+                <Link
+                  href={`/fornecedor/${encodeURIComponent(a.fornecedor_cnpj)}`}
+                  className="font-medium no-underline hover:underline"
+                >
+                  {a.fornecedor_nome ?? a.fornecedor_cnpj}
+                </Link>
+                <div className="text-xs text-muted mt-0.5">
+                  {a.orgao_nome ?? `órgão ${a.orgao_codigo}`}
+                  {a.cd_tce && (
+                    <>
+                      {" · "}
+                      <Link
+                        href={`/municipio/${a.cd_tce}`}
+                        className="no-underline hover:underline"
+                      >
+                        cd_tce {a.cd_tce}
+                      </Link>
+                    </>
+                  )}
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="font-mono text-base font-medium">
+                  {a.n_dispensas_12m}{" "}
+                  <span className="text-xs text-muted font-normal">dispensas</span>
+                </div>
+                <div className="text-xs text-muted">
+                  Total: {fmtBRLCompact(a.valor_total_dispensas)}
+                </div>
+              </div>
+            </div>
+            <div className="text-xs text-muted mt-2">
+              Mediana por contrato: {fmtBRL(a.mediana_valor_dispensa)}
+              {" · "}
+              Período: {a.primeira_dispensa} → {a.ultima_dispensa}
+              {a.primeira_dispensa === a.ultima_dispensa && (
+                <span className="text-attention">
+                  {" "}· todas no mesmo dia
+                </span>
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 
